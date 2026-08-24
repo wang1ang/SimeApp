@@ -82,7 +82,6 @@ final class KeyboardViewController: UIInputViewController {
         root.setCustomSpacing(1, after: sentenceScrollView)
 
         candidateScrollView.showsHorizontalScrollIndicator = false
-        candidateScrollView.delaysContentTouches = false
         candidateScrollView.addSubview(candidateBar)
         candidateScrollView.heightAnchor.constraint(equalToConstant: 34).isActive = true
         root.addArrangedSubview(candidateScrollView)
@@ -356,12 +355,13 @@ final class KeyboardViewController: UIInputViewController {
             }
             candidateContentWidth = candidateX
         }
+        // Do not wait for a later layout pass before making the horizontal
+        // range available; otherwise a freshly rendered candidate row cannot
+        // be dragged on some keyboard-hosting views.
+        candidateBar.frame.size.width = max(candidateScrollView.bounds.width, candidateContentWidth)
+        candidateBar.frame.size.height = candidateScrollView.bounds.height
+        candidateScrollView.contentSize = candidateBar.bounds.size
         sentenceScrollView.setContentOffset(.zero, animated: false)
-        // A candidate update must win over an in-flight horizontal deceleration.
-        // Otherwise the old scroll animation can swallow the first tap or keep
-        // the replacement list off-screen.
-        candidateScrollView.panGestureRecognizer.isEnabled = false
-        candidateScrollView.panGestureRecognizer.isEnabled = true
         candidateScrollView.setContentOffset(.zero, animated: false)
         view.setNeedsLayout()
     }
