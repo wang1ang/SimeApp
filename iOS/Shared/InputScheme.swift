@@ -28,7 +28,7 @@ enum MicrosoftShuangpin {
             switch finalKey {
             case "o":
                 // o is uo after ordinary initials, but plain o in bo/po/mo/fo.
-                final = ["b", "p", "m", "f"].contains(initialKey) ? "o" : "uo"
+                final = ["b", "p", "m", "f", "w"].contains(initialKey) ? "o" : "uo"
             case "w":
                 // w: ia (xia) / ua (gua, zhua, chua, shua).
                 final = ["g", "k", "h", "v", "i", "u", "r", "z", "c", "s"].contains(initialKey)
