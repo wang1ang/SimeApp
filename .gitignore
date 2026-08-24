@@ -52,3 +52,6 @@ replay_pid*
 # Runtime language models
 *.cnt
 *.dict
+
+# XcodeGen output (iOS/project.yml is the tracked source of truth)
+/iOS/Sime.xcodeproj/

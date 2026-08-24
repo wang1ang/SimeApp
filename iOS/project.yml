@@ -1,0 +1,36 @@
+name: Sime
+options:
+  minimumXcodeGenVersion: 2.38.0
+  deploymentTarget:
+    iOS: "16.0"
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    DEVELOPMENT_TEAM: ""
+targets:
+  Sime:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sime
+      - path: Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.ismantic.sime
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_CFBundleDisplayName: 是语
+    dependencies:
+      - target: SimeKeyboard
+        embed: true
+  SimeKeyboard:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: KeyboardExtension
+      - path: Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.ismantic.sime.keyboard
+        INFOPLIST_FILE: KeyboardExtension/Info.plist
+        PRODUCT_NAME: SimeKeyboard
+        APPLICATION_EXTENSION_API_ONLY: YES
