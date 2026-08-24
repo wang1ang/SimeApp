@@ -8,7 +8,7 @@ enum InputScheme: String {
 enum MicrosoftShuangpin {
     private static let initials: [Character: String] = ["v": "zh", "i": "ch", "u": "sh"]
     private static let finals: [Character: String] = [
-        "a": "a", "o": "o", "e": "e", "i": "i", "u": "u", "v": "ü",
+        "a": "a", "e": "e", "i": "i", "u": "u", "v": "ü",
         "l": "ai", "z": "ei", "k": "ao", "b": "ou", "q": "iu",
         "j": "an", "f": "en", "h": "ang", "g": "eng", "s": "ong",
         "w": "ia", "x": "ie", "c": "iao", "m": "ian", "n": "in",
@@ -21,8 +21,21 @@ enum MicrosoftShuangpin {
         var output = ""
         var index = 0
         while index + 1 < keys.count {
-            let initial = initials[keys[index]] ?? String(keys[index])
-            let final = finals[keys[index + 1]] ?? String(keys[index + 1])
+            let initialKey = keys[index]
+            let finalKey = keys[index + 1]
+            let initial = initials[initialKey] ?? String(initialKey)
+            let final: String
+            switch finalKey {
+            case "o":
+                // o is the uo key after ordinary initials, but remains the
+                // plain o final for b/p/m/f syllables such as bo and mo.
+                final = ["b", "p", "m", "f"].contains(initialKey) ? "o" : "uo"
+            case "w":
+                // w is ia (xia) or ua (gua/hua/kua), depending on initial.
+                final = ["g", "k", "h"].contains(initialKey) ? "ua" : "ia"
+            default:
+                final = finals[finalKey] ?? String(finalKey)
+            }
             output += initial + final
             index += 2
         }
