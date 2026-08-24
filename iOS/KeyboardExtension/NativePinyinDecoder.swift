@@ -26,10 +26,23 @@ final class NativePinyinDecoder: PinyinDecoder {
         var sentence = sime_decode_sentence(handle, pinyin, 2)
         defer { sime_free_results(&sentence) }
         var results = unpack(sentence)
-        var words = sime_decode_str(handle, pinyin, Int32(limit))
+        var words = sime_decode_str(handle, pinyin, Int32(min(limit, 3)))
         defer { sime_free_results(&words) }
         for item in unpack(words) where !results.contains(where: { $0.text == item.text && $0.consumed == item.consumed }) {
             results.append(item)
+        }
+        // Also offer alternatives for the first syllable. DecodeStr over a
+        // whole phrase (for example "nihao") only returns whole-phrase
+        // paths, whereas mobile IMEs also expose "你 / 尼 / 呢" for "ni".
+        if let units = results.first?.units,
+           let firstSyllable = units.split(separator: "'").first,
+           !firstSyllable.isEmpty {
+            var syllableResults = sime_decode_str(handle, String(firstSyllable), Int32(limit))
+            defer { sime_free_results(&syllableResults) }
+            for item in unpack(syllableResults)
+                where !results.contains(where: { $0.text == item.text && $0.consumed == item.consumed }) {
+                results.append(item)
+            }
         }
         return Array(results.prefix(limit))
     }
