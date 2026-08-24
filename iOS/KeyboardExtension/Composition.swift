@@ -39,6 +39,22 @@ struct BuiltinPinyinDecoder: PinyinDecoder {
             guard let texts = entries[prefix] else { continue }
             output += texts.map { Candidate(text: $0, consumed: end, tokens: []) }
         }
+        // The production Sime decoder expands unfinished syllables. Preserve
+        // that behavior in the small bundled fallback too: typing "y" can
+        // already offer 一 / 要 instead of leaving the candidate bar empty.
+        if output.isEmpty {
+            let matchingKeys = entries.keys
+                .filter { $0.hasPrefix(normalized) }
+                .sorted {
+                    $0.count == $1.count ? $0 < $1 : $0.count < $1.count
+                }
+            for key in matchingKeys {
+                guard let texts = entries[key] else { continue }
+                output += texts.map {
+                    Candidate(text: $0, consumed: normalized.count, tokens: [])
+                }
+            }
+        }
         return Array(output.prefix(limit))
     }
 }
