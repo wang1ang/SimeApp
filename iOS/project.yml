@@ -17,8 +17,7 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.ismantic.sime
-        INFOPLIST_KEY_UILaunchScreen_Generation: YES
-        INFOPLIST_KEY_CFBundleDisplayName: 是语
+        INFOPLIST_FILE: Sime/Info.plist
     dependencies:
       - target: SimeKeyboard
         embed: true

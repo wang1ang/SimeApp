@@ -145,7 +145,7 @@ final class KeyboardViewController: UIInputViewController {
         render()
     }
 
-    private func selectCandidate(_ sender: UIButton) {
+    @objc private func selectCandidate(_ sender: UIButton) {
         guard let index = sender.accessibilityValue.flatMap(Int.init),
               let text = composition.select(index) else { return }
         textDocumentProxy.insertText(text)

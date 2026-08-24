@@ -4,10 +4,16 @@
 <dict>
     <key>CFBundleDisplayName</key>
     <string>是语键盘</string>
+    <key>CFBundleIdentifier</key>
+    <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
     <key>CFBundleName</key>
     <string>SimeKeyboard</string>
     <key>CFBundlePackageType</key>
     <string>XPC!</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
     <key>NSExtension</key>
     <dict>
         <key>NSExtensionAttributes</key>
