@@ -142,6 +142,13 @@ final class Composition {
     }
 
     func commitBestOrRaw() -> String? {
+        // A character-level replacement owns the final sentence preview.
+        // Commit it verbatim rather than falling back to the original top
+        // decoder candidate.
+        if let overriddenPreview {
+            reset()
+            return overriddenPreview
+        }
         // Space on a mobile keyboard commits the top *sentence* candidate.
         // Do not retain a decoder's partial-consumption tail here: this UI
         // does not yet expose segmented selection, and retaining it caused
