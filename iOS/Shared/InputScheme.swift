@@ -81,4 +81,14 @@ enum InputSettings {
         }
         set { defaults.set(newValue.rawValue, forKey: "inputScheme") }
     }
+
+    static var pendingRaw: String {
+        get { defaults.string(forKey: "pendingCompositionRaw") ?? "" }
+        set { newValue.isEmpty ? defaults.removeObject(forKey: "pendingCompositionRaw") : defaults.set(newValue, forKey: "pendingCompositionRaw") }
+    }
+
+    static var pendingCommitted: String {
+        get { defaults.string(forKey: "pendingCompositionCommitted") ?? "" }
+        set { newValue.isEmpty ? defaults.removeObject(forKey: "pendingCompositionCommitted") : defaults.set(newValue, forKey: "pendingCompositionCommitted") }
+    }
 }

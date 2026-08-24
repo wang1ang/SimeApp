@@ -103,6 +103,13 @@ final class Composition {
         replacementCandidates.isEmpty ? candidates : replacementCandidates
     }
 
+    func restore(raw: String, committed: String) {
+        guard !raw.isEmpty || !committed.isEmpty else { return }
+        self.raw = raw
+        self.committed = committed
+        refresh()
+    }
+
     func append(_ letter: String) {
         raw.append(contentsOf: letter.lowercased())
         overriddenPreview = nil

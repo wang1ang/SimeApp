@@ -18,6 +18,10 @@ final class KeyboardViewController: UIInputViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         setupView()
+        composition.restore(
+            raw: InputSettings.pendingRaw,
+            committed: InputSettings.pendingCommitted
+        )
         render()
     }
 
@@ -215,9 +219,13 @@ final class KeyboardViewController: UIInputViewController {
 
     private func updateMarkedText() {
         guard composition.isComposing else {
+            InputSettings.pendingRaw = ""
+            InputSettings.pendingCommitted = ""
             textDocumentProxy.unmarkText()
             return
         }
+        InputSettings.pendingRaw = composition.raw
+        InputSettings.pendingCommitted = composition.committed
         let text = composition.preedit
         textDocumentProxy.setMarkedText(text,
             selectedRange: NSRange(location: text.utf16.count, length: 0))
