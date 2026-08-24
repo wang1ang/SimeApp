@@ -31,7 +31,9 @@ targets:
         INFOPLIST_FILE: Sime/Info.plist
         CODE_SIGN_ENTITLEMENTS: Sime/Sime.entitlements
     dependencies:
-      - target: SimeKeyboard
+      - target: SimePinyinKeyboard
+        embed: true
+      - target: SimeShuangpinKeyboard
         embed: true
   SimeTests:
     type: bundle.unit-test
@@ -44,27 +46,45 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.ismantic.sime.tests
         GENERATE_INFOPLIST_FILE: YES
-
-  SimeKeyboard:
+  SimePinyinKeyboard:
     type: app-extension
     platform: iOS
-    sources:
+    sources: &keyboard_sources
       - path: KeyboardExtension
+        excludes:
+          - Info.plist
+          - PinyinInfo.plist
+          - ShuangpinInfo.plist
       - path: Engine
       - path: ../require/Sime/src
         includes:
           - "*.cc"
       - path: Shared
-    preBuildScripts:
+    preBuildScripts: &copy_models
       - name: Copy Sime runtime models
         script: |
           cp "$SRCROOT/../require/Sime/save/sime.dict" "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/sime.dict"
           cp "$SRCROOT/../require/Sime/save/sime.cnt" "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/sime.cnt"
+    settings: &keyboard_settings
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.ismantic.sime.pinyin
+        INFOPLIST_FILE: KeyboardExtension/PinyinInfo.plist
+        PRODUCT_NAME: SimePinyinKeyboard
+        APPLICATION_EXTENSION_API_ONLY: YES
+        CODE_SIGN_ENTITLEMENTS: KeyboardExtension/SimeKeyboard.entitlements
+        SWIFT_OBJC_BRIDGING_HEADER: "$(SRCROOT)/Engine/sime_api.h"
+        HEADER_SEARCH_PATHS: "$(SRCROOT)/../require/Sime/include $(SRCROOT)/../require/Sime/src"
+        CLANG_CXX_LANGUAGE_STANDARD: c++20
+  SimeShuangpinKeyboard:
+    type: app-extension
+    platform: iOS
+    sources: *keyboard_sources
+    preBuildScripts: *copy_models
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.ismantic.sime.keyboard
-        INFOPLIST_FILE: KeyboardExtension/Info.plist
-        PRODUCT_NAME: SimeKeyboard
+        PRODUCT_BUNDLE_IDENTIFIER: com.ismantic.sime.shuangpin
+        INFOPLIST_FILE: KeyboardExtension/ShuangpinInfo.plist
+        PRODUCT_NAME: SimeShuangpinKeyboard
         APPLICATION_EXTENSION_API_ONLY: YES
         CODE_SIGN_ENTITLEMENTS: KeyboardExtension/SimeKeyboard.entitlements
         SWIFT_OBJC_BRIDGING_HEADER: "$(SRCROOT)/Engine/sime_api.h"
