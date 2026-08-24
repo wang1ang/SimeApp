@@ -204,6 +204,9 @@ final class Composition {
     }
 
     private func refresh() {
-        candidates = raw.isEmpty ? [] : decoder.decode(raw, limit: 9)
+        // Keep the full first-syllable character set reachable during normal
+        // input too; otherwise low-frequency characters cannot be selected
+        // before continuing with the remaining syllables.
+        candidates = raw.isEmpty ? [] : decoder.decode(raw, limit: 60)
     }
 }

@@ -42,7 +42,9 @@ final class NativePinyinDecoder: PinyinDecoder {
         }
         defer { sime_free_results(&sentence) }
         var results = unpack(sentence)
-        var words = sime_decode_str(handle, pinyin, Int32(limit))
+        // Reserve candidate capacity for complete first-syllable character
+        // alternatives rather than letting whole-input words consume it all.
+        var words = sime_decode_str(handle, pinyin, Int32(min(limit, 5)))
         defer { sime_free_results(&words) }
         for item in unpack(words) where !results.contains(where: { $0.text == item.text && $0.consumed == item.consumed }) {
             results.append(item)
@@ -51,9 +53,11 @@ final class NativePinyinDecoder: PinyinDecoder {
         // alternatives for both ends, so "nihao" also exposes 你/呢 and 好/号.
         if let units = results.first?.units {
             let syllables = units.split(separator: "'").map(String.init)
-            let ends = Array(Set([syllables.first, syllables.last].compactMap { $0 }))
+            var ends: [String] = []
+            if let first = syllables.first { ends.append(first) }
+            if let last = syllables.last, last != syllables.first { ends.append(last) }
             for syllable in ends where !syllable.isEmpty {
-                var syllableResults = sime_decode_str(handle, syllable, 2)
+                var syllableResults = sime_decode_str(handle, syllable, Int32(limit))
                 defer { sime_free_results(&syllableResults) }
                 for item in unpack(syllableResults)
                     where !results.contains(where: { $0.text == item.text && $0.consumed == item.consumed }) {
