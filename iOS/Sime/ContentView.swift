@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct ContentView: View {
+    @State private var microsoftShuangpin = InputSettings.scheme == .microsoftShuangpin
+
     var body: some View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 20) {
@@ -10,6 +12,13 @@ struct ContentView: View {
                 Text("是语输入法")
                     .font(.largeTitle.bold())
                 Text("离线拼音输入法。键盘不会请求完全访问权限，也不会上传输入内容。")
+                    .foregroundStyle(.secondary)
+                Toggle("微软双拼", isOn: $microsoftShuangpin)
+                    .onChange(of: microsoftShuangpin) { enabled in
+                        InputSettings.scheme = enabled ? .microsoftShuangpin : .fullPinyin
+                    }
+                Text(microsoftShuangpin ? "当前：微软双拼" : "当前：全拼")
+                    .font(.footnote)
                     .foregroundStyle(.secondary)
                 Divider()
                 Text("启用方法")

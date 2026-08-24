@@ -1,7 +1,7 @@
 import UIKit
 
 final class KeyboardViewController: UIInputViewController {
-    private let composition = Composition()
+    private var composition = Composition()
     private let sentenceScrollView = UIScrollView()
     private let sentenceBar = UIView()
     private let candidateScrollView = UIScrollView()
@@ -12,6 +12,7 @@ final class KeyboardViewController: UIInputViewController {
     private var chineseMode = true
     private var numberMode = false
     private var shifted = false
+    private var keyboardScheme = InputSettings.scheme
     private var keyboardNeedsRebuild = false
 
     override func viewDidLoad() {
@@ -24,6 +25,12 @@ final class KeyboardViewController: UIInputViewController {
         super.viewWillAppear(animated)
         // The extension view may be detached while the phone is locked.
         // Repaint the in-memory composition when it is attached again.
+        let scheme = InputSettings.scheme
+        if keyboardScheme != scheme {
+            keyboardScheme = scheme
+            composition = Composition(inputScheme: scheme)
+            keyboardNeedsRebuild = true
+        }
         render()
     }
 
@@ -240,10 +247,15 @@ final class KeyboardViewController: UIInputViewController {
             )
         } else {
             let letters = shifted ? "QWERTYUIOP" : "qwertyuiop"
-            let home = shifted ? "ASDFGHJKL;" : "asdfghjkl;"
+            let isDouble = keyboardScheme == .microsoftShuangpin
+            let home = isDouble
+                ? (shifted ? "ASDFGHJKL;" : "asdfghjkl;")
+                : (shifted ? "ASDFGHJKL" : "asdfghjkl")
             let bottom = shifted ? "ZXCVBNM" : "zxcvbnm"
             keyboardStack.addArrangedSubview(makeRow(Array(letters).map(String.init)))
-            keyboardStack.addArrangedSubview(makeRow(Array(home).map(String.init)))
+            keyboardStack.addArrangedSubview(
+                makeRow(Array(home).map(String.init), indented: !isDouble)
+            )
             keyboardStack.addArrangedSubview(
                 makeRow(["⇧"] + Array(bottom).map(String.init) + ["⌫"])
             )

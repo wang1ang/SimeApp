@@ -81,6 +81,7 @@ struct BuiltinPinyinDecoder: PinyinDecoder {
 
 final class Composition {
     private let decoder: PinyinDecoder
+    private let inputScheme: InputScheme
     private(set) var raw = ""
     private(set) var committed = ""
     private(set) var candidates: [Candidate] = []
@@ -88,10 +89,11 @@ final class Composition {
     private var replacementCandidates: [Candidate] = []
     private var overriddenPreview: String?
 
-    init(decoder: PinyinDecoder? = nil) {
+    init(decoder: PinyinDecoder? = nil, inputScheme: InputScheme = InputSettings.scheme) {
         // The fallback keeps development builds usable if model resources are
         // absent, while release builds use the bundled offline Sime engine.
         self.decoder = decoder ?? NativePinyinDecoder() ?? BuiltinPinyinDecoder()
+        self.inputScheme = inputScheme
     }
 
     var preedit: String { committed + raw }
@@ -207,6 +209,8 @@ final class Composition {
         // Keep the full first-syllable character set reachable during normal
         // input too; otherwise low-frequency characters cannot be selected
         // before continuing with the remaining syllables.
-        candidates = raw.isEmpty ? [] : decoder.decode(raw, limit: 60)
+        let input = inputScheme == .microsoftShuangpin
+            ? MicrosoftShuangpin.expand(raw) : raw
+        candidates = input.isEmpty ? [] : decoder.decode(input, limit: 60)
     }
 }

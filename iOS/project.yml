@@ -25,6 +25,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.ismantic.sime
         INFOPLIST_FILE: Sime/Info.plist
+        CODE_SIGN_ENTITLEMENTS: Sime/Sime.entitlements
     dependencies:
       - target: SimeKeyboard
         embed: true
@@ -49,6 +50,7 @@ targets:
         INFOPLIST_FILE: KeyboardExtension/Info.plist
         PRODUCT_NAME: SimeKeyboard
         APPLICATION_EXTENSION_API_ONLY: YES
+        CODE_SIGN_ENTITLEMENTS: KeyboardExtension/SimeKeyboard.entitlements
         SWIFT_OBJC_BRIDGING_HEADER: "$(SRCROOT)/Engine/sime_api.h"
         HEADER_SEARCH_PATHS: "$(SRCROOT)/../require/Sime/include $(SRCROOT)/../require/Sime/src"
         CLANG_CXX_LANGUAGE_STANDARD: c++20
