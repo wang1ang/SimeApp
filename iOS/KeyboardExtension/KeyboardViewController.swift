@@ -8,6 +8,7 @@ final class KeyboardViewController: UIInputViewController {
     private var chineseMode = true
     private var numberMode = false
     private var shifted = false
+    private var keyboardNeedsRebuild = false
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -120,16 +121,19 @@ final class KeyboardViewController: UIInputViewController {
         case "🌐": advanceToNextInputMode()
         case "⇧":
             shifted.toggle()
+            keyboardNeedsRebuild = true
             render()
         case "中/英":
             commitComposition()
             chineseMode.toggle()
             shifted = false
+            keyboardNeedsRebuild = true
             render()
         case "123", "ABC":
             commitComposition()
             numberMode.toggle()
             shifted = false
+            keyboardNeedsRebuild = true
             render()
         case "，", "。", ";":
             commitComposition()
@@ -197,7 +201,10 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func render() {
-        rebuildKeyboard()
+        if keyboardNeedsRebuild {
+            rebuildKeyboard()
+            keyboardNeedsRebuild = false
+        }
         candidateBar.arrangedSubviews.forEach { $0.removeFromSuperview() }
         if composition.candidates.isEmpty {
             let hint = UILabel()
