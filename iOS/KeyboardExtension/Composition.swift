@@ -167,7 +167,7 @@ final class Composition {
         let syllableCandidates = decoder.syllableCandidates(syllables[index])
         let contextualCandidates = decoder.decode(tail, context: context, limit: 18)
         var seen = Set<String>()
-        replacementCandidates = (syllableCandidates + contextualCandidates)
+        replacementCandidates = (contextualCandidates + syllableCandidates)
             .filter { seen.insert($0.text).inserted }
     }
 
