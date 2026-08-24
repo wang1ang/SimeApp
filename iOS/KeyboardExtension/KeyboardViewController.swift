@@ -1,12 +1,7 @@
 import UIKit
 
 final class KeyboardViewController: UIInputViewController {
-    private static var configuredScheme: InputScheme {
-        InputScheme(rawValue: Bundle.main.object(forInfoDictionaryKey: "SimeInputScheme") as? String ?? "")
-            ?? .fullPinyin
-    }
-
-    private var composition = Composition(inputScheme: KeyboardViewController.configuredScheme)
+    private var composition = Composition()
     private let sentenceScrollView = UIScrollView()
     private let sentenceBar = UIView()
     private let candidateScrollView = UIScrollView()
@@ -17,7 +12,7 @@ final class KeyboardViewController: UIInputViewController {
     private var chineseMode = true
     private var numberMode = false
     private var shifted = false
-    private var keyboardScheme = KeyboardViewController.configuredScheme
+    private var keyboardScheme = InputSettings.scheme
     private var keyboardNeedsRebuild = false
 
     override func viewDidLoad() {
@@ -34,6 +29,12 @@ final class KeyboardViewController: UIInputViewController {
         super.viewWillAppear(animated)
         // The extension view may be detached while the phone is locked.
         // Repaint the in-memory composition when it is attached again.
+        let scheme = InputSettings.scheme
+        if keyboardScheme != scheme {
+            keyboardScheme = scheme
+            composition = Composition(inputScheme: scheme)
+            keyboardNeedsRebuild = true
+        }
         render()
     }
 

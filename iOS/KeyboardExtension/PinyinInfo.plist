@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleDisplayName</key>
-    <string>是语拼音</string>
+    <string>是语键盘</string>
     <key>CFBundleExecutable</key>
     <string>$(EXECUTABLE_NAME)</string>
     <key>CFBundleIdentifier</key>
@@ -16,8 +16,6 @@
     <string>1.0</string>
     <key>CFBundleVersion</key>
     <string>1</string>
-    <key>SimeInputScheme</key>
-    <string>fullPinyin</string>
     <key>NSExtension</key>
     <dict>
         <key>NSExtensionAttributes</key>
