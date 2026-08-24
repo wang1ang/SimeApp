@@ -44,8 +44,9 @@ final class KeyboardViewController: UIInputViewController {
 
         sentenceScrollView.showsHorizontalScrollIndicator = false
         sentenceScrollView.addSubview(sentenceBar)
-        sentenceScrollView.heightAnchor.constraint(equalToConstant: 30).isActive = true
+        sentenceScrollView.heightAnchor.constraint(equalToConstant: 28).isActive = true
         root.addArrangedSubview(sentenceScrollView)
+        root.setCustomSpacing(1, after: sentenceScrollView)
 
         candidateScrollView.showsHorizontalScrollIndicator = false
         candidateScrollView.addSubview(candidateBar)
@@ -251,7 +252,7 @@ final class KeyboardViewController: UIInputViewController {
                 button.setTitle(String(char), for: .normal)
                 button.titleLabel?.font = .preferredFont(forTextStyle: .body)
                 button.setTitleColor(index == composition.activeCharacterIndex ? .systemBlue : .label, for: .normal)
-                button.frame = CGRect(x: sentenceX, y: 0, width: 30, height: 30)
+                button.frame = CGRect(x: sentenceX, y: 0, width: 30, height: 28)
                 button.accessibilityValue = String(index)
                 button.addTarget(self, action: #selector(sentenceCharacterTapped(_:)), for: .touchUpInside)
                 sentenceBar.addSubview(button)
