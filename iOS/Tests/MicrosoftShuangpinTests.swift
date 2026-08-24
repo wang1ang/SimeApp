@@ -13,6 +13,7 @@ final class MicrosoftShuangpinTests: XCTestCase {
         XCTAssertEqual(MicrosoftShuangpin.expand("oa"), "a")
         XCTAssertEqual(MicrosoftShuangpin.expand("ol"), "ai")
         XCTAssertEqual(MicrosoftShuangpin.expand("oo"), "o")
+        XCTAssertEqual(MicrosoftShuangpin.expand("or"), "er")
     }
 
     func testVFinalUsesSimePinyinNotation() {

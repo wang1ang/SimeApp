@@ -28,7 +28,13 @@ enum MicrosoftShuangpin {
             if initialKey == "o" {
                 // Microsoft Shuangpin uses o as the zero-initial marker:
                 // oa/a, ol/ai, oj/an … and oo/o.
-                final = finalKey == "o" ? "o" : (finals[finalKey] ?? String(finalKey))
+                if finalKey == "o" {
+                    final = "o"
+                } else if finalKey == "r" {
+                    final = "er"
+                } else {
+                    final = finals[finalKey] ?? String(finalKey)
+                }
                 output += final
                 index += 2
                 continue
