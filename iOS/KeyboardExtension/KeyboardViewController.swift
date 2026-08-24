@@ -9,7 +9,6 @@ final class KeyboardViewController: UIInputViewController {
     private var sentenceContentWidth: CGFloat = 0
     private var candidateContentWidth: CGFloat = 0
     private let keyboardStack = UIStackView()
-    private var chineseMode = true
     private var numberMode = false
     private var shifted = false
     private var keyboardScheme = InputSettings.scheme
@@ -187,15 +186,8 @@ final class KeyboardViewController: UIInputViewController {
             } else {
                 textDocumentProxy.insertText("\n")
             }
-        case "🌐": advanceToNextInputMode()
         case "⇧":
             shifted.toggle()
-            keyboardNeedsRebuild = true
-            render()
-        case "中/英":
-            commitComposition()
-            chineseMode.toggle()
-            shifted = false
             keyboardNeedsRebuild = true
             render()
         case "123", "ABC", "拼音":
@@ -204,15 +196,15 @@ final class KeyboardViewController: UIInputViewController {
             shifted = false
             keyboardNeedsRebuild = true
             render()
-        case ";" where chineseMode && keyboardScheme == .microsoftShuangpin:
+        case ";" where keyboardScheme == .microsoftShuangpin:
             composition.append(title)
             updateMarkedText()
             render()
         case "，", "。", ";":
             commitComposition()
-            textDocumentProxy.insertText(title == ";" && chineseMode ? "；" : title)
+            textDocumentProxy.insertText(title == ";" ? "；" : title)
         default:
-            if numberMode || !chineseMode {
+            if numberMode {
                 textDocumentProxy.insertText(title.lowercased())
             } else {
                 composition.append(title)

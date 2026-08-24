@@ -51,7 +51,6 @@ targets:
       - path: KeyboardExtension
         excludes:
           - PinyinInfo.plist
-          - ShuangpinInfo.plist
       - path: Engine
       - path: ../require/Sime/src
         includes:
