@@ -132,7 +132,12 @@ final class KeyboardViewController: UIInputViewController {
         switch title {
         case "⌫": delete()
         case "空格": space()
-        case "换行": commitComposition()
+        case "换行":
+            if composition.isComposing {
+                commitComposition()
+            } else {
+                textDocumentProxy.insertText("\n")
+            }
         case "🌐": advanceToNextInputMode()
         case "⇧":
             shifted.toggle()
