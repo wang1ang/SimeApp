@@ -46,8 +46,8 @@ enum MicrosoftShuangpin {
                 final = ["g", "k", "h", "v", "i", "u", "r", "z", "c", "s"].contains(initialKey)
                     ? "uang" : "iang"
             case "s":
-                // s: ong (song) / iong (jiong, qiong, xiong, yong).
-                final = ["j", "q", "x", "y"].contains(initialKey) ? "iong" : "ong"
+                // s: ong (song, yong) / iong (jiong, qiong, xiong).
+                final = ["j", "q", "x"].contains(initialKey) ? "iong" : "ong"
             case "v":
                 // Sime uses v (not Unicode ü) in pinyin: nv/lv versus gui.
                 final = ["n", "l"].contains(initialKey) ? "v" : "ui"

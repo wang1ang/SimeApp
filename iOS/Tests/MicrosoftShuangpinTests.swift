@@ -8,6 +8,7 @@ final class MicrosoftShuangpinTests: XCTestCase {
         XCTAssertEqual(MicrosoftShuangpin.expand("xigw"), "xigua")
         XCTAssertEqual(MicrosoftShuangpin.expand("gv"), "gui")
         XCTAssertEqual(MicrosoftShuangpin.expand("js"), "jiong")
+        XCTAssertEqual(MicrosoftShuangpin.expand("ys"), "yong")
         XCTAssertEqual(MicrosoftShuangpin.expand("gd"), "guang")
         XCTAssertEqual(MicrosoftShuangpin.expand("oa"), "a")
         XCTAssertEqual(MicrosoftShuangpin.expand("ol"), "ai")
