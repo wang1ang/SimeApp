@@ -162,6 +162,10 @@ final class KeyboardViewController: UIInputViewController {
             shifted = false
             keyboardNeedsRebuild = true
             render()
+        case ";" where chineseMode && keyboardScheme == .microsoftShuangpin:
+            composition.append(title)
+            updateMarkedText()
+            render()
         case "，", "。", ";":
             commitComposition()
             textDocumentProxy.insertText(title == ";" && chineseMode ? "；" : title)
