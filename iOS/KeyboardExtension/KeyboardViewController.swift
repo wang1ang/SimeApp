@@ -71,7 +71,7 @@ final class KeyboardViewController: UIInputViewController {
         NSLayoutConstraint.activate([
             root.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 5),
             root.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -5),
-            root.topAnchor.constraint(equalTo: view.topAnchor, constant: -16),
+            root.topAnchor.constraint(equalTo: view.topAnchor, constant: -10),
             root.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -6)
         ])
 
