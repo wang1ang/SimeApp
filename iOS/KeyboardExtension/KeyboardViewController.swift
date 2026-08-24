@@ -275,9 +275,11 @@ final class KeyboardViewController: UIInputViewController {
             for (index, candidate) in displayedCandidates.enumerated() {
                 var config = UIButton.Configuration.plain()
                 config.title = candidate.text
+                config.titleLineBreakMode = .byTruncatingTail
+                config.contentInsets = .zero
                 let button = UIButton(configuration: config)
                 button.titleLabel?.numberOfLines = 1
-                button.titleLabel?.lineBreakMode = .byClipping
+                button.titleLabel?.lineBreakMode = .byTruncatingTail
                 let textWidth = (candidate.text as NSString).size(withAttributes: [.font: font]).width
                 let width = max(48, ceil(textWidth) + 20)
                 button.frame = CGRect(x: candidateX, y: 0, width: width, height: 34)
