@@ -74,9 +74,9 @@ final class KeyboardViewController: UIInputViewController {
         let mode = keyButton(numberMode ? "ABC" : "123")
         let space = keyButton("space")
         let enter = keyButton("return")
+        [mode, space, enter].forEach { row.addArrangedSubview($0) }
         mode.widthAnchor.constraint(equalTo: enter.widthAnchor).isActive = true
         space.widthAnchor.constraint(equalTo: mode.widthAnchor, multiplier: 2.1).isActive = true
-        [mode, space, enter].forEach { row.addArrangedSubview($0) }
         return row
     }
 
