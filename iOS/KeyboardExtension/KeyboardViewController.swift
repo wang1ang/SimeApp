@@ -84,7 +84,7 @@ final class KeyboardViewController: UIInputViewController {
 
         // Mirrors the native Chinese keyboard's compact bottom row. iOS
         // supplies the input-mode globe and dictation controls below it.
-        let mode = keyButton(numberMode ? "ABC" : "123")
+        let mode = keyButton(numberMode ? "拼音" : "123")
         let space = keyButton("space")
         let enter = keyButton("return")
         [mode, space, enter].forEach { row.addArrangedSubview($0) }
@@ -129,7 +129,7 @@ final class KeyboardViewController: UIInputViewController {
             shifted = false
             keyboardNeedsRebuild = true
             render()
-        case "123", "ABC":
+        case "123", "ABC", "拼音":
             commitComposition()
             numberMode.toggle()
             shifted = false
@@ -184,9 +184,15 @@ final class KeyboardViewController: UIInputViewController {
     private func rebuildKeyboard() {
         keyboardStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         if numberMode {
-            for row in ["123", "456", "789"] {
-                keyboardStack.addArrangedSubview(makeRow(Array(row).map(String.init), indented: true))
-            }
+            keyboardStack.addArrangedSubview(
+                makeRow(["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"])
+            )
+            keyboardStack.addArrangedSubview(
+                makeRow(["-", "/", "：", "；", "(", ")", "￥", "@", "“", "”"])
+            )
+            keyboardStack.addArrangedSubview(
+                makeRow(["#+=", "。", "，", "、", "？", "！", ".", "⌫"])
+            )
         } else {
             let letters = shifted ? "QWERTYUIOP" : "qwertyuiop"
             let home = shifted ? "ASDFGHJKL;" : "asdfghjkl;"
