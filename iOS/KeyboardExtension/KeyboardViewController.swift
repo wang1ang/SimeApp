@@ -2,6 +2,7 @@ import UIKit
 
 final class KeyboardViewController: UIInputViewController {
     private let composition = Composition()
+    private let candidateScrollView = UIScrollView()
     private let candidateBar = UIStackView()
     private let keyboardStack = UIStackView()
     private var chineseMode = true
@@ -36,11 +37,22 @@ final class KeyboardViewController: UIInputViewController {
             root.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -6)
         ])
 
+        candidateScrollView.showsHorizontalScrollIndicator = false
+        candidateScrollView.addSubview(candidateBar)
         candidateBar.axis = .horizontal
-        candidateBar.spacing = 8
-        candidateBar.distribution = .fillProportionally
-        candidateBar.heightAnchor.constraint(equalToConstant: 39).isActive = true
-        root.addArrangedSubview(candidateBar)
+        candidateBar.spacing = 12
+        candidateBar.distribution = .fill
+        candidateBar.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            candidateBar.leadingAnchor.constraint(equalTo: candidateScrollView.leadingAnchor, constant: 8),
+            candidateBar.trailingAnchor.constraint(equalTo: candidateScrollView.trailingAnchor, constant: -8),
+            candidateBar.topAnchor.constraint(equalTo: candidateScrollView.topAnchor),
+            candidateBar.bottomAnchor.constraint(equalTo: candidateScrollView.bottomAnchor),
+            candidateBar.heightAnchor.constraint(equalTo: candidateScrollView.heightAnchor),
+            candidateBar.widthAnchor.constraint(greaterThanOrEqualTo: candidateScrollView.widthAnchor, constant: -16)
+        ])
+        candidateScrollView.heightAnchor.constraint(equalToConstant: 39).isActive = true
+        root.addArrangedSubview(candidateScrollView)
 
         keyboardStack.axis = .vertical
         keyboardStack.spacing = 7
@@ -203,8 +215,11 @@ final class KeyboardViewController: UIInputViewController {
             candidateBar.addArrangedSubview(preedit)
             for (index, candidate) in composition.candidates.enumerated() {
                 var config = UIButton.Configuration.plain()
-                config.title = "\(index + 1). \(candidate.text)"
+                config.title = candidate.text
                 let button = UIButton(configuration: config)
+                button.titleLabel?.numberOfLines = 1
+                button.titleLabel?.lineBreakMode = .byClipping
+                button.widthAnchor.constraint(greaterThanOrEqualToConstant: 48).isActive = true
                 button.accessibilityValue = String(index)
                 button.addTarget(self, action: #selector(selectCandidate(_:)), for: .touchUpInside)
                 candidateBar.addArrangedSubview(button)
