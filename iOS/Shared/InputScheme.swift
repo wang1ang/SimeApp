@@ -27,12 +27,28 @@ enum MicrosoftShuangpin {
             let final: String
             switch finalKey {
             case "o":
-                // o is the uo key after ordinary initials, but remains the
-                // plain o final for b/p/m/f syllables such as bo and mo.
+                // o is uo after ordinary initials, but plain o in bo/po/mo/fo.
                 final = ["b", "p", "m", "f"].contains(initialKey) ? "o" : "uo"
             case "w":
-                // w is ia (xia) or ua (gua/hua/kua), depending on initial.
-                final = ["g", "k", "h"].contains(initialKey) ? "ua" : "ia"
+                // w: ia (xia) / ua (gua, zhua, chua, shua).
+                final = ["g", "k", "h", "v", "i", "u", "r", "z", "c", "s"].contains(initialKey)
+                    ? "ua" : "ia"
+            case "d":
+                // d: iang (jiang) / uang (guang, zhuang).
+                final = ["g", "k", "h", "v", "i", "u", "r", "z", "c", "s"].contains(initialKey)
+                    ? "uang" : "iang"
+            case "s":
+                // s: ong (song) / iong (jiong, qiong, xiong, yong).
+                final = ["j", "q", "x", "y"].contains(initialKey) ? "iong" : "ong"
+            case "v":
+                // v: ui (gui, zhui) / ü (nü, lü).
+                final = ["n", "l"].contains(initialKey) ? "ü" : "ui"
+            case "t":
+                final = ["j", "q", "x", "y", "n", "l"].contains(initialKey) ? "üe" : "ue"
+            case "r":
+                final = ["j", "q", "x", "y", "n", "l"].contains(initialKey) ? "üan" : "uan"
+            case "p":
+                final = ["j", "q", "x", "y", "n", "l"].contains(initialKey) ? "ün" : "un"
             default:
                 final = finals[finalKey] ?? String(finalKey)
             }

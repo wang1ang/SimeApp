@@ -124,12 +124,22 @@ final class Composition {
         guard candidates.indices.contains(index) else { return nil }
         let candidate = candidates[index]
         committed += candidate.text
-        raw.removeFirst(min(candidate.consumed, raw.count))
+        raw.removeFirst(min(rawConsumption(of: candidate), raw.count))
         refresh()
         guard raw.isEmpty else { return nil }
         let result = committed
         reset()
         return result
+    }
+
+    private func rawConsumption(of candidate: Candidate) -> Int {
+        guard inputScheme == .microsoftShuangpin else { return candidate.consumed }
+        // Sime returns pinyin units (for example xiao'guo), while each
+        // Microsoft Shuangpin syllable was entered with two keyboard keys.
+        let syllableCount = candidate.units.split(separator: "'")
+            .filter { !$0.isEmpty }
+            .count
+        return syllableCount > 0 ? syllableCount * 2 : candidate.consumed
     }
 
     func selectDisplayed(_ index: Int) -> String? {
