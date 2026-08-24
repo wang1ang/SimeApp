@@ -64,7 +64,7 @@ final class KeyboardViewController: UIInputViewController {
     private func makeRow(_ keys: [String]) -> UIStackView {
         let row = UIStackView()
         row.axis = .horizontal
-        row.spacing = 5
+        row.spacing = 3
         row.distribution = .fillEqually
         row.heightAnchor.constraint(equalToConstant: 43).isActive = true
         keys.forEach { row.addArrangedSubview(keyButton($0)) }
@@ -84,19 +84,26 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func keyButton(_ title: String) -> UIButton {
-        var config = UIButton.Configuration.filled()
-        config.title = title == "space" ? "空格" : title == "return" ? "换行" : title == "delete" ? "⌫" : title
-        config.baseBackgroundColor = .tertiarySystemBackground
-        config.baseForegroundColor = .label
-        config.cornerStyle = .medium
-        let button = UIButton(configuration: config)
-        button.titleLabel?.font = .systemFont(ofSize: 16)
+        let displayedTitle: String
+        switch title {
+        case "space": displayedTitle = "空格"
+        case "return": displayedTitle = "换行"
+        case "delete": displayedTitle = "⌫"
+        default: displayedTitle = title
+        }
+        let button = UIButton(type: .system)
+        button.setTitle(displayedTitle, for: .normal)
+        button.setTitleColor(.label, for: .normal)
+        button.titleLabel?.font = .systemFont(ofSize: 18)
+        button.backgroundColor = .tertiarySystemBackground
+        button.layer.cornerRadius = 10
+        button.layer.cornerCurve = .continuous
         button.addTarget(self, action: #selector(keyTapped(_:)), for: .touchUpInside)
         return button
     }
 
     @objc private func keyTapped(_ sender: UIButton) {
-        guard let title = sender.configuration?.title else { return }
+        guard let title = sender.currentTitle else { return }
         switch title {
         case "⌫": delete()
         case "空格": space()
