@@ -2,7 +2,7 @@ import UIKit
 
 final class KeyboardViewController: UIInputViewController {
     private let composition = Composition()
-    private let sentenceLabel = UILabel()
+    private let sentenceBar = UIStackView()
     private let candidateScrollView = UIScrollView()
     private let candidateBar = UIStackView()
     private let keyboardStack = UIStackView()
@@ -39,12 +39,11 @@ final class KeyboardViewController: UIInputViewController {
             root.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -6)
         ])
 
-        sentenceLabel.font = .preferredFont(forTextStyle: .body)
-        sentenceLabel.textColor = .label
-        sentenceLabel.textAlignment = .left
-        sentenceLabel.numberOfLines = 1
-        root.addArrangedSubview(sentenceLabel)
-        sentenceLabel.heightAnchor.constraint(equalToConstant: 30).isActive = true
+        sentenceBar.axis = .horizontal
+        sentenceBar.spacing = 2
+        sentenceBar.distribution = .fillProportionally
+        root.addArrangedSubview(sentenceBar)
+        sentenceBar.heightAnchor.constraint(equalToConstant: 30).isActive = true
 
         candidateScrollView.showsHorizontalScrollIndicator = false
         candidateScrollView.addSubview(candidateBar)
@@ -183,9 +182,16 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     @objc private func selectCandidate(_ sender: UIButton) {
-        guard let index = sender.accessibilityValue.flatMap(Int.init),
-              let text = composition.select(index) else { return }
-        textDocumentProxy.insertText(text)
+        guard let index = sender.accessibilityValue.flatMap(Int.init) else { return }
+        if let text = composition.selectDisplayed(index) {
+            textDocumentProxy.insertText(text)
+        }
+        render()
+    }
+
+    @objc private func sentenceCharacterTapped(_ sender: UIButton) {
+        guard let index = sender.accessibilityValue.flatMap(Int.init) else { return }
+        composition.activateCharacter(index)
         render()
     }
 
@@ -219,17 +225,28 @@ final class KeyboardViewController: UIInputViewController {
             rebuildKeyboard()
             keyboardNeedsRebuild = false
         }
-        let topText = composition.candidates.first?.text ?? ""
-        sentenceLabel.text = composition.isComposing ? composition.committed + topText : ""
+        sentenceBar.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        if composition.isComposing {
+            for (index, char) in Array(composition.sentencePreview).enumerated() {
+                let button = UIButton(type: .system)
+                button.setTitle(String(char), for: .normal)
+                button.titleLabel?.font = .preferredFont(forTextStyle: .body)
+                button.setTitleColor(index == composition.activeCharacterIndex ? .systemBlue : .label, for: .normal)
+                button.accessibilityValue = String(index)
+                button.addTarget(self, action: #selector(sentenceCharacterTapped(_:)), for: .touchUpInside)
+                sentenceBar.addArrangedSubview(button)
+            }
+        }
         candidateBar.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        if composition.candidates.isEmpty {
+        let displayedCandidates = composition.displayCandidates
+        if displayedCandidates.isEmpty {
             let hint = UILabel()
             hint.text = composition.isComposing ? composition.preedit : ""
             hint.textColor = .secondaryLabel
             hint.textAlignment = .left
             candidateBar.addArrangedSubview(hint)
         } else {
-            for (index, candidate) in composition.candidates.enumerated() {
+            for (index, candidate) in displayedCandidates.enumerated() {
                 var config = UIButton.Configuration.plain()
                 config.title = candidate.text
                 let button = UIButton(configuration: config)

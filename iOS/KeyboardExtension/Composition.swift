@@ -4,6 +4,14 @@ struct Candidate: Equatable {
     let text: String
     let consumed: Int
     let tokens: [UInt32]
+    let units: String
+
+    init(text: String, consumed: Int, tokens: [UInt32], units: String = "") {
+        self.text = text
+        self.consumed = consumed
+        self.tokens = tokens
+        self.units = units
+    }
 }
 
 /// Keep the keyboard UI independent from the native Sime bridge.
@@ -64,6 +72,9 @@ final class Composition {
     private(set) var raw = ""
     private(set) var committed = ""
     private(set) var candidates: [Candidate] = []
+    private(set) var activeCharacterIndex: Int?
+    private var replacementCandidates: [Candidate] = []
+    private var overriddenPreview: String?
 
     init(decoder: PinyinDecoder? = nil) {
         // The fallback keeps development builds usable if model resources are
@@ -73,9 +84,16 @@ final class Composition {
 
     var preedit: String { committed + raw }
     var isComposing: Bool { !raw.isEmpty || !committed.isEmpty }
+    var sentencePreview: String { overriddenPreview ?? (committed + (candidates.first?.text ?? "")) }
+    var displayCandidates: [Candidate] {
+        replacementCandidates.isEmpty ? candidates : replacementCandidates
+    }
 
     func append(_ letter: String) {
         raw.append(contentsOf: letter.lowercased())
+        overriddenPreview = nil
+        activeCharacterIndex = nil
+        replacementCandidates = []
         refresh()
     }
 
@@ -100,6 +118,29 @@ final class Composition {
         return result
     }
 
+    func selectDisplayed(_ index: Int) -> String? {
+        if let active = activeCharacterIndex,
+           replacementCandidates.indices.contains(index) {
+            var chars = Array(sentencePreview)
+            guard chars.indices.contains(active) else { return nil }
+            guard let replacement = replacementCandidates[index].text.first else { return nil }
+            chars[active] = replacement
+            overriddenPreview = String(chars)
+            return nil
+        }
+        return select(index)
+    }
+
+    func activateCharacter(_ index: Int) {
+        let sentence = sentencePreview
+        guard Array(sentence).indices.contains(index),
+              let top = candidates.first else { return }
+        let syllables = top.units.split(separator: "'").map(String.init)
+        guard syllables.indices.contains(index) else { return }
+        activeCharacterIndex = index
+        replacementCandidates = decoder.decode(syllables[index], limit: 9)
+    }
+
     func commitBestOrRaw() -> String? {
         // Space on a mobile keyboard commits the top *sentence* candidate.
         // Do not retain a decoder's partial-consumption tail here: this UI
@@ -120,6 +161,9 @@ final class Composition {
         raw = ""
         committed = ""
         candidates = []
+        activeCharacterIndex = nil
+        replacementCandidates = []
+        overriddenPreview = nil
     }
 
     private func refresh() {

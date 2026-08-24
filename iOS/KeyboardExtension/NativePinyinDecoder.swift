@@ -41,7 +41,8 @@ final class NativePinyinDecoder: PinyinDecoder {
             guard let text = item.text else { return nil }
             let tokens: [UInt32] = item.token_count > 0 && item.tokens != nil
                 ? (0..<Int(item.token_count)).map { item.tokens![$0] } : []
-            return Candidate(text: String(cString: text), consumed: Int(item.consumed), tokens: tokens)
+            let units = item.units.map { String(cString: $0) } ?? ""
+            return Candidate(text: String(cString: text), consumed: Int(item.consumed), tokens: tokens, units: units)
         }
     }
 }
