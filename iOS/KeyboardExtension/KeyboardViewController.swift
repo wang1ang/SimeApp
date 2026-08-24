@@ -2,9 +2,11 @@ import UIKit
 
 final class KeyboardViewController: UIInputViewController {
     private let composition = Composition()
+    private let sentenceScrollView = UIScrollView()
     private let sentenceBar = UIView()
     private let candidateScrollView = UIScrollView()
     private let candidateBar = UIView()
+    private var sentenceContentWidth: CGFloat = 0
     private var candidateContentWidth: CGFloat = 0
     private let keyboardStack = UIStackView()
     private var chineseMode = true
@@ -40,8 +42,10 @@ final class KeyboardViewController: UIInputViewController {
             root.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -6)
         ])
 
-        root.addArrangedSubview(sentenceBar)
-        sentenceBar.heightAnchor.constraint(equalToConstant: 30).isActive = true
+        sentenceScrollView.showsHorizontalScrollIndicator = false
+        sentenceScrollView.addSubview(sentenceBar)
+        sentenceScrollView.heightAnchor.constraint(equalToConstant: 30).isActive = true
+        root.addArrangedSubview(sentenceScrollView)
 
         candidateScrollView.showsHorizontalScrollIndicator = false
         candidateScrollView.addSubview(candidateBar)
@@ -56,6 +60,9 @@ final class KeyboardViewController: UIInputViewController {
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
+        sentenceBar.frame.size.width = max(sentenceScrollView.bounds.width, sentenceContentWidth)
+        sentenceBar.frame.size.height = sentenceScrollView.bounds.height
+        sentenceScrollView.contentSize = sentenceBar.bounds.size
         candidateBar.frame.size.width = max(candidateScrollView.bounds.width, candidateContentWidth)
         candidateBar.frame.size.height = candidateScrollView.bounds.height
         candidateScrollView.contentSize = candidateBar.bounds.size
@@ -251,6 +258,7 @@ final class KeyboardViewController: UIInputViewController {
                 sentenceX += 35
             }
         }
+        sentenceContentWidth = sentenceX
         candidateBar.subviews.forEach { $0.removeFromSuperview() }
         let displayedCandidates = composition.displayCandidates
         if displayedCandidates.isEmpty {
@@ -280,5 +288,6 @@ final class KeyboardViewController: UIInputViewController {
             }
             candidateContentWidth = candidateX
         }
+        view.setNeedsLayout()
     }
 }
