@@ -123,8 +123,14 @@ final class Composition {
            replacementCandidates.indices.contains(index) {
             var chars = Array(sentencePreview)
             guard chars.indices.contains(active) else { return nil }
-            guard let replacement = replacementCandidates[index].text.first else { return nil }
-            chars[active] = replacement
+            let replacement = replacementCandidates[index]
+            let consumedSyllables = replacement.units
+                .split(separator: "'")
+                .filter { !$0.isEmpty }
+                .count
+            let span = max(1, consumedSyllables)
+            let end = min(chars.count, active + span)
+            chars.replaceSubrange(active..<end, with: replacement.text)
             overriddenPreview = String(chars)
             return nil
         }
@@ -138,7 +144,10 @@ final class Composition {
         let syllables = top.units.split(separator: "'").map(String.init)
         guard syllables.indices.contains(index) else { return }
         activeCharacterIndex = index
-        replacementCandidates = decoder.decode(syllables[index], limit: 9)
+        // Re-decode the tail from the tapped character, not just its single
+        // syllable. This exposes word and phrase candidates at that position.
+        let tail = syllables[index...].joined(separator: "'")
+        replacementCandidates = decoder.decode(tail, limit: 9)
     }
 
     func commitBestOrRaw() -> String? {
