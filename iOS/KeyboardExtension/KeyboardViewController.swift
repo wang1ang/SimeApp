@@ -40,16 +40,16 @@ final class KeyboardViewController: UIInputViewController {
         ])
 
         sentenceBar.axis = .horizontal
-        sentenceBar.spacing = 2
-        sentenceBar.distribution = .fillProportionally
+        sentenceBar.spacing = 5
+        sentenceBar.distribution = .fill
         root.addArrangedSubview(sentenceBar)
         sentenceBar.heightAnchor.constraint(equalToConstant: 30).isActive = true
 
         candidateScrollView.showsHorizontalScrollIndicator = false
         candidateScrollView.addSubview(candidateBar)
         candidateBar.axis = .horizontal
-        candidateBar.spacing = 12
-        candidateBar.distribution = .equalSpacing
+        candidateBar.spacing = 10
+        candidateBar.distribution = .fill
         candidateBar.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
             candidateBar.leadingAnchor.constraint(equalTo: candidateScrollView.leadingAnchor, constant: 8),
@@ -151,6 +151,7 @@ final class KeyboardViewController: UIInputViewController {
             } else {
                 composition.append(title)
                 shifted = false
+                updateMarkedText()
                 render()
             }
         }
@@ -159,6 +160,7 @@ final class KeyboardViewController: UIInputViewController {
     private func delete() {
         if composition.isComposing {
             composition.delete()
+            updateMarkedText()
             render()
         } else {
             textDocumentProxy.deleteBackward()
@@ -167,25 +169,41 @@ final class KeyboardViewController: UIInputViewController {
 
     private func space() {
         if let text = composition.commitBestOrRaw() {
+            textDocumentProxy.unmarkText()
             textDocumentProxy.insertText(text)
         } else {
             textDocumentProxy.insertText(" ")
         }
+        updateMarkedText()
         render()
     }
 
     private func commitComposition() {
         if let text = composition.commitBestOrRaw() {
+            textDocumentProxy.unmarkText()
             textDocumentProxy.insertText(text)
         }
+        updateMarkedText()
         render()
+    }
+
+    private func updateMarkedText() {
+        guard composition.isComposing else {
+            textDocumentProxy.unmarkText()
+            return
+        }
+        let text = composition.preedit
+        textDocumentProxy.setMarkedText(text,
+            selectedRange: NSRange(location: text.utf16.count, length: 0))
     }
 
     @objc private func selectCandidate(_ sender: UIButton) {
         guard let index = sender.accessibilityValue.flatMap(Int.init) else { return }
         if let text = composition.selectDisplayed(index) {
+            textDocumentProxy.unmarkText()
             textDocumentProxy.insertText(text)
         }
+        updateMarkedText()
         render()
     }
 
@@ -232,6 +250,8 @@ final class KeyboardViewController: UIInputViewController {
                 button.setTitle(String(char), for: .normal)
                 button.titleLabel?.font = .preferredFont(forTextStyle: .body)
                 button.setTitleColor(index == composition.activeCharacterIndex ? .systemBlue : .label, for: .normal)
+                button.widthAnchor.constraint(equalToConstant: 30).isActive = true
+                button.setContentHuggingPriority(.required, for: .horizontal)
                 button.accessibilityValue = String(index)
                 button.addTarget(self, action: #selector(sentenceCharacterTapped(_:)), for: .touchUpInside)
                 sentenceBar.addArrangedSubview(button)
@@ -258,6 +278,9 @@ final class KeyboardViewController: UIInputViewController {
                 button.addTarget(self, action: #selector(selectCandidate(_:)), for: .touchUpInside)
                 candidateBar.addArrangedSubview(button)
             }
+            let spacer = UIView()
+            spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
+            candidateBar.addArrangedSubview(spacer)
         }
     }
 }
