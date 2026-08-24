@@ -288,6 +288,8 @@ final class KeyboardViewController: UIInputViewController {
             }
             candidateContentWidth = candidateX
         }
+        sentenceScrollView.setContentOffset(.zero, animated: false)
+        candidateScrollView.setContentOffset(.zero, animated: false)
         view.setNeedsLayout()
     }
 }
