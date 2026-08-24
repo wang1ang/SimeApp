@@ -20,6 +20,13 @@ final class KeyboardViewController: UIInputViewController {
         render()
     }
 
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        // The extension view may be detached while the phone is locked.
+        // Repaint the in-memory composition when it is attached again.
+        render()
+    }
+
     override func textWillChange(_ textInput: UITextInput?) {
         super.textWillChange(textInput)
     }
@@ -125,7 +132,7 @@ final class KeyboardViewController: UIInputViewController {
         switch title {
         case "⌫": delete()
         case "空格": space()
-        case "换行": commitComposition(); textDocumentProxy.insertText("\n")
+        case "换行": commitComposition()
         case "🌐": advanceToNextInputMode()
         case "⇧":
             shifted.toggle()
