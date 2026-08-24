@@ -29,7 +29,7 @@ final class KeyboardViewController: UIInputViewController {
         view.backgroundColor = .secondarySystemBackground
         let root = UIStackView()
         root.axis = .vertical
-        root.spacing = 7
+        root.spacing = 4
         root.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(root)
         NSLayoutConstraint.activate([
@@ -50,7 +50,7 @@ final class KeyboardViewController: UIInputViewController {
         candidateScrollView.addSubview(candidateBar)
         candidateBar.axis = .horizontal
         candidateBar.spacing = 12
-        candidateBar.distribution = .fill
+        candidateBar.distribution = .equalSpacing
         candidateBar.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
             candidateBar.leadingAnchor.constraint(equalTo: candidateScrollView.leadingAnchor, constant: 8),
@@ -64,7 +64,7 @@ final class KeyboardViewController: UIInputViewController {
         root.addArrangedSubview(candidateScrollView)
 
         keyboardStack.axis = .vertical
-        keyboardStack.spacing = 7
+        keyboardStack.spacing = 5
         root.addArrangedSubview(keyboardStack)
         rebuildKeyboard()
     }
@@ -235,8 +235,8 @@ final class KeyboardViewController: UIInputViewController {
                 let button = UIButton(configuration: config)
                 button.titleLabel?.numberOfLines = 1
                 button.titleLabel?.lineBreakMode = .byClipping
-                let candidateWidth = CGFloat(max(64, candidate.text.count * 30))
-                button.widthAnchor.constraint(equalToConstant: candidateWidth).isActive = true
+                button.widthAnchor.constraint(greaterThanOrEqualToConstant: 48).isActive = true
+                button.setContentHuggingPriority(.required, for: .horizontal)
                 button.accessibilityValue = String(index)
                 button.addTarget(self, action: #selector(selectCandidate(_:)), for: .touchUpInside)
                 candidateBar.addArrangedSubview(button)
