@@ -14,6 +14,10 @@ schemes:
         Sime: all
     run:
       config: Debug
+    test:
+      config: Debug
+      targets:
+        - SimeTests
 targets:
   Sime:
     type: application
@@ -29,6 +33,18 @@ targets:
     dependencies:
       - target: SimeKeyboard
         embed: true
+  SimeTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Tests
+    dependencies:
+      - target: Sime
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.ismantic.sime.tests
+        GENERATE_INFOPLIST_FILE: YES
+
   SimeKeyboard:
     type: app-extension
     platform: iOS

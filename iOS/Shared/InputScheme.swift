@@ -25,6 +25,14 @@ enum MicrosoftShuangpin {
             let finalKey = keys[index + 1]
             let initial = initials[initialKey] ?? String(initialKey)
             let final: String
+            if initialKey == "o" {
+                // Microsoft Shuangpin uses o as the zero-initial marker:
+                // oa/a, ol/ai, oj/an … and oo/o.
+                final = finalKey == "o" ? "o" : (finals[finalKey] ?? String(finalKey))
+                output += final
+                index += 2
+                continue
+            }
             switch finalKey {
             case "o":
                 // o is uo after ordinary initials, but plain o in bo/po/mo/fo.
@@ -41,14 +49,14 @@ enum MicrosoftShuangpin {
                 // s: ong (song) / iong (jiong, qiong, xiong, yong).
                 final = ["j", "q", "x", "y"].contains(initialKey) ? "iong" : "ong"
             case "v":
-                // v: ui (gui, zhui) / ü (nü, lü).
-                final = ["n", "l"].contains(initialKey) ? "ü" : "ui"
+                // Sime uses v (not Unicode ü) in pinyin: nv/lv versus gui.
+                final = ["n", "l"].contains(initialKey) ? "v" : "ui"
             case "t":
-                final = ["j", "q", "x", "y", "n", "l"].contains(initialKey) ? "üe" : "ue"
+                final = ["n", "l"].contains(initialKey) ? "ve" : "ue"
             case "r":
-                final = ["j", "q", "x", "y", "n", "l"].contains(initialKey) ? "üan" : "uan"
+                final = ["n", "l"].contains(initialKey) ? "van" : "uan"
             case "p":
-                final = ["j", "q", "x", "y", "n", "l"].contains(initialKey) ? "ün" : "un"
+                final = ["n", "l"].contains(initialKey) ? "vn" : "un"
             default:
                 final = finals[finalKey] ?? String(finalKey)
             }
