@@ -131,6 +131,11 @@ final class KeyboardViewController: UIInputViewController {
         let mode = keyButton(numberMode ? "拼音" : "123")
         let space = keyButton("space")
         let enter = keyButton("return")
+        if needsInputModeSwitchKey {
+            let globe = inputModeButton()
+            row.addArrangedSubview(globe)
+            globe.widthAnchor.constraint(equalTo: mode.widthAnchor, multiplier: 0.75).isActive = true
+        }
         [mode, space, enter].forEach { row.addArrangedSubview($0) }
         mode.widthAnchor.constraint(equalTo: enter.widthAnchor).isActive = true
         space.widthAnchor.constraint(equalTo: mode.widthAnchor, multiplier: 2.1).isActive = true
@@ -153,6 +158,21 @@ final class KeyboardViewController: UIInputViewController {
         button.layer.cornerRadius = 10
         button.layer.cornerCurve = .continuous
         button.addTarget(self, action: #selector(keyTapped(_:)), for: .touchUpInside)
+        return button
+    }
+
+    private func inputModeButton() -> UIButton {
+        let button = UIButton(type: .system)
+        button.setImage(UIImage(systemName: "globe"), for: .normal)
+        button.tintColor = .label
+        button.backgroundColor = .tertiarySystemBackground
+        button.layer.cornerRadius = 10
+        button.layer.cornerCurve = .continuous
+        // UIInputViewController supplies Apple's input-mode picker here. It
+        // includes keyboard placement controls on devices that support them.
+        button.addTarget(self,
+                         action: #selector(handleInputModeList(from:with:)),
+                         for: .allTouchEvents)
         return button
     }
 
