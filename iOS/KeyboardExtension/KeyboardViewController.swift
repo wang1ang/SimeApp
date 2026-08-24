@@ -36,7 +36,7 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func setupView() {
-        view.backgroundColor = .secondarySystemBackground
+        view.backgroundColor = .clear
         let root = UIStackView()
         root.axis = .vertical
         root.spacing = 4
@@ -45,7 +45,7 @@ final class KeyboardViewController: UIInputViewController {
         NSLayoutConstraint.activate([
             root.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 5),
             root.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -5),
-            root.topAnchor.constraint(equalTo: view.topAnchor, constant: 6),
+            root.topAnchor.constraint(equalTo: view.topAnchor),
             root.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -6)
         ])
 
