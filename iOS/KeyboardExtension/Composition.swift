@@ -101,7 +101,15 @@ final class Composition {
     }
 
     func commitBestOrRaw() -> String? {
-        if !candidates.isEmpty { return select(0) }
+        // Space on a mobile keyboard commits the top *sentence* candidate.
+        // Do not retain a decoder's partial-consumption tail here: this UI
+        // does not yet expose segmented selection, and retaining it caused
+        // the final pinyin letter to remain in composition.
+        if let candidate = candidates.first {
+            let result = committed + candidate.text
+            reset()
+            return result
+        }
         guard isComposing else { return nil }
         let result = preedit
         reset()

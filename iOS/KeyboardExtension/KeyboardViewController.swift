@@ -211,7 +211,7 @@ final class KeyboardViewController: UIInputViewController {
             preedit.font = .preferredFont(forTextStyle: .body)
             preedit.textColor = .secondaryLabel
             preedit.textAlignment = .center
-            preedit.widthAnchor.constraint(greaterThanOrEqualToConstant: 54).isActive = true
+            preedit.widthAnchor.constraint(equalToConstant: 88).isActive = true
             candidateBar.addArrangedSubview(preedit)
             for (index, candidate) in composition.candidates.enumerated() {
                 var config = UIButton.Configuration.plain()
@@ -219,7 +219,8 @@ final class KeyboardViewController: UIInputViewController {
                 let button = UIButton(configuration: config)
                 button.titleLabel?.numberOfLines = 1
                 button.titleLabel?.lineBreakMode = .byClipping
-                button.widthAnchor.constraint(greaterThanOrEqualToConstant: 48).isActive = true
+                let candidateWidth = CGFloat(max(64, candidate.text.count * 30))
+                button.widthAnchor.constraint(equalToConstant: candidateWidth).isActive = true
                 button.accessibilityValue = String(index)
                 button.addTarget(self, action: #selector(selectCandidate(_:)), for: .touchUpInside)
                 candidateBar.addArrangedSubview(button)
