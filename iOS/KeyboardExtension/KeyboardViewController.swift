@@ -256,7 +256,7 @@ final class KeyboardViewController: UIInputViewController {
                 button.accessibilityValue = String(index)
                 button.addTarget(self, action: #selector(sentenceCharacterTapped(_:)), for: .touchUpInside)
                 sentenceBar.addSubview(button)
-                sentenceX += 35
+                sentenceX += 33
             }
         }
         sentenceContentWidth = sentenceX
@@ -287,7 +287,7 @@ final class KeyboardViewController: UIInputViewController {
                 button.accessibilityValue = String(index)
                 button.addTarget(self, action: #selector(selectCandidate(_:)), for: .touchUpInside)
                 candidateBar.addSubview(button)
-                candidateX += width + 10
+                candidateX += width + 6
             }
             candidateContentWidth = candidateX
         }
