@@ -44,6 +44,22 @@ final class KeyboardViewController: UIInputViewController {
 
     override func textDidChange(_ textInput: UITextInput?) {
         super.textDidChange(textInput)
+        syncCompositionCursor()
+    }
+
+    private func syncCompositionCursor() {
+        guard composition.isComposing,
+              let before = textDocumentProxy.documentContextBeforeInput,
+              let after = textDocumentProxy.documentContextAfterInput else { return }
+        let raw = composition.raw
+        for offset in 0...raw.count {
+            let prefix = composition.committed + String(raw.prefix(offset))
+            let suffix = String(raw.dropFirst(offset))
+            if before.hasSuffix(prefix), after.hasPrefix(suffix) {
+                composition.moveCursor(to: offset)
+                return
+            }
+        }
     }
 
     private func setupView() {
@@ -56,7 +72,7 @@ final class KeyboardViewController: UIInputViewController {
         NSLayoutConstraint.activate([
             root.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 5),
             root.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -5),
-            root.topAnchor.constraint(equalTo: view.topAnchor, constant: -6),
+            root.topAnchor.constraint(equalTo: view.topAnchor),
             root.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -6)
         ])
 
@@ -228,7 +244,7 @@ final class KeyboardViewController: UIInputViewController {
         InputSettings.pendingCommitted = composition.committed
         let text = composition.preedit
         textDocumentProxy.setMarkedText(text,
-            selectedRange: NSRange(location: text.utf16.count, length: 0))
+            selectedRange: NSRange(location: composition.selectionLocation, length: 0))
     }
 
     @objc private func selectCandidate(_ sender: UIButton) {

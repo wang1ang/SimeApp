@@ -84,6 +84,7 @@ final class Composition {
     private let inputScheme: InputScheme
     private(set) var raw = ""
     private(set) var committed = ""
+    private(set) var cursor = 0
     private(set) var candidates: [Candidate] = []
     private(set) var activeCharacterIndex: Int?
     private var replacementCandidates: [Candidate] = []
@@ -97,6 +98,9 @@ final class Composition {
     }
 
     var preedit: String { committed + raw }
+    var selectionLocation: Int {
+        committed.utf16.count + String(raw.prefix(cursor)).utf16.count
+    }
     var isComposing: Bool { !raw.isEmpty || !committed.isEmpty }
     var sentencePreview: String { overriddenPreview ?? (committed + (candidates.first?.text ?? "")) }
     var displayCandidates: [Candidate] {
@@ -107,11 +111,18 @@ final class Composition {
         guard !raw.isEmpty || !committed.isEmpty else { return }
         self.raw = raw
         self.committed = committed
+        cursor = raw.count
         refresh()
     }
 
+    func moveCursor(to offset: Int) {
+        cursor = min(max(0, offset), raw.count)
+    }
+
     func append(_ letter: String) {
-        raw.append(contentsOf: letter.lowercased())
+        let insertion = raw.index(raw.startIndex, offsetBy: cursor)
+        raw.insert(contentsOf: letter.lowercased(), at: insertion)
+        cursor += letter.count
         overriddenPreview = nil
         activeCharacterIndex = nil
         replacementCandidates = []
@@ -123,7 +134,10 @@ final class Composition {
             committed = ""
             return
         }
-        raw.removeLast()
+        guard cursor > 0 else { return }
+        let deletion = raw.index(raw.startIndex, offsetBy: cursor - 1)
+        raw.remove(at: deletion)
+        cursor -= 1
         refresh()
     }
 
@@ -132,6 +146,7 @@ final class Composition {
         let candidate = candidates[index]
         committed += candidate.text
         raw.removeFirst(min(rawConsumption(of: candidate), raw.count))
+        cursor = max(0, cursor - rawConsumption(of: candidate))
         refresh()
         guard raw.isEmpty else { return nil }
         let result = committed
@@ -216,6 +231,7 @@ final class Composition {
     func reset() {
         raw = ""
         committed = ""
+        cursor = 0
         candidates = []
         activeCharacterIndex = nil
         replacementCandidates = []
