@@ -2,9 +2,10 @@ import UIKit
 
 final class KeyboardViewController: UIInputViewController {
     private let composition = Composition()
-    private let sentenceBar = UIStackView()
+    private let sentenceBar = UIView()
     private let candidateScrollView = UIScrollView()
-    private let candidateBar = UIStackView()
+    private let candidateBar = UIView()
+    private var candidateContentWidth: CGFloat = 0
     private let keyboardStack = UIStackView()
     private var chineseMode = true
     private var numberMode = false
@@ -39,26 +40,11 @@ final class KeyboardViewController: UIInputViewController {
             root.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -6)
         ])
 
-        sentenceBar.axis = .horizontal
-        sentenceBar.spacing = 5
-        sentenceBar.distribution = .fill
         root.addArrangedSubview(sentenceBar)
         sentenceBar.heightAnchor.constraint(equalToConstant: 30).isActive = true
 
         candidateScrollView.showsHorizontalScrollIndicator = false
         candidateScrollView.addSubview(candidateBar)
-        candidateBar.axis = .horizontal
-        candidateBar.spacing = 10
-        candidateBar.distribution = .fill
-        candidateBar.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            candidateBar.leadingAnchor.constraint(equalTo: candidateScrollView.leadingAnchor, constant: 8),
-            candidateBar.trailingAnchor.constraint(equalTo: candidateScrollView.trailingAnchor, constant: -8),
-            candidateBar.topAnchor.constraint(equalTo: candidateScrollView.topAnchor),
-            candidateBar.bottomAnchor.constraint(equalTo: candidateScrollView.bottomAnchor),
-            candidateBar.heightAnchor.constraint(equalTo: candidateScrollView.heightAnchor),
-            candidateBar.widthAnchor.constraint(greaterThanOrEqualTo: candidateScrollView.widthAnchor, constant: -16)
-        ])
         candidateScrollView.heightAnchor.constraint(equalToConstant: 34).isActive = true
         root.addArrangedSubview(candidateScrollView)
 
@@ -66,6 +52,13 @@ final class KeyboardViewController: UIInputViewController {
         keyboardStack.spacing = 5
         root.addArrangedSubview(keyboardStack)
         rebuildKeyboard()
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        candidateBar.frame.size.width = max(candidateScrollView.bounds.width, candidateContentWidth)
+        candidateBar.frame.size.height = candidateScrollView.bounds.height
+        candidateScrollView.contentSize = candidateBar.bounds.size
     }
 
     private func makeRow(_ keys: [String], indented: Bool = false) -> UIStackView {
@@ -243,44 +236,49 @@ final class KeyboardViewController: UIInputViewController {
             rebuildKeyboard()
             keyboardNeedsRebuild = false
         }
-        sentenceBar.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        sentenceBar.subviews.forEach { $0.removeFromSuperview() }
+        var sentenceX: CGFloat = 8
         if composition.isComposing {
             for (index, char) in Array(composition.sentencePreview).enumerated() {
                 let button = UIButton(type: .system)
                 button.setTitle(String(char), for: .normal)
                 button.titleLabel?.font = .preferredFont(forTextStyle: .body)
                 button.setTitleColor(index == composition.activeCharacterIndex ? .systemBlue : .label, for: .normal)
-                button.widthAnchor.constraint(equalToConstant: 30).isActive = true
-                button.setContentHuggingPriority(.required, for: .horizontal)
+                button.frame = CGRect(x: sentenceX, y: 0, width: 30, height: 30)
                 button.accessibilityValue = String(index)
                 button.addTarget(self, action: #selector(sentenceCharacterTapped(_:)), for: .touchUpInside)
-                sentenceBar.addArrangedSubview(button)
+                sentenceBar.addSubview(button)
+                sentenceX += 35
             }
         }
-        candidateBar.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        candidateBar.subviews.forEach { $0.removeFromSuperview() }
         let displayedCandidates = composition.displayCandidates
         if displayedCandidates.isEmpty {
             let hint = UILabel()
             hint.text = composition.isComposing ? composition.preedit : ""
             hint.textColor = .secondaryLabel
             hint.textAlignment = .left
-            candidateBar.addArrangedSubview(hint)
+            hint.frame = CGRect(x: 8, y: 0, width: 120, height: 34)
+            candidateBar.addSubview(hint)
+            candidateContentWidth = candidateScrollView.bounds.width
         } else {
+            var candidateX: CGFloat = 8
+            let font = UIFont.preferredFont(forTextStyle: .body)
             for (index, candidate) in displayedCandidates.enumerated() {
                 var config = UIButton.Configuration.plain()
                 config.title = candidate.text
                 let button = UIButton(configuration: config)
                 button.titleLabel?.numberOfLines = 1
                 button.titleLabel?.lineBreakMode = .byClipping
-                button.widthAnchor.constraint(greaterThanOrEqualToConstant: 48).isActive = true
-                button.setContentHuggingPriority(.required, for: .horizontal)
+                let textWidth = (candidate.text as NSString).size(withAttributes: [.font: font]).width
+                let width = max(48, ceil(textWidth) + 20)
+                button.frame = CGRect(x: candidateX, y: 0, width: width, height: 34)
                 button.accessibilityValue = String(index)
                 button.addTarget(self, action: #selector(selectCandidate(_:)), for: .touchUpInside)
-                candidateBar.addArrangedSubview(button)
+                candidateBar.addSubview(button)
+                candidateX += width + 10
             }
-            let spacer = UIView()
-            spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-            candidateBar.addArrangedSubview(spacer)
+            candidateContentWidth = candidateX
         }
     }
 }
