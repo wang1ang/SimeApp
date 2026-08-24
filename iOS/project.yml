@@ -33,10 +33,22 @@ targets:
     platform: iOS
     sources:
       - path: KeyboardExtension
+      - path: Engine
+      - path: ../require/Sime/src
+        includes:
+          - "*.cc"
       - path: Shared
+    preBuildScripts:
+      - name: Copy Sime runtime models
+        script: |
+          cp "$SRCROOT/../require/Sime/save/sime.dict" "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/sime.dict"
+          cp "$SRCROOT/../require/Sime/save/sime.cnt" "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/sime.cnt"
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.ismantic.sime.keyboard
         INFOPLIST_FILE: KeyboardExtension/Info.plist
         PRODUCT_NAME: SimeKeyboard
         APPLICATION_EXTENSION_API_ONLY: YES
+        SWIFT_OBJC_BRIDGING_HEADER: "$(SRCROOT)/Engine/sime_api.h"
+        HEADER_SEARCH_PATHS: "$(SRCROOT)/../require/Sime/include $(SRCROOT)/../require/Sime/src"
+        CLANG_CXX_LANGUAGE_STANDARD: c++20

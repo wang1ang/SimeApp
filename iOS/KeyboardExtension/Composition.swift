@@ -65,8 +65,10 @@ final class Composition {
     private(set) var committed = ""
     private(set) var candidates: [Candidate] = []
 
-    init(decoder: PinyinDecoder = BuiltinPinyinDecoder()) {
-        self.decoder = decoder
+    init(decoder: PinyinDecoder? = nil) {
+        // The fallback keeps development builds usable if model resources are
+        // absent, while release builds use the bundled offline Sime engine.
+        self.decoder = decoder ?? NativePinyinDecoder() ?? BuiltinPinyinDecoder()
     }
 
     var preedit: String { committed + raw }
