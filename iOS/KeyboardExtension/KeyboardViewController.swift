@@ -4,9 +4,9 @@ final class KeyboardViewController: UIInputViewController {
     private let composition = Composition()
     private let candidateBar = UIStackView()
     private let keyboardStack = UIStackView()
-    private let preeditLabel = UILabel()
     private var chineseMode = true
     private var numberMode = false
+    private var shifted = false
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -36,19 +36,6 @@ final class KeyboardViewController: UIInputViewController {
             root.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -6)
         ])
 
-        let preedit = UIView()
-        preedit.translatesAutoresizingMaskIntoConstraints = false
-        preedit.heightAnchor.constraint(equalToConstant: 25).isActive = true
-        preeditLabel.font = .preferredFont(forTextStyle: .caption1)
-        preeditLabel.textColor = .secondaryLabel
-        preeditLabel.translatesAutoresizingMaskIntoConstraints = false
-        preedit.addSubview(preeditLabel)
-        NSLayoutConstraint.activate([
-            preeditLabel.leadingAnchor.constraint(equalTo: preedit.leadingAnchor, constant: 8),
-            preeditLabel.centerYAnchor.constraint(equalTo: preedit.centerYAnchor)
-        ])
-        root.addArrangedSubview(preedit)
-
         candidateBar.axis = .horizontal
         candidateBar.spacing = 4
         candidateBar.distribution = .fillEqually
@@ -61,11 +48,15 @@ final class KeyboardViewController: UIInputViewController {
         rebuildKeyboard()
     }
 
-    private func makeRow(_ keys: [String]) -> UIStackView {
+    private func makeRow(_ keys: [String], indented: Bool = false) -> UIStackView {
         let row = UIStackView()
         row.axis = .horizontal
-        row.spacing = 3
+        row.spacing = 4
         row.distribution = .fillEqually
+        row.isLayoutMarginsRelativeArrangement = true
+        if indented {
+            row.layoutMargins = UIEdgeInsets(top: 0, left: 18, bottom: 0, right: 18)
+        }
         row.heightAnchor.constraint(equalToConstant: 43).isActive = true
         keys.forEach { row.addArrangedSubview(keyButton($0)) }
         return row
@@ -74,12 +65,18 @@ final class KeyboardViewController: UIInputViewController {
     private func makeBottomRow() -> UIStackView {
         let row = UIStackView()
         row.axis = .horizontal
-        row.spacing = 5
-        row.distribution = .fillProportionally
+        row.spacing = 8
+        row.distribution = .fill
         row.heightAnchor.constraint(equalToConstant: 43).isActive = true
-        [numberMode ? "ABC" : "123", "🌐", "中/En", "space", "return", "delete"].forEach {
-            row.addArrangedSubview(keyButton($0))
-        }
+
+        // Mirrors the native Chinese keyboard's compact bottom row. iOS
+        // supplies the input-mode globe and dictation controls below it.
+        let mode = keyButton(numberMode ? "ABC" : "123")
+        let space = keyButton("space")
+        let enter = keyButton("return")
+        mode.widthAnchor.constraint(equalTo: enter.widthAnchor).isActive = true
+        space.widthAnchor.constraint(equalTo: mode.widthAnchor, multiplier: 2.1).isActive = true
+        [mode, space, enter].forEach { row.addArrangedSubview($0) }
         return row
     }
 
@@ -109,19 +106,28 @@ final class KeyboardViewController: UIInputViewController {
         case "空格": space()
         case "换行": commitComposition(); textDocumentProxy.insertText("\n")
         case "🌐": advanceToNextInputMode()
-        case "中/En":
+        case "⇧":
+            shifted.toggle()
+            render()
+        case "中/英":
             commitComposition()
             chineseMode.toggle()
+            shifted = false
             render()
         case "123", "ABC":
             commitComposition()
             numberMode.toggle()
+            shifted = false
             render()
+        case "，", "。", ";":
+            commitComposition()
+            textDocumentProxy.insertText(title == ";" && chineseMode ? "；" : title)
         default:
             if numberMode || !chineseMode {
                 textDocumentProxy.insertText(title.lowercased())
             } else {
                 composition.append(title)
+                shifted = false
                 render()
             }
         }
@@ -161,20 +167,29 @@ final class KeyboardViewController: UIInputViewController {
 
     private func rebuildKeyboard() {
         keyboardStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        let rows = numberMode ? ["123", "456", "789"] : ["QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"]
-        for row in rows {
-            keyboardStack.addArrangedSubview(makeRow(Array(row).map(String.init)))
+        if numberMode {
+            for row in ["123", "456", "789"] {
+                keyboardStack.addArrangedSubview(makeRow(Array(row).map(String.init), indented: true))
+            }
+        } else {
+            let letters = shifted ? "QWERTYUIOP" : "qwertyuiop"
+            let home = shifted ? "ASDFGHJKL;" : "asdfghjkl;"
+            let bottom = shifted ? "ZXCVBNM" : "zxcvbnm"
+            keyboardStack.addArrangedSubview(makeRow(Array(letters).map(String.init)))
+            keyboardStack.addArrangedSubview(makeRow(Array(home).map(String.init)))
+            keyboardStack.addArrangedSubview(
+                makeRow(["⇧"] + Array(bottom).map(String.init) + ["⌫"])
+            )
         }
         keyboardStack.addArrangedSubview(makeBottomRow())
     }
 
     private func render() {
         rebuildKeyboard()
-        preeditLabel.text = composition.isComposing ? composition.preedit : (numberMode ? "数字" : (chineseMode ? "中文" : "English"))
         candidateBar.arrangedSubviews.forEach { $0.removeFromSuperview() }
         if composition.candidates.isEmpty {
             let hint = UILabel()
-            hint.text = chineseMode && !numberMode ? "输入拼音" : ""
+            hint.text = composition.isComposing ? composition.preedit : ""
             hint.textColor = .secondaryLabel
             hint.textAlignment = .center
             candidateBar.addArrangedSubview(hint)
