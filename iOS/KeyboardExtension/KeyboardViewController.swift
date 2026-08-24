@@ -83,7 +83,6 @@ final class KeyboardViewController: UIInputViewController {
 
         candidateScrollView.showsHorizontalScrollIndicator = false
         candidateScrollView.delaysContentTouches = false
-        candidateScrollView.canCancelContentTouches = false
         candidateScrollView.addSubview(candidateBar)
         candidateScrollView.heightAnchor.constraint(equalToConstant: 34).isActive = true
         root.addArrangedSubview(candidateScrollView)
