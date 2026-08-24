@@ -54,6 +54,23 @@ SimeResults sime_decode_sentence(const SimeHandle *h, const char *input,
   return to_c(h->sime->DecodeSentence(input, static_cast<size_t>(extra)));
 }
 
+SimeResults sime_decode_sentence_with_context(
+    const SimeHandle *h, const char *input, const uint32_t *context,
+    int context_count, int extra) {
+  if (!h || !h->sime || !h->sime->Ready() || !input) {
+    SimeResults z{};
+    z.items = nullptr;
+    z.count = 0;
+    return z;
+  }
+  std::vector<sime::TokenID> ctx;
+  if (context && context_count > 0) {
+    ctx.assign(context, context + context_count);
+  }
+  return to_c(h->sime->DecodeSentence(input, ctx,
+                                      static_cast<size_t>(extra)));
+}
+
 SimeResults sime_decode_str(const SimeHandle *h, const char *input, int num) {
   if (!h || !h->sime || !h->sime->Ready()) { SimeResults z{}; z.items=nullptr; z.count=0; return z; }
   return to_c(h->sime->DecodeStr(input, static_cast<size_t>(num)));

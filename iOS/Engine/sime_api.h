@@ -36,6 +36,9 @@ int sime_context_size(const SimeHandle *h);
 // alternatives beyond the top result.
 SimeResults sime_decode_sentence(const SimeHandle *h, const char *input,
                                  int extra);
+SimeResults sime_decode_sentence_with_context(
+    const SimeHandle *h, const char *input, const uint32_t *context,
+    int context_count, int extra);
 // decode_str: single-word / multi-word candidates (all starting at input[0])
 SimeResults sime_decode_str(const SimeHandle *h, const char *input, int num);
 

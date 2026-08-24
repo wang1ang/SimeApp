@@ -17,6 +17,13 @@ struct Candidate: Equatable {
 /// Keep the keyboard UI independent from the native Sime bridge.
 protocol PinyinDecoder {
     func decode(_ pinyin: String, limit: Int) -> [Candidate]
+    func decode(_ pinyin: String, context: [UInt32], limit: Int) -> [Candidate]
+}
+
+extension PinyinDecoder {
+    func decode(_ pinyin: String, context: [UInt32], limit: Int) -> [Candidate] {
+        decode(pinyin, limit: limit)
+    }
 }
 
 /// A small offline fallback so a freshly generated extension is usable before
@@ -147,7 +154,10 @@ final class Composition {
         // Re-decode the tail from the tapped character, not just its single
         // syllable. This exposes word and phrase candidates at that position.
         let tail = syllables[index...].joined(separator: "'")
-        replacementCandidates = decoder.decode(tail, limit: 9)
+        let prefix = syllables[..<index].joined(separator: "'")
+        let context = prefix.isEmpty
+            ? [] : (decoder.decode(prefix, limit: 1).first?.tokens ?? [])
+        replacementCandidates = decoder.decode(tail, context: context, limit: 9)
     }
 
     func commitBestOrRaw() -> String? {
