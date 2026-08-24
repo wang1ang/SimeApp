@@ -18,11 +18,16 @@ struct Candidate: Equatable {
 protocol PinyinDecoder {
     func decode(_ pinyin: String, limit: Int) -> [Candidate]
     func decode(_ pinyin: String, context: [UInt32], limit: Int) -> [Candidate]
+    func syllableCandidates(_ pinyin: String) -> [Candidate]
 }
 
 extension PinyinDecoder {
     func decode(_ pinyin: String, context: [UInt32], limit: Int) -> [Candidate] {
         decode(pinyin, limit: limit)
+    }
+
+    func syllableCandidates(_ pinyin: String) -> [Candidate] {
+        decode(pinyin, limit: 60)
     }
 }
 
@@ -159,7 +164,7 @@ final class Composition {
             ? [] : (decoder.decode(prefix, limit: 1).first?.tokens ?? [])
         // Put high-recall alternatives for the tapped syllable first (删 for
         // shan, for example), then append context-ranked words and phrases.
-        let syllableCandidates = decoder.decode(syllables[index], limit: 30)
+        let syllableCandidates = decoder.syllableCandidates(syllables[index])
         let contextualCandidates = decoder.decode(tail, context: context, limit: 18)
         var seen = Set<String>()
         replacementCandidates = (syllableCandidates + contextualCandidates)

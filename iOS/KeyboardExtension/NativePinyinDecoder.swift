@@ -25,6 +25,13 @@ final class NativePinyinDecoder: PinyinDecoder {
         decode(pinyin, context: [], limit: limit)
     }
 
+    func syllableCandidates(_ pinyin: String) -> [Candidate] {
+        guard let handle, !pinyin.isEmpty else { return [] }
+        var results = sime_decode_str(handle, pinyin, 60)
+        defer { sime_free_results(&results) }
+        return unpack(results)
+    }
+
     func decode(_ pinyin: String, context: [UInt32], limit: Int) -> [Candidate] {
         guard let handle, !pinyin.isEmpty else { return [] }
         var sentence = context.withUnsafeBufferPointer { buffer in
