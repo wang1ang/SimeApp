@@ -37,8 +37,8 @@ final class KeyboardViewController: UIInputViewController {
         ])
 
         candidateBar.axis = .horizontal
-        candidateBar.spacing = 4
-        candidateBar.distribution = .fillEqually
+        candidateBar.spacing = 8
+        candidateBar.distribution = .fillProportionally
         candidateBar.heightAnchor.constraint(equalToConstant: 39).isActive = true
         root.addArrangedSubview(candidateBar)
 
@@ -191,9 +191,16 @@ final class KeyboardViewController: UIInputViewController {
             let hint = UILabel()
             hint.text = composition.isComposing ? composition.preedit : ""
             hint.textColor = .secondaryLabel
-            hint.textAlignment = .center
+            hint.textAlignment = .left
             candidateBar.addArrangedSubview(hint)
         } else {
+            let preedit = UILabel()
+            preedit.text = composition.preedit
+            preedit.font = .preferredFont(forTextStyle: .body)
+            preedit.textColor = .secondaryLabel
+            preedit.textAlignment = .center
+            preedit.widthAnchor.constraint(greaterThanOrEqualToConstant: 54).isActive = true
+            candidateBar.addArrangedSubview(preedit)
             for (index, candidate) in composition.candidates.enumerated() {
                 var config = UIButton.Configuration.plain()
                 config.title = "\(index + 1). \(candidate.text)"
