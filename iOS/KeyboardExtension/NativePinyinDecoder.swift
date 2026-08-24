@@ -35,7 +35,7 @@ final class NativePinyinDecoder: PinyinDecoder {
         }
         defer { sime_free_results(&sentence) }
         var results = unpack(sentence)
-        var words = sime_decode_str(handle, pinyin, Int32(min(limit, 2)))
+        var words = sime_decode_str(handle, pinyin, Int32(limit))
         defer { sime_free_results(&words) }
         for item in unpack(words) where !results.contains(where: { $0.text == item.text && $0.consumed == item.consumed }) {
             results.append(item)

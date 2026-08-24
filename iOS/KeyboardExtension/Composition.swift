@@ -157,7 +157,13 @@ final class Composition {
         let prefix = syllables[..<index].joined(separator: "'")
         let context = prefix.isEmpty
             ? [] : (decoder.decode(prefix, limit: 1).first?.tokens ?? [])
-        replacementCandidates = decoder.decode(tail, context: context, limit: 9)
+        // Put high-recall alternatives for the tapped syllable first (删 for
+        // shan, for example), then append context-ranked words and phrases.
+        let syllableCandidates = decoder.decode(syllables[index], limit: 30)
+        let contextualCandidates = decoder.decode(tail, context: context, limit: 18)
+        var seen = Set<String>()
+        replacementCandidates = (syllableCandidates + contextualCandidates)
+            .filter { seen.insert($0.text).inserted }
     }
 
     func commitBestOrRaw() -> String? {
