@@ -17,13 +17,29 @@ private final class CandidateBarView: UIView {
     }
 }
 
-final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDelegate {
+private final class InterruptibleCandidateScrollView: UIScrollView {
+    private func stopDecelerationIfNeeded() {
+        guard isDecelerating else { return }
+        setContentOffset(contentOffset, animated: false)
+    }
+
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        stopDecelerationIfNeeded()
+        super.touchesBegan(touches, with: event)
+    }
+
+    override func touchesShouldBegin(_ touches: Set<UITouch>, with event: UIEvent?, in view: UIView) -> Bool {
+        stopDecelerationIfNeeded()
+        return super.touchesShouldBegin(touches, with: event, in: view)
+    }
+}
+
+final class KeyboardViewController: UIInputViewController {
     private var composition = Composition()
     private let sentenceScrollView = UIScrollView()
     private let sentenceBar = UIView()
-    private let candidateScrollView = UIScrollView()
+    private let candidateScrollView = InterruptibleCandidateScrollView()
     private let candidateBar = CandidateBarView()
-    private let candidateTouchInterrupt = UILongPressGestureRecognizer()
     private var sentenceContentWidth: CGFloat = 0
     private var candidateContentWidth: CGFloat = 0
     private let keyboardStack = UIStackView()
@@ -102,11 +118,6 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
         root.setCustomSpacing(1, after: sentenceScrollView)
 
         candidateScrollView.showsHorizontalScrollIndicator = false
-        candidateTouchInterrupt.minimumPressDuration = 0
-        candidateTouchInterrupt.cancelsTouchesInView = false
-        candidateTouchInterrupt.delegate = self
-        candidateTouchInterrupt.addTarget(self, action: #selector(interruptCandidateDeceleration(_:)))
-        candidateScrollView.addGestureRecognizer(candidateTouchInterrupt)
         candidateScrollView.addSubview(candidateBar)
         candidateScrollView.heightAnchor.constraint(equalToConstant: 34).isActive = true
         root.addArrangedSubview(candidateScrollView)
@@ -125,19 +136,6 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
         candidateBar.frame.size.width = max(candidateScrollView.bounds.width, candidateContentWidth)
         candidateBar.frame.size.height = candidateScrollView.bounds.height
         candidateScrollView.contentSize = candidateBar.bounds.size
-    }
-
-    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
-                           shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
-        gestureRecognizer === candidateTouchInterrupt || otherGestureRecognizer === candidateTouchInterrupt
-    }
-
-    @objc private func interruptCandidateDeceleration(_ gesture: UILongPressGestureRecognizer) {
-        guard gesture.state == .began, candidateScrollView.isDecelerating else { return }
-        // Toggling scrolling cancels UIKit's deceleration immediately. The
-        // recognizer does not cancel the underlying button/drag touch.
-        candidateScrollView.isScrollEnabled = false
-        candidateScrollView.isScrollEnabled = true
     }
 
     private func makeRow(_ keys: [String], indented: Bool = false) -> UIStackView {
