@@ -366,8 +366,8 @@ final class KeyboardViewController: UIInputViewController {
         }
         if composition.isComposing {
             let confirm = UIButton(type: .system)
-            confirm.setImage(UIImage(systemName: "checkmark"), for: .normal)
-            confirm.tintColor = .secondaryLabel
+            confirm.setImage(UIImage(systemName: "return"), for: .normal)
+            confirm.tintColor = .label
             confirm.frame = CGRect(x: sentenceX, y: 0, width: 24, height: 28)
             confirm.addTarget(self, action: #selector(confirmSentence), for: .touchUpInside)
             sentenceBar.addSubview(confirm)
