@@ -5,12 +5,15 @@ struct Candidate {
     let consumed: Int
     let tokens: [UInt32]
     let units: String
+    /// Sime's log score, retained so correction can prune weak lattice paths.
+    let score: Double
 
-    init(text: String, consumed: Int, tokens: [UInt32], units: String = "") {
+    init(text: String, consumed: Int, tokens: [UInt32], units: String = "", score: Double = 0) {
         self.text = text
         self.consumed = consumed
         self.tokens = tokens
         self.units = units
+        self.score = score
     }
 }
 
@@ -272,7 +275,15 @@ final class Composition {
         // its path and incorrectly promotes 假币.
         let fixedPrefix = String(Array(sentence).prefix(index))
         let fullPaths = decoder.exactCandidates(top.units, limit: 60)
+        // DecodeStr intentionally returns a broad lattice beam.  Keep paths
+        // within a log-score margin of the best full sentence: this is normal
+        // beam pruning, and prevents very weak tails such as 性珈币 from
+        // reaching the candidate UI while retaining meaningful alternatives.
+        let scoreFloor = (fullPaths.first?.score ?? -.infinity) - 18
         replacementCandidates = fullPaths.compactMap { path in
+            guard path.score >= scoreFloor else { return nil }
+            
+
             let pathCharacters = Array(path.text)
             let pathSyllables = path.units.split(separator: "'").map(String.init)
             guard pathCharacters.count > index,
