@@ -17,12 +17,14 @@ private final class CandidateBarView: UIView {
     }
 }
 
-final class KeyboardViewController: UIInputViewController {
+final class KeyboardViewController: UIInputViewController, UIScrollViewDelegate, UIGestureRecognizerDelegate {
     private var composition = Composition()
     private let sentenceScrollView = UIScrollView()
     private let sentenceBar = UIView()
     private let candidateScrollView = UIScrollView()
     private let candidateBar = CandidateBarView()
+    private let candidateDecelerationTap = UITapGestureRecognizer()
+    private var candidateWasDecelerating = false
     private var sentenceContentWidth: CGFloat = 0
     private var candidateContentWidth: CGFloat = 0
     private let keyboardStack = UIStackView()
@@ -101,6 +103,11 @@ final class KeyboardViewController: UIInputViewController {
         root.setCustomSpacing(1, after: sentenceScrollView)
 
         candidateScrollView.showsHorizontalScrollIndicator = false
+        candidateScrollView.delegate = self
+        candidateDecelerationTap.addTarget(self, action: #selector(selectCandidateDuringDeceleration(_:)))
+        candidateDecelerationTap.delegate = self
+        candidateDecelerationTap.cancelsTouchesInView = false
+        candidateScrollView.addGestureRecognizer(candidateDecelerationTap)
         candidateScrollView.addSubview(candidateBar)
         candidateScrollView.heightAnchor.constraint(equalToConstant: 34).isActive = true
         root.addArrangedSubview(candidateScrollView)
@@ -119,6 +126,28 @@ final class KeyboardViewController: UIInputViewController {
         candidateBar.frame.size.width = max(candidateScrollView.bounds.width, candidateContentWidth)
         candidateBar.frame.size.height = candidateScrollView.bounds.height
         candidateScrollView.contentSize = candidateBar.bounds.size
+    }
+
+    func scrollViewWillBeginDecelerating(_ scrollView: UIScrollView) {
+        if scrollView === candidateScrollView { candidateWasDecelerating = true }
+    }
+
+    func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
+        if scrollView === candidateScrollView { candidateWasDecelerating = false }
+    }
+
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
+                           shouldReceive touch: UITouch) -> Bool {
+        gestureRecognizer === candidateDecelerationTap && candidateWasDecelerating
+    }
+
+    @objc private func selectCandidateDuringDeceleration(_ gesture: UITapGestureRecognizer) {
+        guard gesture.state == .ended else { return }
+        candidateWasDecelerating = false
+        let point = gesture.location(in: candidateBar)
+        guard let button = candidateBar.subviews.compactMap({ $0 as? UIButton })
+            .first(where: { $0.frame.contains(point) }) else { return }
+        selectCandidate(button)
     }
 
     private func makeRow(_ keys: [String], indented: Bool = false) -> UIStackView {
