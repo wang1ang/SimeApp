@@ -55,3 +55,6 @@ replay_pid*
 
 # XcodeGen output (iOS/project.yml is the tracked source of truth)
 /iOS/Sime.xcodeproj/
+
+# Local handoff notes for coding agents
+/iOS/AGENTS.md
