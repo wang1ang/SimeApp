@@ -204,9 +204,8 @@ final class KeyboardViewController: UIInputViewController {
             composition.append(title)
             updateMarkedText()
             render()
-        case "，", "。", ";":
-            commitComposition()
-            textDocumentProxy.insertText(title == ";" ? "；" : title)
+        case "，", "。", ";", "-", "/", "：", "；", "(", ")", "￥", "@", "“", "”", "、", "？", "！", ".":
+            insertPunctuation(title)
         default:
             if numberMode {
                 textDocumentProxy.insertText(title.lowercased())
@@ -241,6 +240,17 @@ final class KeyboardViewController: UIInputViewController {
         deleteInitialTimer = nil
         deleteRepeatTimer?.invalidate()
         deleteRepeatTimer = nil
+    }
+
+    private func insertPunctuation(_ punctuation: String) {
+        commitComposition()
+        textDocumentProxy.insertText(punctuation == ";" ? "；" : punctuation)
+        if numberMode {
+            numberMode = false
+            shifted = false
+            keyboardNeedsRebuild = true
+        }
+        render()
     }
 
     private func delete() {
