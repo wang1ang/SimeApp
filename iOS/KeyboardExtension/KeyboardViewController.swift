@@ -1,7 +1,7 @@
 import UIKit
 
 final class KeyboardViewController: UIInputViewController {
-    private var composition = Composition()
+    private var composition = KeyboardViewController.makeComposition()
     private let sentenceScrollView = UIScrollView()
     private let sentenceBar = UIView()
     private let candidateScrollView = UIScrollView()
@@ -21,6 +21,13 @@ final class KeyboardViewController: UIInputViewController {
     private var deleteInitialTimer: Timer?
     private var deleteRepeatTimer: Timer?
 
+    private static func makeComposition(inputScheme: InputScheme = InputSettings.scheme) -> Composition {
+        Composition(
+            decoder: NativePinyinDecoder() ?? BuiltinPinyinDecoder(),
+            inputScheme: inputScheme
+        )
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
         setupView()
@@ -39,7 +46,7 @@ final class KeyboardViewController: UIInputViewController {
         let scheme = InputSettings.scheme
         if keyboardScheme != scheme {
             keyboardScheme = scheme
-            composition = Composition(inputScheme: scheme)
+            composition = Self.makeComposition(inputScheme: scheme)
             keyboardNeedsRebuild = true
         }
         refreshReturnKeyAppearance()

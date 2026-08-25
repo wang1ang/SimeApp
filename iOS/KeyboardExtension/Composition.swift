@@ -119,10 +119,9 @@ final class Composition {
     private var committedTokens: [UInt32] = []
     private var overriddenPreview: String?
 
-    init(decoder: PinyinDecoder? = nil, inputScheme: InputScheme = InputSettings.scheme) {
-        // The fallback keeps development builds usable if model resources are
-        // absent, while release builds use the bundled offline Sime engine.
-        self.decoder = decoder ?? NativePinyinDecoder() ?? BuiltinPinyinDecoder()
+    init(decoder: PinyinDecoder = BuiltinPinyinDecoder(),
+         inputScheme: InputScheme = InputSettings.scheme) {
+        self.decoder = decoder
         self.inputScheme = inputScheme
     }
 
