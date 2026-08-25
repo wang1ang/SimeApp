@@ -17,14 +17,13 @@ private final class CandidateBarView: UIView {
     }
 }
 
-final class KeyboardViewController: UIInputViewController, UIScrollViewDelegate, UIGestureRecognizerDelegate {
+final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDelegate {
     private var composition = Composition()
     private let sentenceScrollView = UIScrollView()
     private let sentenceBar = UIView()
     private let candidateScrollView = UIScrollView()
     private let candidateBar = CandidateBarView()
-    private let candidateDecelerationTap = UITapGestureRecognizer()
-    private var candidateWasDecelerating = false
+    private let candidateTouchInterrupt = UILongPressGestureRecognizer()
     private var sentenceContentWidth: CGFloat = 0
     private var candidateContentWidth: CGFloat = 0
     private let keyboardStack = UIStackView()
@@ -103,11 +102,11 @@ final class KeyboardViewController: UIInputViewController, UIScrollViewDelegate,
         root.setCustomSpacing(1, after: sentenceScrollView)
 
         candidateScrollView.showsHorizontalScrollIndicator = false
-        candidateScrollView.delegate = self
-        candidateDecelerationTap.addTarget(self, action: #selector(selectCandidateDuringDeceleration(_:)))
-        candidateDecelerationTap.delegate = self
-        candidateDecelerationTap.cancelsTouchesInView = false
-        candidateScrollView.addGestureRecognizer(candidateDecelerationTap)
+        candidateTouchInterrupt.minimumPressDuration = 0
+        candidateTouchInterrupt.cancelsTouchesInView = false
+        candidateTouchInterrupt.delegate = self
+        candidateTouchInterrupt.addTarget(self, action: #selector(interruptCandidateDeceleration(_:)))
+        candidateScrollView.addGestureRecognizer(candidateTouchInterrupt)
         candidateScrollView.addSubview(candidateBar)
         candidateScrollView.heightAnchor.constraint(equalToConstant: 34).isActive = true
         root.addArrangedSubview(candidateScrollView)
@@ -128,26 +127,17 @@ final class KeyboardViewController: UIInputViewController, UIScrollViewDelegate,
         candidateScrollView.contentSize = candidateBar.bounds.size
     }
 
-    func scrollViewWillBeginDecelerating(_ scrollView: UIScrollView) {
-        if scrollView === candidateScrollView { candidateWasDecelerating = true }
-    }
-
-    func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
-        if scrollView === candidateScrollView { candidateWasDecelerating = false }
-    }
-
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
-                           shouldReceive touch: UITouch) -> Bool {
-        gestureRecognizer === candidateDecelerationTap && candidateWasDecelerating
+                           shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+        gestureRecognizer === candidateTouchInterrupt || otherGestureRecognizer === candidateTouchInterrupt
     }
 
-    @objc private func selectCandidateDuringDeceleration(_ gesture: UITapGestureRecognizer) {
-        guard gesture.state == .ended else { return }
-        candidateWasDecelerating = false
-        let point = gesture.location(in: candidateBar)
-        guard let button = candidateBar.subviews.compactMap({ $0 as? UIButton })
-            .first(where: { $0.frame.contains(point) }) else { return }
-        selectCandidate(button)
+    @objc private func interruptCandidateDeceleration(_ gesture: UILongPressGestureRecognizer) {
+        guard gesture.state == .began, candidateScrollView.isDecelerating else { return }
+        // Toggling scrolling cancels UIKit's deceleration immediately. The
+        // recognizer does not cancel the underlying button/drag touch.
+        candidateScrollView.isScrollEnabled = false
+        candidateScrollView.isScrollEnabled = true
     }
 
     private func makeRow(_ keys: [String], indented: Bool = false) -> UIStackView {
@@ -439,12 +429,6 @@ final class KeyboardViewController: UIInputViewController, UIScrollViewDelegate,
         candidateBar.frame.size.width = max(candidateScrollView.bounds.width, candidateContentWidth)
         candidateBar.frame.size.height = candidateScrollView.bounds.height
         candidateScrollView.contentSize = candidateBar.bounds.size
-        if candidateScrollView.isDecelerating {
-            // Cancel only an old inertial run before replacing its content.
-            // Do not toggle this recognizer during ordinary rendering/dragging.
-            candidateScrollView.panGestureRecognizer.isEnabled = false
-            candidateScrollView.panGestureRecognizer.isEnabled = true
-        }
         sentenceScrollView.setContentOffset(.zero, animated: false)
         candidateScrollView.setContentOffset(.zero, animated: false)
         view.setNeedsLayout()
