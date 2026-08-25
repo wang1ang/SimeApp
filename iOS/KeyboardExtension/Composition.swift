@@ -113,6 +113,13 @@ final class Composition {
         if !replacementCandidates.isEmpty { return replacementCandidates }
         return isComposing ? candidates : predictionCandidates
     }
+    var activePinyin: String? {
+        guard let active = activeCharacterIndex,
+              let units = candidates.first?.units else { return nil }
+        let syllables = units.split(separator: "'").map(String.init)
+        guard syllables.indices.contains(active) else { return nil }
+        return syllables[active]
+    }
 
     func restore(raw: String, committed: String) {
         guard !raw.isEmpty || !committed.isEmpty else { return }

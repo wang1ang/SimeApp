@@ -403,16 +403,21 @@ final class KeyboardViewController: UIInputViewController {
         sentenceBar.subviews.forEach { $0.removeFromSuperview() }
         var sentenceX: CGFloat = 8
         if composition.isComposing {
+            let font = UIFont.preferredFont(forTextStyle: .body)
             for (index, char) in Array(composition.sentencePreview).enumerated() {
+                let isActive = index == composition.activeCharacterIndex
+                let title = isActive ? (composition.activePinyin ?? String(char)) : String(char)
                 let button = UIButton(type: .system)
-                button.setTitle(String(char), for: .normal)
-                button.titleLabel?.font = .preferredFont(forTextStyle: .body)
-                button.setTitleColor(index == composition.activeCharacterIndex ? .systemBlue : .label, for: .normal)
-                button.frame = CGRect(x: sentenceX, y: 0, width: 24, height: 28)
+                button.setTitle(title, for: .normal)
+                button.titleLabel?.font = font
+                button.setTitleColor(isActive ? .systemBlue : .label, for: .normal)
+                let textWidth = (title as NSString).size(withAttributes: [.font: font]).width
+                let width = max(24, ceil(textWidth) + 4)
+                button.frame = CGRect(x: sentenceX, y: 0, width: width, height: 28)
                 button.accessibilityValue = String(index)
                 button.addTarget(self, action: #selector(sentenceCharacterTapped(_:)), for: .touchUpInside)
                 sentenceBar.addSubview(button)
-                sentenceX += 27
+                sentenceX += width + 3
             }
         }
         if composition.isComposing {
