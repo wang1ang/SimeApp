@@ -178,6 +178,17 @@ final class Composition {
             let end = min(chars.count, active + span)
             chars.replaceSubrange(active..<end, with: replacement.text)
             overriddenPreview = String(chars)
+
+            // Continue the classic character-by-character correction flow at
+            // the first syllable after the replacement, rather than leaving
+            // the old candidate set selected at the previous character.
+            let next = active + span
+            if next < chars.count {
+                activateCharacter(next)
+            } else {
+                activeCharacterIndex = nil
+                replacementCandidates = []
+            }
             return nil
         }
         return select(index)
