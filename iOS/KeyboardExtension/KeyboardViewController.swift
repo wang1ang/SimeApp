@@ -40,10 +40,6 @@ final class KeyboardViewController: UIInputViewController {
         render()
     }
 
-    override func textWillChange(_ textInput: UITextInput?) {
-        super.textWillChange(textInput)
-    }
-
     override func textDidChange(_ textInput: UITextInput?) {
         super.textDidChange(textInput)
         syncCompositionCursor()
@@ -129,8 +125,7 @@ final class KeyboardViewController: UIInputViewController {
         row.distribution = .fill
         row.heightAnchor.constraint(equalToConstant: 43).isActive = true
 
-        // Mirrors the native Chinese keyboard's compact bottom row. iOS
-        // supplies the input-mode globe and dictation controls below it.
+        // Mirrors the native Chinese keyboard's compact bottom row.
         let mode = keyButton(numberMode ? "拼音" : "123")
         let space = keyButton("space")
         let enter = keyButton("return")
@@ -188,7 +183,6 @@ final class KeyboardViewController: UIInputViewController {
     @objc private func keyTapped(_ sender: UIButton) {
         guard let title = sender.currentTitle else { return }
         switch title {
-        case "⌫": delete()
         case "空格": space()
         case "换行":
             if composition.isComposing {
@@ -200,7 +194,7 @@ final class KeyboardViewController: UIInputViewController {
             shifted.toggle()
             keyboardNeedsRebuild = true
             render()
-        case "123", "ABC", "拼音":
+        case "123", "拼音":
             commitComposition()
             numberMode.toggle()
             shifted = false
@@ -340,7 +334,7 @@ final class KeyboardViewController: UIInputViewController {
                 makeRow(Array(home).map(String.init), indented: !isDouble)
             )
             keyboardStack.addArrangedSubview(
-                makeRow(["⇧"] + Array(bottom).map(String.init) + ["⌫"])
+                makeRow(["⇧"] + Array(bottom).map(String.init) + ["delete"])
             )
         }
         keyboardStack.addArrangedSubview(makeBottomRow())

@@ -1,6 +1,6 @@
 import Foundation
 
-struct Candidate: Equatable {
+struct Candidate {
     let text: String
     let consumed: Int
     let tokens: [UInt32]
