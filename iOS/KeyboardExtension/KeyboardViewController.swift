@@ -17,28 +17,11 @@ private final class CandidateBarView: UIView {
     }
 }
 
-private final class InterruptibleCandidateScrollView: UIScrollView {
-    private func stopDecelerationIfNeeded() {
-        guard isDecelerating else { return }
-        setContentOffset(contentOffset, animated: false)
-    }
-
-    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
-        stopDecelerationIfNeeded()
-        super.touchesBegan(touches, with: event)
-    }
-
-    override func touchesShouldBegin(_ touches: Set<UITouch>, with event: UIEvent?, in view: UIView) -> Bool {
-        stopDecelerationIfNeeded()
-        return super.touchesShouldBegin(touches, with: event, in: view)
-    }
-}
-
 final class KeyboardViewController: UIInputViewController {
     private var composition = Composition()
     private let sentenceScrollView = UIScrollView()
     private let sentenceBar = UIView()
-    private let candidateScrollView = InterruptibleCandidateScrollView()
+    private let candidateScrollView = UIScrollView()
     private let candidateBar = CandidateBarView()
     private var sentenceContentWidth: CGFloat = 0
     private var candidateContentWidth: CGFloat = 0
