@@ -49,7 +49,7 @@
 - 普通输入请求 60 条候选，保留首音节的完整单字集合，避免低频字（如 `shan` 的“删”）无法选择。
 - 第一行：整句预览，每字可点；第二行：候选横向滚动。
 - 点第一行某字后：第二行上下文词/句优先，随后附完整单字候选（按文本去重）。
-- 候选更新必须重置两行到左侧；`render()` 创建候选后须立即更新 candidate scroll view 的 `contentSize`，不要依赖下一轮 layout，也不要重置其 pan gesture recognizer。
+- 候选更新必须重置两行到左侧；`render()` 创建候选后须立即更新 candidate scroll view 的 `contentSize`，不要依赖下一轮 layout。仅当 `isDecelerating` 时，临时重置 pan gesture recognizer 以取消旧惯性；不可在普通拖动/每次 render 时重置它。
 - 空格：有组合时上屏最佳句，无组合时插入空格。
 - 换行：有组合时仅上屏，不插入换行；无组合时插入 `\n`。
 - 锁屏可能重建 extension：`InputSettings.pendingRaw/pendingCommitted` 临时保存本地组合，`viewDidLoad` 恢复并重新解码；上屏/清空时删除。

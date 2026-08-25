@@ -393,6 +393,12 @@ final class KeyboardViewController: UIInputViewController {
         candidateBar.frame.size.width = max(candidateScrollView.bounds.width, candidateContentWidth)
         candidateBar.frame.size.height = candidateScrollView.bounds.height
         candidateScrollView.contentSize = candidateBar.bounds.size
+        if candidateScrollView.isDecelerating {
+            // Cancel only an old inertial run before replacing its content.
+            // Do not toggle this recognizer during ordinary rendering/dragging.
+            candidateScrollView.panGestureRecognizer.isEnabled = false
+            candidateScrollView.panGestureRecognizer.isEnabled = true
+        }
         sentenceScrollView.setContentOffset(.zero, animated: false)
         candidateScrollView.setContentOffset(.zero, animated: false)
         view.setNeedsLayout()
