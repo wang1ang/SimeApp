@@ -16,6 +16,8 @@ final class KeyboardViewController: UIInputViewController {
     private var keyboardNeedsRebuild = false
     private var displayedReturnKeyType: UIReturnKeyType?
     private var restoringMarkedText = false
+    private var spaceCursorMode = false
+    private var spaceLastTranslation: CGFloat = 0
     private var deleteInitialTimer: Timer?
     private var deleteRepeatTimer: Timer?
 
@@ -187,6 +189,13 @@ final class KeyboardViewController: UIInputViewController {
             button.addTarget(self, action: #selector(endDeleteRepeat),
                              for: [.touchUpInside, .touchUpOutside, .touchCancel])
         } else {
+            if title == "space" {
+                let gesture = UILongPressGestureRecognizer(target: self,
+                                                           action: #selector(moveCursorWithSpace(_:)))
+                gesture.minimumPressDuration = 0.25
+                gesture.cancelsTouchesInView = false
+                button.addGestureRecognizer(gesture)
+            }
             button.addTarget(self, action: #selector(keyTapped(_:)), for: .touchUpInside)
         }
         return button
@@ -224,7 +233,12 @@ final class KeyboardViewController: UIInputViewController {
     @objc private func keyTapped(_ sender: UIButton) {
         guard let title = sender.accessibilityValue ?? sender.currentTitle else { return }
         switch title {
-        case "空格": space()
+        case "空格":
+            if spaceCursorMode {
+                spaceCursorMode = false
+            } else {
+                space()
+            }
         case "return":
             if composition.isComposing {
                 commitComposition()
@@ -256,6 +270,25 @@ final class KeyboardViewController: UIInputViewController {
                 updateMarkedText()
                 render()
             }
+        }
+    }
+
+    @objc private func moveCursorWithSpace(_ gesture: UILongPressGestureRecognizer) {
+        guard !composition.isComposing else { return }
+        switch gesture.state {
+        case .began:
+            spaceCursorMode = true
+            spaceLastTranslation = gesture.location(in: gesture.view).x
+        case .changed:
+            let position = gesture.location(in: gesture.view).x
+            let delta = position - spaceLastTranslation
+            let step: CGFloat = 18
+            guard abs(delta) >= step else { return }
+            let offset = delta > 0 ? 1 : -1
+            textDocumentProxy.adjustTextPosition(byCharacterOffset: offset)
+            spaceLastTranslation += CGFloat(offset) * step
+        default:
+            break
         }
     }
 
