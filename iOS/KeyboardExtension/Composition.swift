@@ -24,6 +24,8 @@ protocol PinyinDecoder {
     /// High-recall candidates for one exact pinyin span, used to recover the
     /// token path for a fixed correction prefix.
     func exactCandidates(_ pinyin: String, limit: Int) -> [Candidate]
+    func correctionCandidates(_ pinyin: String, fixedPrefix: String,
+                              prefixSyllables: Int, limit: Int) -> [Candidate]
     func tokenize(_ text: String) -> [UInt32]
     func syllableCandidates(_ pinyin: String) -> [Candidate]
     func predict(_ context: [UInt32], limit: Int) -> [Candidate]
@@ -36,6 +38,11 @@ extension PinyinDecoder {
 
     func exactCandidates(_ pinyin: String, limit: Int) -> [Candidate] {
         decode(pinyin, limit: limit)
+    }
+
+    func correctionCandidates(_ pinyin: String, fixedPrefix: String,
+                              prefixSyllables: Int, limit: Int) -> [Candidate] {
+        exactCandidates(pinyin, limit: limit)
     }
 
     func tokenize(_ text: String) -> [UInt32] { [] }
@@ -281,43 +288,16 @@ final class Composition {
         let syllables = top.units.split(separator: "'").map(String.init)
         guard syllables.indices.contains(index) else { return }
         activeCharacterIndex = index
-        // Decode the complete original pinyin span, then retain only paths
-        // whose Chinese prefix is exactly what appears before the tap.  This
-        // is a lattice constraint, not a next-token guess: 性价比 is a single
-        // dictionary token, so decoding just jia'bi with “性” as context loses
-        // its path and incorrectly promotes 假币.
+        // Sime owns both normal correction layers: full constrained suffix
+        // paths first, then short/character alternatives at this syllable.
+        // Swift neither filters complete paths nor appends a separate table.
         let fixedPrefix = String(Array(sentence).prefix(index))
-        let fullPaths = decoder.exactCandidates(top.units, limit: 60)
-        // DecodeStr intentionally returns a broad lattice beam.  Keep paths
-        // within a log-score margin of the best full sentence: this is normal
-        // beam pruning, and prevents very weak tails such as 性珈币 from
-        // reaching the candidate UI while retaining meaningful alternatives.
-        let scoreFloor = (fullPaths.first?.score ?? -.infinity) - 18
-        let anchoredPaths = fullPaths.compactMap { path -> Candidate? in
-            guard path.score >= scoreFloor else { return nil }
-            let pathCharacters = Array(path.text)
-            let pathSyllables = path.units.split(separator: "'").map(String.init)
-            guard pathCharacters.count > index,
-                  pathSyllables.count > index,
-                  String(pathCharacters.prefix(index)) == fixedPrefix else {
-                return nil
-            }
-            return Candidate(
-                text: String(pathCharacters.dropFirst(index)),
-                consumed: path.consumed,
-                tokens: path.tokens,
-                units: pathSyllables[index...].joined(separator: "'")
-            )
-        }
-        // Full paths supply phrase/suffix correction. Keep the complete
-        // single-character table too: selecting one replaces only the tapped
-        // syllable and then advances to the next, so prefix pruning must not
-        // make character correction unavailable.
-        let singleCharacters = decoder.syllableCandidates(syllables[index])
-            .filter { $0.text.count == 1 }
-        var seen = Set<String>()
-        replacementCandidates = (anchoredPaths + singleCharacters)
-            .filter { seen.insert($0.text).inserted }
+        replacementCandidates = decoder.correctionCandidates(
+            top.units,
+            fixedPrefix: fixedPrefix,
+            prefixSyllables: index,
+            limit: 60
+        )
     }
 
     func commitBestOrRaw() -> String? {

@@ -49,6 +49,11 @@ SimeResults sime_decode_sentence_with_context(
     int context_count, int extra);
 // decode_str: single-word / multi-word candidates (all starting at input[0])
 SimeResults sime_decode_str(const SimeHandle *h, const char *input, int num);
+// One ordered correction list: fixed_prefix remains unchanged and returned
+// texts replace only the suffix at prefix_syllables.
+SimeResults sime_decode_correction(const SimeHandle *h, const char *input,
+                                   const char *fixed_prefix,
+                                   int prefix_syllables, int num);
 
 // Prediction: given LM context token IDs, return likely next words.
 SimeResults sime_next_tokens(const SimeHandle *h, const uint32_t *tokens,

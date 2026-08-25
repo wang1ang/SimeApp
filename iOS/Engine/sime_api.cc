@@ -96,6 +96,19 @@ SimeResults sime_decode_str(const SimeHandle *h, const char *input, int num) {
   return to_c(h->sime->DecodeStr(input, static_cast<size_t>(num)));
 }
 
+SimeResults sime_decode_correction(const SimeHandle *h, const char *input,
+                                   const char *fixed_prefix,
+                                   int prefix_syllables, int num) {
+  if (!h || !h->sime || !h->sime->Ready() || !input || !fixed_prefix ||
+      prefix_syllables < 0 || num <= 0) {
+    SimeResults z{};
+    return z;
+  }
+  return to_c(h->sime->DecodeCorrection(
+      input, fixed_prefix, static_cast<size_t>(prefix_syllables),
+      static_cast<size_t>(num)));
+}
+
 SimeResults sime_next_tokens(const SimeHandle *h, const uint32_t *tokens,
                              int count, int num) {
   if (!h || !h->sime || !h->sime->Ready()) { SimeResults z{}; z.items=nullptr; z.count=0; return z; }
