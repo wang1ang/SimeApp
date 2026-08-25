@@ -13,6 +13,8 @@ final class KeyboardViewController: UIInputViewController {
     private var shifted = false
     private var keyboardScheme = InputSettings.scheme
     private var keyboardNeedsRebuild = false
+    private var deleteInitialTimer: Timer?
+    private var deleteRepeatTimer: Timer?
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -154,7 +156,13 @@ final class KeyboardViewController: UIInputViewController {
         button.backgroundColor = .tertiarySystemBackground
         button.layer.cornerRadius = 10
         button.layer.cornerCurve = .continuous
-        button.addTarget(self, action: #selector(keyTapped(_:)), for: .touchUpInside)
+        if displayedTitle == "⌫" {
+            button.addTarget(self, action: #selector(beginDeleteRepeat), for: .touchDown)
+            button.addTarget(self, action: #selector(endDeleteRepeat),
+                             for: [.touchUpInside, .touchUpOutside, .touchCancel])
+        } else {
+            button.addTarget(self, action: #selector(keyTapped(_:)), for: .touchUpInside)
+        }
         return button
     }
 
@@ -211,6 +219,30 @@ final class KeyboardViewController: UIInputViewController {
                 render()
             }
         }
+    }
+
+    @objc private func beginDeleteRepeat() {
+        endDeleteRepeat()
+        delete()
+        deleteInitialTimer = Timer.scheduledTimer(withTimeInterval: 0.35, repeats: false) { [weak self] _ in
+            guard let self else { return }
+            self.deleteRepeatTimer = Timer.scheduledTimer(withTimeInterval: 0.08, repeats: true) { [weak self] _ in
+                self?.delete()
+            }
+            if let deleteRepeatTimer = self.deleteRepeatTimer {
+                RunLoop.main.add(deleteRepeatTimer, forMode: .common)
+            }
+        }
+        if let deleteInitialTimer {
+            RunLoop.main.add(deleteInitialTimer, forMode: .common)
+        }
+    }
+
+    @objc private func endDeleteRepeat() {
+        deleteInitialTimer?.invalidate()
+        deleteInitialTimer = nil
+        deleteRepeatTimer?.invalidate()
+        deleteRepeatTimer = nil
     }
 
     private func delete() {
