@@ -16,10 +16,25 @@ final class MicrosoftShuangpinTests: XCTestCase {
         XCTAssertEqual(MicrosoftShuangpin.expand("or"), "er")
     }
 
+    func testAmbiguousFinalRules() {
+        XCTAssertEqual(MicrosoftShuangpin.expand("bo"), "bo")
+        XCTAssertEqual(MicrosoftShuangpin.expand("lo"), "luo")
+        XCTAssertEqual(MicrosoftShuangpin.expand("xw"), "xia")
+        XCTAssertEqual(MicrosoftShuangpin.expand("gw"), "gua")
+        XCTAssertEqual(MicrosoftShuangpin.expand("jd"), "jiang")
+    }
+
     func testVFinalUsesSimePinyinNotation() {
         XCTAssertEqual(MicrosoftShuangpin.expand("nv"), "nv")
         XCTAssertEqual(MicrosoftShuangpin.expand("lt"), "lve")
         XCTAssertEqual(MicrosoftShuangpin.expand("lr"), "lvan")
         XCTAssertEqual(MicrosoftShuangpin.expand("lp"), "lvn")
+    }
+
+    func testSpecialInitialsSemicolonAndIncompletePair() {
+        XCTAssertEqual(MicrosoftShuangpin.expand("vs"), "zhong")
+        XCTAssertEqual(MicrosoftShuangpin.expand("is"), "chong")
+        XCTAssertEqual(MicrosoftShuangpin.expand("j;"), "jing")
+        XCTAssertEqual(MicrosoftShuangpin.expand("xcg"), "xiaog")
     }
 }
