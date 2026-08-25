@@ -265,47 +265,28 @@ final class Composition {
         let syllables = top.units.split(separator: "'").map(String.init)
         guard syllables.indices.contains(index) else { return }
         activeCharacterIndex = index
-        // Re-decode the tail from the tapped character, not just its single
-        // syllable. This exposes word and phrase candidates at that position.
-        let tail = syllables[index...].joined(separator: "'")
-        let prefix = syllables[..<index].joined(separator: "'")
-        // Keep every confirmed token before the tapped position as decoder
-        // context.  Decoding the suffix alone makes phrases at a middle
-        // character rank as if they began a new sentence.
-        var context = committedTokens
-        if !prefix.isEmpty {
-            // The prefix must be the text currently shown before the tap, not
-            // merely the decoder's most likely standalone reading.  For
-            // example, xing can independently prefer “行” even when the
-            // selected sentence is “性价比”; using 行 here made “假币” outrank
-            // continuations of 性.  Find the exact displayed prefix and take
-            // its token path as the language-model context.
-            let prefixText = String(Array(sentence).prefix(index))
-            let prefixCandidates = decoder.exactCandidates(prefix, limit: 60)
-            let prefixTokens = prefixCandidates.first(where: { $0.text == prefixText })?.tokens
-                ?? prefixCandidates.first?.tokens
-                ?? []
-            context += prefixTokens
+        // Decode the complete original pinyin span, then retain only paths
+        // whose Chinese prefix is exactly what appears before the tap.  This
+        // is a lattice constraint, not a next-token guess: 性价比 is a single
+        // dictionary token, so decoding just jia'bi with “性” as context loses
+        // its path and incorrectly promotes 假币.
+        let fixedPrefix = String(Array(sentence).prefix(index))
+        let fullPaths = decoder.exactCandidates(top.units, limit: 60)
+        replacementCandidates = fullPaths.compactMap { path in
+            let pathCharacters = Array(path.text)
+            let pathSyllables = path.units.split(separator: "'").map(String.init)
+            guard pathCharacters.count > index,
+                  pathSyllables.count > index,
+                  String(pathCharacters.prefix(index)) == fixedPrefix else {
+                return nil
+            }
+            return Candidate(
+                text: String(pathCharacters.dropFirst(index)),
+                consumed: path.consumed,
+                tokens: path.tokens,
+                units: pathSyllables[index...].joined(separator: "'")
+            )
         }
-        // Put high-recall alternatives for the tapped syllable first (删 for
-        // shan, for example), then append context-ranked words and phrases.
-        let syllableCandidates = decoder.syllableCandidates(syllables[index])
-        let contextualCandidates = decoder.decode(tail, context: context, limit: 18)
-
-        // Preserve the unmodified tail as the first choice.  A full sentence
-        // such as 性价比 may be represented by one dictionary token, while
-        // its prefix 性 cannot reproduce that token's continuation through a
-        // next-token context; the statistical suffix decode then ranks 假币.
-        // The original decoded path is a valid anchored continuation and must
-        // remain the default when the user only opens correction candidates.
-        let originalSuffix = String(Array(top.text).dropFirst(index))
-        let original = originalSuffix.isEmpty
-            ? []
-            : [Candidate(text: originalSuffix, consumed: top.consumed,
-                         tokens: [], units: tail)]
-        var seen = Set<String>()
-        replacementCandidates = (original + contextualCandidates + syllableCandidates)
-            .filter { seen.insert($0.text).inserted }
     }
 
     func commitBestOrRaw() -> String? {
