@@ -297,14 +297,23 @@ final class KeyboardViewController: UIInputViewController {
         case .began:
             spaceCursorMode = true
             spaceLastTranslation = gesture.location(in: gesture.view).x
+            // Match the native keyboard's acknowledgement that the space bar
+            // has entered cursor-tracking mode.
+            let feedback = UIImpactFeedbackGenerator(style: .light)
+            feedback.prepare()
+            feedback.impactOccurred()
         case .changed:
             let position = gesture.location(in: gesture.view).x
             let delta = position - spaceLastTranslation
-            let step: CGFloat = 18
-            guard abs(delta) >= step else { return }
-            let offset = delta > 0 ? 1 : -1
+            // UITextDocumentProxy can move only by whole characters, but map
+            // the finger's continuous displacement at a fine resolution
+            // instead of waiting for the former 18pt discrete jumps.  Consume
+            // all crossed steps so a fast drag cannot lose cursor movement.
+            let pointsPerCharacter: CGFloat = 6
+            let offset = Int(delta / pointsPerCharacter)
+            guard offset != 0 else { return }
             textDocumentProxy.adjustTextPosition(byCharacterOffset: offset)
-            spaceLastTranslation += CGFloat(offset) * step
+            spaceLastTranslation += CGFloat(offset) * pointsPerCharacter
         default:
             break
         }
@@ -457,7 +466,7 @@ final class KeyboardViewController: UIInputViewController {
             let font = UIFont.preferredFont(forTextStyle: .body)
             for (index, char) in Array(composition.sentencePreview).enumerated() {
                 let isActive = index == composition.activeCharacterIndex
-                let title = isActive ? (composition.activePinyin ?? String(char)) : String(char)
+                let title = isActive ? (composition.activeEnteredKeys ?? String(char)) : String(char)
                 let button = UIButton(type: .system)
                 button.setTitle(title, for: .normal)
                 button.titleLabel?.font = font

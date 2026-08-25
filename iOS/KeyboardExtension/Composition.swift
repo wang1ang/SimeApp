@@ -113,12 +113,45 @@ final class Composition {
         if !replacementCandidates.isEmpty { return replacementCandidates }
         return isComposing ? candidates : predictionCandidates
     }
-    var activePinyin: String? {
+    /// The literal key sequence entered for the active correction syllable.
+    /// Do not use Sime's normalized pinyin units here: a Microsoft Shuangpin
+    /// user must see their two-key code, and full-pinyin input must retain
+    /// typed separators such as an apostrophe.
+    var activeEnteredKeys: String? {
         guard let active = activeCharacterIndex,
               let units = candidates.first?.units else { return nil }
         let syllables = units.split(separator: "'").map(String.init)
-        guard syllables.indices.contains(active) else { return nil }
-        return syllables[active]
+        let rawSyllableIndex = active - committed.count
+        guard syllables.indices.contains(rawSyllableIndex) else { return nil }
+        let groups = enteredKeyGroups(for: syllables)
+        guard groups.indices.contains(rawSyllableIndex) else { return nil }
+        return groups[rawSyllableIndex]
+    }
+
+    private func enteredKeyGroups(for syllables: [String]) -> [String] {
+        var remaining = Substring(raw)
+        var groups: [String] = []
+        for syllable in syllables {
+            switch inputScheme {
+            case .microsoftShuangpin:
+                guard remaining.count >= 2 else { return [] }
+                groups.append(String(remaining.prefix(2)))
+                remaining.removeFirst(2)
+            case .fullPinyin:
+                // Apostrophes are input keys too; associate one with the
+                // syllable that follows it so the displayed label is literal.
+                var group = ""
+                if remaining.first == "'" {
+                    group.append("'")
+                    remaining.removeFirst()
+                }
+                guard remaining.count >= syllable.count else { return [] }
+                group += String(remaining.prefix(syllable.count))
+                remaining.removeFirst(syllable.count)
+                groups.append(group)
+            }
+        }
+        return groups
     }
 
     func restore(raw: String, committed: String) {
