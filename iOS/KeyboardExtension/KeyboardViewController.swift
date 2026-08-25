@@ -353,11 +353,11 @@ final class KeyboardViewController: UIInputViewController {
                 button.setTitle(String(char), for: .normal)
                 button.titleLabel?.font = .preferredFont(forTextStyle: .body)
                 button.setTitleColor(index == composition.activeCharacterIndex ? .systemBlue : .label, for: .normal)
-                button.frame = CGRect(x: sentenceX, y: 0, width: 30, height: 28)
+                button.frame = CGRect(x: sentenceX, y: 0, width: 24, height: 28)
                 button.accessibilityValue = String(index)
                 button.addTarget(self, action: #selector(sentenceCharacterTapped(_:)), for: .touchUpInside)
                 sentenceBar.addSubview(button)
-                sentenceX += 33
+                sentenceX += 27
             }
         }
         sentenceContentWidth = sentenceX
