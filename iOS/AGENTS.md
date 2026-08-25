@@ -47,7 +47,7 @@
 
 - `Composition.swift` 管理 raw 拼音、已选前缀、候选、逐字改选和 marked text 光标。
 - 普通输入请求 60 条候选，保留首音节的完整单字集合，避免低频字（如 `shan` 的“删”）无法选择。
-- 第一行：整句预览，每字可点；第二行：候选横向滚动。
+- 第一行：整句预览，每字可点；末尾追加可点 `checkmark`，等同空格确认上屏且随第一行横向滚动；第二行：候选横向滚动。
 - 点第一行某字后：第二行上下文词/句优先，随后附完整单字候选（按文本去重）。
 - 候选更新必须重置两行到左侧；`render()` 创建候选后须立即更新 candidate scroll view 的 `contentSize`，不要依赖下一轮 layout。
 - 第二行候选**不要使用 UIButton**：此前按钮会与 `UIScrollView` 争抢拖动，造成字上/字间滚动不一致。当前实现以非交互 `UILabel` 手工布局候选，`candidateBar` 上单个 `UITapGestureRecognizer` 按 label frame 选词，横向拖动完全交由原生 `UIScrollView`。不要重新加入候选按钮或额外的惯性/长按手势拦截。

@@ -310,6 +310,10 @@ final class KeyboardViewController: UIInputViewController {
         render()
     }
 
+    @objc private func confirmSentence() {
+        commitComposition()
+    }
+
     private func rebuildKeyboard() {
         keyboardStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         if numberMode {
@@ -359,6 +363,15 @@ final class KeyboardViewController: UIInputViewController {
                 sentenceBar.addSubview(button)
                 sentenceX += 27
             }
+        }
+        if composition.isComposing {
+            let confirm = UIButton(type: .system)
+            confirm.setImage(UIImage(systemName: "checkmark"), for: .normal)
+            confirm.tintColor = .secondaryLabel
+            confirm.frame = CGRect(x: sentenceX, y: 0, width: 24, height: 28)
+            confirm.addTarget(self, action: #selector(confirmSentence), for: .touchUpInside)
+            sentenceBar.addSubview(confirm)
+            sentenceX += 27
         }
         sentenceContentWidth = sentenceX
         candidateBar.subviews.forEach { $0.removeFromSuperview() }
