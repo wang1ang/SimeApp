@@ -18,6 +18,9 @@ struct Candidate {
 protocol PinyinDecoder {
     func decode(_ pinyin: String, limit: Int) -> [Candidate]
     func decode(_ pinyin: String, context: [UInt32], limit: Int) -> [Candidate]
+    /// High-recall candidates for one exact pinyin span, used to recover the
+    /// token path for a fixed correction prefix.
+    func exactCandidates(_ pinyin: String, limit: Int) -> [Candidate]
     func syllableCandidates(_ pinyin: String) -> [Candidate]
     func predict(_ context: [UInt32], limit: Int) -> [Candidate]
 }
@@ -27,8 +30,12 @@ extension PinyinDecoder {
         decode(pinyin, limit: limit)
     }
 
+    func exactCandidates(_ pinyin: String, limit: Int) -> [Candidate] {
+        decode(pinyin, limit: limit)
+    }
+
     func syllableCandidates(_ pinyin: String) -> [Candidate] {
-        decode(pinyin, limit: 60)
+        exactCandidates(pinyin, limit: 60)
     }
 
     func predict(_ context: [UInt32], limit: Int) -> [Candidate] { [] }
@@ -267,7 +274,18 @@ final class Composition {
         // character rank as if they began a new sentence.
         var context = committedTokens
         if !prefix.isEmpty {
-            context += decoder.decode(prefix, limit: 1).first?.tokens ?? []
+            // The prefix must be the text currently shown before the tap, not
+            // merely the decoder's most likely standalone reading.  For
+            // example, xing can independently prefer “行” even when the
+            // selected sentence is “性价比”; using 行 here made “假币” outrank
+            // continuations of 性.  Find the exact displayed prefix and take
+            // its token path as the language-model context.
+            let prefixText = String(Array(sentence).prefix(index))
+            let prefixCandidates = decoder.exactCandidates(prefix, limit: 60)
+            let prefixTokens = prefixCandidates.first(where: { $0.text == prefixText })?.tokens
+                ?? prefixCandidates.first?.tokens
+                ?? []
+            context += prefixTokens
         }
         // Put high-recall alternatives for the tapped syllable first (删 for
         // shan, for example), then append context-ranked words and phrases.
