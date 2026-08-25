@@ -47,6 +47,8 @@ targets:
   SimeKeyboard:
     type: app-extension
     platform: iOS
+    dependencies:
+      - framework: Dependencies/ncnn.xcframework
     sources:
       - path: KeyboardExtension
         excludes:
@@ -61,6 +63,11 @@ targets:
         script: |
           cp "$SRCROOT/../require/Sime/save/sime.dict" "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/sime.dict"
           cp "$SRCROOT/../require/Sime/save/sime.cnt" "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/sime.cnt"
+          cp "$SRCROOT/../require/Sime/save/gru.embedding.i8" "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/gru.embedding.i8"
+          cp "$SRCROOT/../require/Sime/save/gru.pinyin.ncnn.param" "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/gru.pinyin.ncnn.param"
+          cp "$SRCROOT/../require/Sime/save/gru.pinyin.ncnn.bin" "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/gru.pinyin.ncnn.bin"
+          cp "$SRCROOT/../require/Sime/save/gru.t9.ncnn.param" "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/gru.t9.ncnn.param"
+          cp "$SRCROOT/../require/Sime/save/gru.t9.ncnn.bin" "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/gru.t9.ncnn.bin"
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.ismantic.sime.keyboard
@@ -70,4 +77,7 @@ targets:
         CODE_SIGN_ENTITLEMENTS: KeyboardExtension/SimeKeyboard.entitlements
         SWIFT_OBJC_BRIDGING_HEADER: "$(SRCROOT)/Engine/sime_api.h"
         HEADER_SEARCH_PATHS: "$(SRCROOT)/../require/Sime/include $(SRCROOT)/../require/Sime/src"
+        "HEADER_SEARCH_PATHS[sdk=iphoneos*]": "$(inherited) $(SRCROOT)/Dependencies/ncnn.xcframework/ios-arm64/Headers"
+        "HEADER_SEARCH_PATHS[sdk=iphonesimulator*]": "$(inherited) $(SRCROOT)/Dependencies/ncnn.xcframework/ios-arm64_x86_64-simulator/Headers"
         CLANG_CXX_LANGUAGE_STANDARD: c++20
+        OTHER_CPLUSPLUSFLAGS: "$(inherited) -DSIME_ENABLE_NCNN=1"

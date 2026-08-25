@@ -10,6 +10,7 @@
 ```bash
 brew install xcodegen        # 只需首次安装
 cd iOS
+./scripts/build-ncnn-xcframework.sh  # 首次或 ncnn 更新后，构建本地 GRU runtime
 xcodegen generate
 open Sime.xcodeproj
 ```
@@ -27,4 +28,4 @@ open Sime.xcodeproj
 
 `KeyboardExtension/Composition.swift` 是 UI 组合状态与引擎的边界，`NativePinyinDecoder.swift` 通过 `Engine/sime_api.{h,cc}` 调用 bundled Sime C++ 引擎。
 
-构建时会把 `require/Sime/save/sime.dict` 和 `require/Sime/save/sime.cnt` 复制进 keyboard extension；运行时和模型必须位于扩展 target 内，不能依赖宿主 App 进程。上屏后会用已确认的 token 调用 `sime_next_tokens` 显示离线联想；点联想词会继续更新短期上下文。不要启用网络或把输入内容传出扩展。
+构建时会把 `require/Sime/save/sime.dict`、`sime.cnt` 和 GRU 模型复制进 keyboard extension；运行时和模型必须位于扩展 target 内，不能依赖宿主 App 进程。`scripts/build-ncnn-xcframework.sh` 从 bundled ncnn 源码构建 CPU-only iOS static XCFramework（生成物不提交）。上屏后会用已确认的 token 调用 `sime_next_tokens` 显示离线联想；点联想词会继续更新短期上下文。不要启用网络或把输入内容传出扩展。

@@ -59,3 +59,6 @@ replay_pid*
 # Local handoff notes for coding agents
 /iOS/AGENTS.md
 /iOS/TODO.md
+
+# Locally built ncnn static runtime (rebuild with iOS/scripts/build-ncnn-xcframework.sh)
+/iOS/Dependencies/
