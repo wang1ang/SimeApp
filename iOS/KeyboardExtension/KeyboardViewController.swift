@@ -1,11 +1,28 @@
 import UIKit
 
+/// Lets the enclosing scroll view receive drags that begin in the visual gaps
+/// between candidate buttons, while leaving the buttons themselves tappable.
+private final class CandidateBarView: UIView {
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        guard bounds.contains(point), !isHidden, alpha > 0.01, isUserInteractionEnabled else {
+            return nil
+        }
+        for subview in subviews.reversed() {
+            let converted = convert(point, to: subview)
+            if let hit = subview.hitTest(converted, with: event) {
+                return hit
+            }
+        }
+        return nil
+    }
+}
+
 final class KeyboardViewController: UIInputViewController {
     private var composition = Composition()
     private let sentenceScrollView = UIScrollView()
     private let sentenceBar = UIView()
     private let candidateScrollView = UIScrollView()
-    private let candidateBar = UIView()
+    private let candidateBar = CandidateBarView()
     private var sentenceContentWidth: CGFloat = 0
     private var candidateContentWidth: CGFloat = 0
     private let keyboardStack = UIStackView()
