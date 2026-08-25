@@ -29,7 +29,6 @@ final class KeyboardViewController: UIInputViewController {
             raw: InputSettings.pendingRaw,
             committed: InputSettings.pendingCommitted
         )
-        refreshHostContext()
         render()
     }
 
@@ -43,7 +42,6 @@ final class KeyboardViewController: UIInputViewController {
             composition = Composition(inputScheme: scheme)
             keyboardNeedsRebuild = true
         }
-        refreshHostContext()
         refreshReturnKeyAppearance()
         render()
     }
@@ -52,7 +50,9 @@ final class KeyboardViewController: UIInputViewController {
         super.textDidChange(textInput)
         guard !restoringMarkedText else { return }
         syncCompositionCursor()
-        refreshHostContext()
+        if composition.isComposing {
+            refreshHostContext()
+        }
         refreshReturnKeyAppearance()
 
         // Some hosts temporarily unmark the entire composition when the user
