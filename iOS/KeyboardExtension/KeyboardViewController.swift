@@ -14,12 +14,14 @@ final class KeyboardViewController: UIInputViewController {
     private var shifted = false
     private var keyboardScheme = InputSettings.scheme
     private var keyboardNeedsRebuild = false
+    private var displayedReturnKeyType: UIReturnKeyType?
     private var deleteInitialTimer: Timer?
     private var deleteRepeatTimer: Timer?
 
     override func viewDidLoad() {
         super.viewDidLoad()
         setupView()
+        displayedReturnKeyType = textDocumentProxy.returnKeyType
         composition.restore(
             raw: InputSettings.pendingRaw,
             committed: InputSettings.pendingCommitted
@@ -37,12 +39,21 @@ final class KeyboardViewController: UIInputViewController {
             composition = Composition(inputScheme: scheme)
             keyboardNeedsRebuild = true
         }
+        refreshReturnKeyAppearance()
         render()
     }
 
     override func textDidChange(_ textInput: UITextInput?) {
         super.textDidChange(textInput)
         syncCompositionCursor()
+        refreshReturnKeyAppearance()
+    }
+
+    private func refreshReturnKeyAppearance() {
+        let type = textDocumentProxy.returnKeyType
+        guard displayedReturnKeyType != type else { return }
+        displayedReturnKeyType = type
+        keyboardNeedsRebuild = true
     }
 
     private func syncCompositionCursor() {
@@ -144,12 +155,13 @@ final class KeyboardViewController: UIInputViewController {
         let displayedTitle: String
         switch title {
         case "space": displayedTitle = "空格"
-        case "return": displayedTitle = "换行"
+        case "return": displayedTitle = returnKeyTitle()
         case "delete": displayedTitle = "⌫"
         default: displayedTitle = title
         }
         let button = UIButton(type: .system)
         button.setTitle(displayedTitle, for: .normal)
+        if title == "return" { button.accessibilityValue = "return" }
         button.setTitleColor(.label, for: .normal)
         button.titleLabel?.font = .systemFont(ofSize: 18)
         button.backgroundColor = .tertiarySystemBackground
@@ -180,11 +192,25 @@ final class KeyboardViewController: UIInputViewController {
         return button
     }
 
+    private func returnKeyTitle() -> String {
+        switch textDocumentProxy.returnKeyType {
+        case .send: return "发送"
+        case .search: return "搜索"
+        case .done: return "完成"
+        case .go: return "前往"
+        case .next: return "下一项"
+        case .join: return "加入"
+        case .continue: return "继续"
+        case .route: return "路线"
+        default: return "换行"
+        }
+    }
+
     @objc private func keyTapped(_ sender: UIButton) {
-        guard let title = sender.currentTitle else { return }
+        guard let title = sender.accessibilityValue ?? sender.currentTitle else { return }
         switch title {
         case "空格": space()
-        case "换行":
+        case "return":
             if composition.isComposing {
                 commitComposition()
             } else {
