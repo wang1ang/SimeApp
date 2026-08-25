@@ -49,7 +49,8 @@
 - 普通输入请求 60 条候选，保留首音节的完整单字集合，避免低频字（如 `shan` 的“删”）无法选择。
 - 第一行：整句预览，每字可点；第二行：候选横向滚动。
 - 点第一行某字后：第二行上下文词/句优先，随后附完整单字候选（按文本去重）。
-- 候选更新必须重置两行到左侧；`render()` 创建候选后须立即更新 candidate scroll view 的 `contentSize`，不要依赖下一轮 layout。仅当 `isDecelerating` 时，临时重置 pan gesture recognizer 以取消旧惯性；不可在普通拖动/每次 render 时重置它。
+- 候选更新必须重置两行到左侧；`render()` 创建候选后须立即更新 candidate scroll view 的 `contentSize`，不要依赖下一轮 layout。
+- 第二行候选**不要使用 UIButton**：此前按钮会与 `UIScrollView` 争抢拖动，造成字上/字间滚动不一致。当前实现以非交互 `UILabel` 手工布局候选，`candidateBar` 上单个 `UITapGestureRecognizer` 按 label frame 选词，横向拖动完全交由原生 `UIScrollView`。不要重新加入候选按钮或额外的惯性/长按手势拦截。
 - 空格：有组合时上屏最佳句，无组合时插入空格。
 - 换行：有组合时仅上屏，不插入换行；无组合时插入 `\n`。
 - 锁屏可能重建 extension：`InputSettings.pendingRaw/pendingCommitted` 临时保存本地组合，`viewDidLoad` 恢复并重新解码；上屏/清空时删除。
@@ -79,7 +80,7 @@
 
 ## 当前状态
 
-- 最新清理提交：`266b5cf iOS: remove obsolete keyboard mode branches`。
-- 最近实现包含单 extension + App 内方案开关：`f130653`。
+- 最近候选触摸修复：`09ee1aa iOS: separate candidate tap from scrolling`。
+- 单 extension + App 内方案开关：`f130653`。
 - 工作区在写本文档前应是干净的；提交本文档后也应保持干净。
-- 后续优先真机验证：锁屏恢复、marked text 光标重定位、微软双拼覆盖、候选惯性滚动时点选。
+- 后续优先真机验证：锁屏恢复、marked text 光标重定位、微软双拼覆盖，以及候选栏长距离滚动/惯性后的触摸体验。
