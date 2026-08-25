@@ -24,6 +24,7 @@ protocol PinyinDecoder {
     /// High-recall candidates for one exact pinyin span, used to recover the
     /// token path for a fixed correction prefix.
     func exactCandidates(_ pinyin: String, limit: Int) -> [Candidate]
+    func tokenize(_ text: String) -> [UInt32]
     func syllableCandidates(_ pinyin: String) -> [Candidate]
     func predict(_ context: [UInt32], limit: Int) -> [Candidate]
 }
@@ -36,6 +37,8 @@ extension PinyinDecoder {
     func exactCandidates(_ pinyin: String, limit: Int) -> [Candidate] {
         decode(pinyin, limit: limit)
     }
+
+    func tokenize(_ text: String) -> [UInt32] { [] }
 
     func syllableCandidates(_ pinyin: String) -> [Candidate] {
         exactCandidates(pinyin, limit: 60)
@@ -102,6 +105,9 @@ final class Composition {
     private(set) var activeCharacterIndex: Int?
     private var replacementCandidates: [Candidate] = []
     private var predictionCandidates: [Candidate] = []
+    // Tokens derived from the host's text before the insertion point. They
+    // supersede the local fallback whenever UIKit exposes that text.
+    private var hostContextTokens: [UInt32]?
     private var contextTokens: [UInt32] = []
     private var committedTokens: [UInt32] = []
     private var overriddenPreview: String?
@@ -175,6 +181,13 @@ final class Composition {
 
     func moveCursor(to offset: Int) {
         cursor = min(max(0, offset), raw.count)
+    }
+
+    func updateHostContext(from text: String) {
+        let tokens = decoder.tokenize(text)
+        guard hostContextTokens != tokens else { return }
+        hostContextTokens = tokens
+        if isComposing { refresh() }
     }
 
     func append(_ letter: String) {
@@ -352,8 +365,7 @@ final class Composition {
             predictionCandidates = []
             return
         }
-        contextTokens += tokens
-        contextTokens = Array(contextTokens.suffix(32))
+        contextTokens = Array(((hostContextTokens ?? contextTokens) + tokens).suffix(32))
         predictionCandidates = decoder.predict(contextTokens, limit: 9)
     }
 
@@ -374,6 +386,10 @@ final class Composition {
         // before continuing with the remaining syllables.
         let input = inputScheme == .microsoftShuangpin
             ? MicrosoftShuangpin.expand(raw) : raw
-        candidates = input.isEmpty ? [] : decoder.decode(input, context: contextTokens, limit: 60)
+        candidates = input.isEmpty ? [] : decoder.decode(
+            input,
+            context: hostContextTokens ?? contextTokens,
+            limit: 60
+        )
     }
 }

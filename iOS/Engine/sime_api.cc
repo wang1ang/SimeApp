@@ -28,6 +28,26 @@ int sime_context_size(const SimeHandle *h) {
   return (h && h->sime) ? h->sime->ContextSize() : 0;
 }
 
+SimeTokens sime_tokenize_text(const SimeHandle *h, const char *text) {
+  SimeTokens result{};
+  if (!h || !h->sime || !h->sime->Ready() || !text) return result;
+  const auto tokens = h->sime->Tokenize(text);
+  if (tokens.empty()) return result;
+  result.items = static_cast<uint32_t *>(
+      malloc(tokens.size() * sizeof(uint32_t)));
+  if (!result.items) return result;
+  memcpy(result.items, tokens.data(), tokens.size() * sizeof(uint32_t));
+  result.count = static_cast<int>(tokens.size());
+  return result;
+}
+
+void sime_free_tokens(SimeTokens *tokens) {
+  if (!tokens) return;
+  free(tokens->items);
+  tokens->items = nullptr;
+  tokens->count = 0;
+}
+
 static SimeResults to_c(const std::vector<sime::DecodeResult> &results) {
   SimeResults r;
   r.count = static_cast<int>(results.size());

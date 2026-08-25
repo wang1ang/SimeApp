@@ -29,6 +29,7 @@ final class KeyboardViewController: UIInputViewController {
             raw: InputSettings.pendingRaw,
             committed: InputSettings.pendingCommitted
         )
+        refreshHostContext()
         render()
     }
 
@@ -42,6 +43,7 @@ final class KeyboardViewController: UIInputViewController {
             composition = Composition(inputScheme: scheme)
             keyboardNeedsRebuild = true
         }
+        refreshHostContext()
         refreshReturnKeyAppearance()
         render()
     }
@@ -50,6 +52,7 @@ final class KeyboardViewController: UIInputViewController {
         super.textDidChange(textInput)
         guard !restoringMarkedText else { return }
         syncCompositionCursor()
+        refreshHostContext()
         refreshReturnKeyAppearance()
 
         // Some hosts temporarily unmark the entire composition when the user
@@ -64,6 +67,22 @@ final class KeyboardViewController: UIInputViewController {
                 self?.restoringMarkedText = false
             }
         }
+    }
+
+    private func refreshHostContext() {
+        guard var before = textDocumentProxy.documentContextBeforeInput else { return }
+        // UIKit normally includes the marked preedit before the cursor. It is
+        // not committed host text and must not become language-model context.
+        if composition.isComposing {
+            let markedPrefix = composition.committed
+                + String(composition.raw.prefix(composition.cursor))
+            if before.hasSuffix(markedPrefix) {
+                before.removeLast(markedPrefix.count)
+            }
+        }
+        // UITextDocumentProxy already bounds this context; retain an explicit
+        // recent window as a safeguard for hosts that return more text.
+        composition.updateHostContext(from: String(before.suffix(128)))
     }
 
     private func refreshReturnKeyAppearance() {

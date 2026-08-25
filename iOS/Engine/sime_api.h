@@ -25,11 +25,19 @@ typedef struct {
   int count;
 } SimeResults;
 
+typedef struct {
+  uint32_t *items;  // malloc'd array
+  int count;
+} SimeTokens;
+
 // Lifecycle
 SimeHandle *sime_create(const char *dict_path, const char *cnt_path);
 void sime_destroy(SimeHandle *h);
 bool sime_ready(const SimeHandle *h);
 int sime_context_size(const SimeHandle *h);
+// Segment already-written UTF-8 text for use as language-model context.
+SimeTokens sime_tokenize_text(const SimeHandle *h, const char *text);
+void sime_free_tokens(SimeTokens *tokens);
 
 // Decoding
 // decode_sentence: full Viterbi sentence decode; extra = number of N-best

@@ -32,6 +32,14 @@ final class NativePinyinDecoder: PinyinDecoder {
         return unpack(results)
     }
 
+    func tokenize(_ text: String) -> [UInt32] {
+        guard let handle, !text.isEmpty else { return [] }
+        var tokens = sime_tokenize_text(handle, text)
+        defer { sime_free_tokens(&tokens) }
+        guard tokens.count > 0, let items = tokens.items else { return [] }
+        return (0..<Int(tokens.count)).map { items[$0] }
+    }
+
     func syllableCandidates(_ pinyin: String) -> [Candidate] {
         exactCandidates(pinyin, limit: 60)
     }
