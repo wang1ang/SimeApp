@@ -15,6 +15,7 @@ final class KeyboardViewController: UIInputViewController {
     private var keyboardScheme = InputSettings.scheme
     private var keyboardNeedsRebuild = false
     private var displayedReturnKeyType: UIReturnKeyType?
+    private var restoringMarkedText = false
     private var deleteInitialTimer: Timer?
     private var deleteRepeatTimer: Timer?
 
@@ -45,8 +46,22 @@ final class KeyboardViewController: UIInputViewController {
 
     override func textDidChange(_ textInput: UITextInput?) {
         super.textDidChange(textInput)
+        guard !restoringMarkedText else { return }
         syncCompositionCursor()
         refreshReturnKeyAppearance()
+
+        // Some hosts temporarily unmark the entire composition when the user
+        // places the insertion point inside it. Restore it at the detected
+        // position instead of letting the raw pinyin disappear.
+        guard composition.isComposing else { return }
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.composition.isComposing else { return }
+            self.restoringMarkedText = true
+            self.updateMarkedText()
+            DispatchQueue.main.async { [weak self] in
+                self?.restoringMarkedText = false
+            }
+        }
     }
 
     private func refreshReturnKeyAppearance() {
