@@ -280,10 +280,8 @@ final class Composition {
         // beam pruning, and prevents very weak tails such as 性珈币 from
         // reaching the candidate UI while retaining meaningful alternatives.
         let scoreFloor = (fullPaths.first?.score ?? -.infinity) - 18
-        replacementCandidates = fullPaths.compactMap { path in
+        let anchoredPaths = fullPaths.compactMap { path -> Candidate? in
             guard path.score >= scoreFloor else { return nil }
-            
-
             let pathCharacters = Array(path.text)
             let pathSyllables = path.units.split(separator: "'").map(String.init)
             guard pathCharacters.count > index,
@@ -298,6 +296,15 @@ final class Composition {
                 units: pathSyllables[index...].joined(separator: "'")
             )
         }
+        // Full paths supply phrase/suffix correction. Keep the complete
+        // single-character table too: selecting one replaces only the tapped
+        // syllable and then advances to the next, so prefix pruning must not
+        // make character correction unavailable.
+        let singleCharacters = decoder.syllableCandidates(syllables[index])
+            .filter { $0.text.count == 1 }
+        var seen = Set<String>()
+        replacementCandidates = (anchoredPaths + singleCharacters)
+            .filter { seen.insert($0.text).inserted }
     }
 
     func commitBestOrRaw() -> String? {
