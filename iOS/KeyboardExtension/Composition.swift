@@ -114,15 +114,6 @@ final class Composition {
         return isComposing ? candidates : predictionCandidates
     }
 
-    /// Correction candidates decode only the editable suffix, but present the
-    /// fixed sentence prefix too.  That makes the second row a continuation
-    /// of what the user tapped rather than an ambiguous word starting there.
-    func displayText(for candidate: Candidate) -> String {
-        guard activeCharacterIndex != nil,
-              !replacementCandidates.isEmpty,
-              let active = activeCharacterIndex else { return candidate.text }
-        return String(sentencePreview.prefix(active)) + candidate.text
-    }
     /// The literal key sequence entered for the active correction syllable.
     /// Do not use Sime's normalized pinyin units here: a Microsoft Shuangpin
     /// user must see their two-key code, and full-pinyin input must retain

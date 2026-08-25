@@ -505,13 +505,12 @@ final class KeyboardViewController: UIInputViewController {
             let font = UIFont.preferredFont(forTextStyle: .body)
             for (index, candidate) in displayedCandidates.enumerated() {
                 let label = UILabel()
-                let text = composition.displayText(for: candidate)
-                label.text = text
+                label.text = candidate.text
                 label.font = font
                 label.textColor = .label
                 label.textAlignment = .center
                 label.lineBreakMode = .byTruncatingTail
-                let textWidth = (text as NSString).size(withAttributes: [.font: font]).width
+                let textWidth = (candidate.text as NSString).size(withAttributes: [.font: font]).width
                 let width = max(ceil(textWidth) + 4, 22)
                 label.frame = CGRect(x: candidateX, y: 0, width: width, height: 34)
                 label.tag = index
