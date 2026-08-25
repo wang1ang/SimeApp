@@ -39,6 +39,7 @@ targets:
     sources:
       - path: Tests
       - path: KeyboardExtension/Composition.swift
+      - path: KeyboardExtension/PinyinDecoder.swift
       - path: Shared/InputScheme.swift
     dependencies:
       - target: Sime
