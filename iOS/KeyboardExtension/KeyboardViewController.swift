@@ -74,14 +74,27 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func syncCompositionCursor() {
-        guard composition.isComposing,
-              let before = textDocumentProxy.documentContextBeforeInput,
-              let after = textDocumentProxy.documentContextAfterInput else { return }
+        guard composition.isComposing else { return }
+        // Hosts are allowed to return nil for the context after the insertion
+        // point (notably at the end of a note).  The previous all-or-nothing
+        // check then missed a tap in marked pinyin and the subsequent
+        // setMarkedText replaced it at the wrong position.
+        let before = textDocumentProxy.documentContextBeforeInput
+        let after = textDocumentProxy.documentContextAfterInput
+        guard before != nil || after != nil else { return }
+
         let raw = composition.raw
         for offset in 0...raw.count {
             let prefix = composition.committed + String(raw.prefix(offset))
             let suffix = String(raw.dropFirst(offset))
-            if before.hasSuffix(prefix), after.hasPrefix(suffix) {
+            let prefixMatches = before?.hasSuffix(prefix) ?? false
+            let suffixMatches = after?.hasPrefix(suffix) ?? false
+
+            // Prefer both sides when available, but either immediate document
+            // context is sufficient when the host only exposes one side.
+            if (before != nil && after != nil && prefixMatches && suffixMatches)
+                || (before != nil && after == nil && prefixMatches)
+                || (before == nil && after != nil && suffixMatches) {
                 composition.moveCursor(to: offset)
                 return
             }
@@ -240,8 +253,13 @@ final class KeyboardViewController: UIInputViewController {
                 space()
             }
         case "return":
-            if composition.isComposing {
-                commitComposition()
+            if let text = composition.commitPreeditLiterally() {
+                // Return is the literal-English escape hatch: unlike space or
+                // the candidate-bar confirmation, it must not decode pinyin.
+                textDocumentProxy.unmarkText()
+                textDocumentProxy.insertText(text)
+                updateMarkedText()
+                render()
             } else {
                 textDocumentProxy.insertText("\n")
             }

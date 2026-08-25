@@ -268,6 +268,17 @@ final class Composition {
         return result
     }
 
+    /// Commits the currently marked input without decoding its remaining pinyin.
+    /// A prior explicit candidate selection remains part of the preedit, while
+    /// the unconverted portion is inserted literally as English text.
+    func commitPreeditLiterally() -> String? {
+        guard isComposing else { return nil }
+        let result = preedit
+        predictionCandidates = []
+        clearComposition()
+        return result
+    }
+
     private func publishPredictions(for tokens: [UInt32]) {
         guard !tokens.isEmpty else {
             predictionCandidates = []
