@@ -103,6 +103,14 @@ struct BuiltinPinyinDecoder: PinyinDecoder {
 }
 
 final class Composition {
+    /// A fixed decoded prefix. All remaining raw input is decoded after this
+    /// boundary; it is the single source of truth for character correction,
+    /// rather than a display-only replacement string.
+    private struct Anchor {
+        let text: String
+        let syllableCount: Int
+    }
+
     private let decoder: PinyinDecoder
     private let inputScheme: InputScheme
     private(set) var raw = ""
@@ -117,7 +125,7 @@ final class Composition {
     private var hostContextTokens: [UInt32]?
     private var contextTokens: [UInt32] = []
     private var committedTokens: [UInt32] = []
-    private var overriddenPreview: String?
+    private var anchor: Anchor?
 
     init(decoder: PinyinDecoder = BuiltinPinyinDecoder(),
          inputScheme: InputScheme = InputSettings.scheme) {
@@ -125,12 +133,13 @@ final class Composition {
         self.inputScheme = inputScheme
     }
 
-    var preedit: String { committed + raw }
+    private var anchoredPrefix: String { anchor?.text ?? committed }
+    var preedit: String { anchoredPrefix + raw }
     var selectionLocation: Int {
-        committed.utf16.count + String(raw.prefix(cursor)).utf16.count
+        anchoredPrefix.utf16.count + String(raw.prefix(cursor)).utf16.count
     }
-    var isComposing: Bool { !raw.isEmpty || !committed.isEmpty }
-    var sentencePreview: String { overriddenPreview ?? (committed + (candidates.first?.text ?? "")) }
+    var isComposing: Bool { !raw.isEmpty || !anchoredPrefix.isEmpty }
+    var sentencePreview: String { anchoredPrefix + (candidates.first?.text ?? "") }
     var displayCandidates: [Candidate] {
         if !replacementCandidates.isEmpty { return replacementCandidates }
         return isComposing ? candidates : predictionCandidates
@@ -144,7 +153,7 @@ final class Composition {
         guard let active = activeCharacterIndex,
               let units = candidates.first?.units else { return nil }
         let syllables = units.split(separator: "'").map(String.init)
-        let rawSyllableIndex = active - committed.count
+        let rawSyllableIndex = active - anchoredPrefix.count
         guard syllables.indices.contains(rawSyllableIndex) else { return nil }
         let groups = enteredKeyGroups(for: syllables)
         guard groups.indices.contains(rawSyllableIndex) else { return nil }
@@ -177,6 +186,14 @@ final class Composition {
         return groups
     }
 
+    private func rawLength(forSyllables count: Int, units: String) -> Int {
+        guard count > 0 else { return 0 }
+        let syllables = units.split(separator: "'").map(String.init)
+        let groups = enteredKeyGroups(for: syllables)
+        guard groups.count >= count else { return 0 }
+        return groups.prefix(count).reduce(0) { $0 + $1.count }
+    }
+
     func restore(raw: String, committed: String) {
         guard !raw.isEmpty || !committed.isEmpty else { return }
         self.raw = raw
@@ -201,7 +218,6 @@ final class Composition {
         raw.insert(contentsOf: letter.lowercased(), at: insertion)
         cursor += letter.count
         predictionCandidates = []
-        overriddenPreview = nil
         activeCharacterIndex = nil
         replacementCandidates = []
         refresh()
@@ -223,7 +239,11 @@ final class Composition {
         guard candidates.indices.contains(index) else { return nil }
         let candidate = candidates[index]
         let consumed = rawConsumption(of: candidate)
-        committed += candidate.text
+        committed = anchoredPrefix + candidate.text
+        if let anchor {
+            self.anchor = Anchor(text: committed,
+                                 syllableCount: anchor.syllableCount + candidate.units.split(separator: "'").count)
+        }
         committedTokens += candidate.tokens
         raw.removeFirst(min(consumed, raw.count))
         cursor = max(0, cursor - consumed)
@@ -252,28 +272,31 @@ final class Composition {
             return prediction.text
         }
         if let active = activeCharacterIndex,
-           replacementCandidates.indices.contains(index) {
-            var chars = Array(sentencePreview)
-            guard chars.indices.contains(active) else { return nil }
+           replacementCandidates.indices.contains(index),
+           let top = candidates.first {
             let replacement = replacementCandidates[index]
-            let consumedSyllables = replacement.units
-                .split(separator: "'")
-                .filter { !$0.isEmpty }
-                .count
-            let span = max(1, consumedSyllables)
-            let end = min(chars.count, active + span)
-            chars.replaceSubrange(active..<end, with: replacement.text)
-            overriddenPreview = String(chars)
+            let span = max(1, replacement.units.split(separator: "'")
+                .filter { !$0.isEmpty }.count)
+            let relativeActive = active - anchoredPrefix.count
+            guard relativeActive >= 0 else { return nil }
 
-            // Continue the classic character-by-character correction flow at
-            // the first syllable after the replacement, rather than leaving
-            // the old candidate set selected at the previous character.
-            let next = active + span
-            if next < chars.count {
-                activateCharacter(next)
-            } else {
-                activeCharacterIndex = nil
-                replacementCandidates = []
+            // Materialize the selected prefix and consume exactly its source
+            // syllables. Subsequent input can therefore only decode the raw
+            // suffix; it cannot retranslate this user anchor.
+            let fixed = String(Array(sentencePreview).prefix(active))
+            let consumed = rawLength(forSyllables: relativeActive + span,
+                                     units: top.units)
+            guard consumed > 0 else { return nil }
+            committed = fixed + replacement.text
+            anchor = Anchor(text: committed,
+                            syllableCount: (anchor?.syllableCount ?? 0) + relativeActive + span)
+            raw.removeFirst(min(consumed, raw.count))
+            cursor = max(0, cursor - consumed)
+            activeCharacterIndex = nil
+            replacementCandidates = []
+            refresh()
+            if !raw.isEmpty {
+                activateCharacter(anchoredPrefix.count)
             }
             return nil
         }
@@ -285,32 +308,22 @@ final class Composition {
         guard Array(sentence).indices.contains(index),
               let top = candidates.first else { return }
         let syllables = top.units.split(separator: "'").map(String.init)
-        guard syllables.indices.contains(index) else { return }
+        let relativeIndex = index - anchoredPrefix.count
+        guard syllables.indices.contains(relativeIndex) else { return }
         activeCharacterIndex = index
         // Sime owns both normal correction layers: full constrained suffix
         // paths first, then short/character alternatives at this syllable.
         // Swift neither filters complete paths nor appends a separate table.
-        let fixedPrefix = String(Array(sentence).prefix(index))
+        let fixedPrefix = String(Array(top.text).prefix(relativeIndex))
         replacementCandidates = decoder.correctionCandidates(
             top.units,
             fixedPrefix: fixedPrefix,
-            prefixSyllables: index,
+            prefixSyllables: relativeIndex,
             limit: 60
         )
     }
 
     func commitBestOrRaw() -> String? {
-        // A character-level replacement owns the final sentence preview.
-        // Commit it verbatim rather than falling back to the original top
-        // decoder candidate.
-        if let overriddenPreview {
-            // A manually replaced preview no longer has a trustworthy full
-            // token sequence, so do not use the original sentence tokens for
-            // prediction context.
-            predictionCandidates = []
-            clearComposition()
-            return overriddenPreview
-        }
         // Space on a mobile keyboard commits the top *sentence* candidate.
         // Do not retain a decoder's partial-consumption tail here: this UI
         // does not yet expose segmented selection, and retaining it caused
@@ -356,7 +369,7 @@ final class Composition {
         candidates = []
         activeCharacterIndex = nil
         replacementCandidates = []
-        overriddenPreview = nil
+        anchor = nil
     }
 
     private func refresh() {

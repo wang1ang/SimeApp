@@ -3,7 +3,10 @@ import XCTest
 
 private struct CorrectionCandidateDecoder: PinyinDecoder {
     func decode(_ pinyin: String, limit: Int) -> [Candidate] {
-        [Candidate(text: "性价比", consumed: pinyin.count, tokens: [], units: "xing'jia'bi")]
+        if pinyin.hasPrefix("bi") {
+            return [Candidate(text: "比", consumed: pinyin.count, tokens: [], units: "bi")]
+        }
+        return [Candidate(text: "性价比", consumed: pinyin.count, tokens: [], units: "xing'jia'bi")]
     }
 
     func decode(_ pinyin: String, context: [UInt32], limit: Int) -> [Candidate] {
@@ -16,10 +19,7 @@ private struct CorrectionCandidateDecoder: PinyinDecoder {
 
     func correctionCandidates(_ pinyin: String, fixedPrefix: String,
                               prefixSyllables: Int, limit: Int) -> [Candidate] {
-        XCTAssertEqual(pinyin, "xing'jia'bi")
-        XCTAssertEqual(fixedPrefix, "性")
-        XCTAssertEqual(prefixSyllables, 1)
-        return ["价比", "假币", "家比", "强", "将", "家"].map {
+        return ["价比", "假币", "家比", "强", "将", "家", "假"].map {
             Candidate(text: $0, consumed: 0, tokens: [], units: "jia")
         }
     }
@@ -40,7 +40,20 @@ final class CompositionCorrectionTests: XCTestCase {
         composition.activateCharacter(1)
         XCTAssertEqual(
             composition.displayCandidates.map(\.text),
-            ["价比", "假币", "家比", "强", "将", "家"]
+            ["价比", "假币", "家比", "强", "将", "家", "假"]
         )
+    }
+
+    func testMiddleSelectionRemainsAnchoredAfterMoreInput() {
+        let composition = Composition(
+            decoder: CorrectionCandidateDecoder(), inputScheme: .fullPinyin
+        )
+        "xingjiabi".forEach { composition.append(String($0)) }
+        composition.activateCharacter(1)
+        XCTAssertNil(composition.selectDisplayed(6)) // 假, consuming only jia
+        XCTAssertTrue(composition.sentencePreview.hasPrefix("性假"))
+
+        composition.append("x")
+        XCTAssertTrue(composition.sentencePreview.hasPrefix("性假"))
     }
 }
