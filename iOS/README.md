@@ -1,6 +1,6 @@
 # 是语输入法（iOS）
 
-这是“是语输入法”的 iOS App 与键盘扩展。包含离线 Sime 拼音引擎、两行候选栏、逐字改选、全拼与微软双拼；默认不申请“完全访问”，不上传输入内容。
+这是“是语输入法”的 iOS App 与键盘扩展。包含离线 Sime 拼音引擎、两行候选栏、逐字改选、上屏后联想、全拼与微软双拼；默认不申请“完全访问”，不上传输入内容。
 
 - 宿主 App 名称：**是语输入法**
 - 系统键盘名称：**是语键盘**
@@ -27,4 +27,4 @@ open Sime.xcodeproj
 
 `KeyboardExtension/Composition.swift` 是 UI 组合状态与引擎的边界，`NativePinyinDecoder.swift` 通过 `Engine/sime_api.{h,cc}` 调用 bundled Sime C++ 引擎。
 
-构建时会把 `require/Sime/save/sime.dict` 和 `require/Sime/save/sime.cnt` 复制进 keyboard extension；运行时和模型必须位于扩展 target 内，不能依赖宿主 App 进程。不要启用网络或把输入内容传出扩展。
+构建时会把 `require/Sime/save/sime.dict` 和 `require/Sime/save/sime.cnt` 复制进 keyboard extension；运行时和模型必须位于扩展 target 内，不能依赖宿主 App 进程。上屏后会用已确认的 token 调用 `sime_next_tokens` 显示离线联想；点联想词会继续更新短期上下文。不要启用网络或把输入内容传出扩展。

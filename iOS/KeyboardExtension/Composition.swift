@@ -19,6 +19,7 @@ protocol PinyinDecoder {
     func decode(_ pinyin: String, limit: Int) -> [Candidate]
     func decode(_ pinyin: String, context: [UInt32], limit: Int) -> [Candidate]
     func syllableCandidates(_ pinyin: String) -> [Candidate]
+    func predict(_ context: [UInt32], limit: Int) -> [Candidate]
 }
 
 extension PinyinDecoder {
@@ -29,6 +30,8 @@ extension PinyinDecoder {
     func syllableCandidates(_ pinyin: String) -> [Candidate] {
         decode(pinyin, limit: 60)
     }
+
+    func predict(_ context: [UInt32], limit: Int) -> [Candidate] { [] }
 }
 
 /// A small offline fallback so a freshly generated extension is usable before
@@ -88,6 +91,9 @@ final class Composition {
     private(set) var candidates: [Candidate] = []
     private(set) var activeCharacterIndex: Int?
     private var replacementCandidates: [Candidate] = []
+    private var predictionCandidates: [Candidate] = []
+    private var contextTokens: [UInt32] = []
+    private var committedTokens: [UInt32] = []
     private var overriddenPreview: String?
 
     init(decoder: PinyinDecoder? = nil, inputScheme: InputScheme = InputSettings.scheme) {
@@ -104,7 +110,8 @@ final class Composition {
     var isComposing: Bool { !raw.isEmpty || !committed.isEmpty }
     var sentencePreview: String { overriddenPreview ?? (committed + (candidates.first?.text ?? "")) }
     var displayCandidates: [Candidate] {
-        replacementCandidates.isEmpty ? candidates : replacementCandidates
+        if !replacementCandidates.isEmpty { return replacementCandidates }
+        return isComposing ? candidates : predictionCandidates
     }
 
     func restore(raw: String, committed: String) {
@@ -123,6 +130,7 @@ final class Composition {
         let insertion = raw.index(raw.startIndex, offsetBy: cursor)
         raw.insert(contentsOf: letter.lowercased(), at: insertion)
         cursor += letter.count
+        predictionCandidates = []
         overriddenPreview = nil
         activeCharacterIndex = nil
         replacementCandidates = []
@@ -144,13 +152,16 @@ final class Composition {
     func select(_ index: Int) -> String? {
         guard candidates.indices.contains(index) else { return nil }
         let candidate = candidates[index]
+        let consumed = rawConsumption(of: candidate)
         committed += candidate.text
-        raw.removeFirst(min(rawConsumption(of: candidate), raw.count))
-        cursor = max(0, cursor - rawConsumption(of: candidate))
+        committedTokens += candidate.tokens
+        raw.removeFirst(min(consumed, raw.count))
+        cursor = max(0, cursor - consumed)
         refresh()
         guard raw.isEmpty else { return nil }
         let result = committed
-        reset()
+        publishPredictions(for: committedTokens)
+        clearComposition()
         return result
     }
 
@@ -165,6 +176,11 @@ final class Composition {
     }
 
     func selectDisplayed(_ index: Int) -> String? {
+        if !isComposing, predictionCandidates.indices.contains(index) {
+            let prediction = predictionCandidates[index]
+            publishPredictions(for: prediction.tokens)
+            return prediction.text
+        }
         if let active = activeCharacterIndex,
            replacementCandidates.indices.contains(index) {
             var chars = Array(sentencePreview)
@@ -221,7 +237,11 @@ final class Composition {
         // Commit it verbatim rather than falling back to the original top
         // decoder candidate.
         if let overriddenPreview {
-            reset()
+            // A manually replaced preview no longer has a trustworthy full
+            // token sequence, so do not use the original sentence tokens for
+            // prediction context.
+            predictionCandidates = []
+            clearComposition()
             return overriddenPreview
         }
         // Space on a mobile keyboard commits the top *sentence* candidate.
@@ -230,18 +250,31 @@ final class Composition {
         // the final pinyin letter to remain in composition.
         if let candidate = candidates.first {
             let result = committed + candidate.text
-            reset()
+            publishPredictions(for: committedTokens + candidate.tokens)
+            clearComposition()
             return result
         }
         guard isComposing else { return nil }
         let result = preedit
-        reset()
+        predictionCandidates = []
+        clearComposition()
         return result
     }
 
-    func reset() {
+    private func publishPredictions(for tokens: [UInt32]) {
+        guard !tokens.isEmpty else {
+            predictionCandidates = []
+            return
+        }
+        contextTokens += tokens
+        contextTokens = Array(contextTokens.suffix(32))
+        predictionCandidates = decoder.predict(contextTokens, limit: 9)
+    }
+
+    private func clearComposition() {
         raw = ""
         committed = ""
+        committedTokens = []
         cursor = 0
         candidates = []
         activeCharacterIndex = nil
@@ -255,6 +288,6 @@ final class Composition {
         // before continuing with the remaining syllables.
         let input = inputScheme == .microsoftShuangpin
             ? MicrosoftShuangpin.expand(raw) : raw
-        candidates = input.isEmpty ? [] : decoder.decode(input, limit: 60)
+        candidates = input.isEmpty ? [] : decoder.decode(input, context: contextTokens, limit: 60)
     }
 }
