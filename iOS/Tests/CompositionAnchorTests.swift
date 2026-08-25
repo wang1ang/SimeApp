@@ -20,7 +20,12 @@ private struct CorrectionCandidateDecoder: PinyinDecoder {
     func correctionCandidates(_ pinyin: String, fixedPrefix: String,
                               prefixSyllables: Int, limit: Int) -> [Candidate] {
         return ["价比", "假币", "家比", "强", "将", "家", "假"].map {
-            Candidate(text: $0, consumed: 0, tokens: [], units: "jia")
+            Candidate(
+                text: $0,
+                consumed: 0,
+                tokens: [],
+                units: $0.count > 1 ? "jia'bi" : "jia"
+            )
         }
     }
 
@@ -55,5 +60,18 @@ final class CompositionCorrectionTests: XCTestCase {
 
         composition.append("x")
         XCTAssertTrue(composition.sentencePreview.hasPrefix("性假"))
+    }
+
+    func testWordSelectionAnchorsItsEntireSourceRange() {
+        let composition = Composition(
+            decoder: CorrectionCandidateDecoder(), inputScheme: .fullPinyin
+        )
+        "xingjiabi".forEach { composition.append(String($0)) }
+        composition.activateCharacter(1)
+        XCTAssertNil(composition.selectDisplayed(1)) // 假币 consumes jia + bi
+        XCTAssertEqual(composition.sentencePreview, "性假币")
+
+        composition.append("x")
+        XCTAssertTrue(composition.sentencePreview.hasPrefix("性假币"))
     }
 }
