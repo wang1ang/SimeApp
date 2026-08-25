@@ -395,7 +395,10 @@ final class KeyboardViewController: UIInputViewController {
                 button.titleLabel?.numberOfLines = 1
                 button.titleLabel?.lineBreakMode = .byTruncatingTail
                 let textWidth = (candidate.text as NSString).size(withAttributes: [.font: font]).width
-                let width = max(48, ceil(textWidth) + 20)
+                // Keep only a small hit slop around the glyph. The remaining
+                // inter-candidate space is transparent to CandidateBarView
+                // and therefore starts native scroll gestures immediately.
+                let width = max(ceil(textWidth) + 4, 22)
                 button.frame = CGRect(x: candidateX, y: 0, width: width, height: 34)
                 button.accessibilityValue = String(index)
                 button.addTarget(self, action: #selector(selectCandidate(_:)), for: .touchUpInside)
