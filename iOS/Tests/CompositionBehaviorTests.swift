@@ -97,6 +97,68 @@ final class CompositionCandidateSelectionTests: XCTestCase {
         XCTAssertEqual(composition.displayCandidates.map(\.text), ["晓"])
     }
 
+    func testOddShuangpinKeyRemainsInCompositionUntilPairCompletes() {
+        let decoder = RecordingPinyinDecoder()
+        decoder.decodeResult = { pinyin in
+            pinyin == "xiaoguo"
+                ? [Candidate(text: "小国", consumed: 7, tokens: [31, 32], units: "xiao'guo")]
+                : []
+        }
+        let composition = Composition(decoder: decoder, inputScheme: .microsoftShuangpin)
+
+        "xcg".forEach { composition.append(String($0)) }
+
+        XCTAssertEqual(composition.raw, "xcg")
+        XCTAssertEqual(composition.cursor, 3)
+        XCTAssertEqual(decoder.decodeCalls.last?.pinyin, "xiaog")
+        XCTAssertTrue(composition.candidates.isEmpty)
+
+        composition.append("o")
+
+        XCTAssertEqual(decoder.decodeCalls.last?.pinyin, "xiaoguo")
+        XCTAssertEqual(composition.select(0), "小国")
+        XCTAssertFalse(composition.isComposing)
+    }
+
+    func testLongShuangpinSentencePreservesAllSyllableBoundaries() {
+        let decoder = RecordingPinyinDecoder()
+        decoder.decodeResult = { pinyin in
+            pinyin == "womendezhongguo"
+                ? [Candidate(
+                    text: "我们的中国",
+                    consumed: pinyin.count,
+                    tokens: [1, 2, 3, 4, 5],
+                    units: "wo'men'de'zhong'guo"
+                )]
+                : []
+        }
+        let composition = Composition(decoder: decoder, inputScheme: .microsoftShuangpin)
+
+        "womfdevsgo".forEach { composition.append(String($0)) }
+
+        XCTAssertEqual(decoder.decodeCalls.last?.pinyin, "womendezhongguo")
+        XCTAssertEqual(composition.sentencePreview, "我们的中国")
+        XCTAssertEqual(composition.select(0), "我们的中国")
+        XCTAssertEqual(decoder.predictionCalls.last?.context, [1, 2, 3, 4, 5])
+    }
+
+    func testNormalCandidateOrderIsNotResortedByComposition() {
+        let decoder = RecordingPinyinDecoder()
+        decoder.decodeResult = { _ in
+            [
+                Candidate(text: "中国", consumed: 8, tokens: [1], units: "zhong'guo", score: -6),
+                Candidate(text: "中过", consumed: 8, tokens: [2, 3], units: "zhong'guo", score: -13),
+                Candidate(text: "种过", consumed: 8, tokens: [4], units: "zhong'guo", score: -15)
+            ]
+        }
+        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
+
+        "zhongguo".forEach { composition.append(String($0)) }
+
+        XCTAssertEqual(composition.displayCandidates.map(\.text), ["中国", "中过", "种过"])
+        XCTAssertEqual(composition.displayCandidates.map(\.score), [-6, -13, -15])
+    }
+
     func testSelectingAllSegmentsUsesEveryFixedTokenForPrediction() {
         let decoder = RecordingPinyinDecoder()
         decoder.decodeResult = { pinyin in
