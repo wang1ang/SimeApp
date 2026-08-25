@@ -1,28 +1,12 @@
 import UIKit
 
-/// Lets the enclosing scroll view receive drags that begin in the visual gaps
-/// between candidate buttons, while leaving the buttons themselves tappable.
-private final class CandidateBarView: UIView {
-    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
-        guard bounds.contains(point), !isHidden, alpha > 0.01, isUserInteractionEnabled else {
-            return nil
-        }
-        for subview in subviews.reversed() {
-            let converted = convert(point, to: subview)
-            if let hit = subview.hitTest(converted, with: event) {
-                return hit
-            }
-        }
-        return nil
-    }
-}
-
 final class KeyboardViewController: UIInputViewController {
     private var composition = Composition()
     private let sentenceScrollView = UIScrollView()
     private let sentenceBar = UIView()
     private let candidateScrollView = UIScrollView()
-    private let candidateBar = CandidateBarView()
+    private let candidateBar = UIView()
+    private let candidateTap = UITapGestureRecognizer()
     private var sentenceContentWidth: CGFloat = 0
     private var candidateContentWidth: CGFloat = 0
     private let keyboardStack = UIStackView()
@@ -101,6 +85,9 @@ final class KeyboardViewController: UIInputViewController {
         root.setCustomSpacing(1, after: sentenceScrollView)
 
         candidateScrollView.showsHorizontalScrollIndicator = false
+        candidateTap.addTarget(self, action: #selector(candidateBarTapped(_:)))
+        candidateTap.cancelsTouchesInView = false
+        candidateBar.addGestureRecognizer(candidateTap)
         candidateScrollView.addSubview(candidateBar)
         candidateScrollView.heightAnchor.constraint(equalToConstant: 34).isActive = true
         root.addArrangedSubview(candidateScrollView)
@@ -306,8 +293,15 @@ final class KeyboardViewController: UIInputViewController {
             selectedRange: NSRange(location: composition.selectionLocation, length: 0))
     }
 
-    @objc private func selectCandidate(_ sender: UIButton) {
-        guard let index = sender.accessibilityValue.flatMap(Int.init) else { return }
+    @objc private func candidateBarTapped(_ gesture: UITapGestureRecognizer) {
+        guard gesture.state == .ended else { return }
+        let point = gesture.location(in: candidateBar)
+        guard let label = candidateBar.subviews.compactMap({ $0 as? UILabel })
+            .first(where: { $0.frame.contains(point) }) else { return }
+        selectCandidate(at: label.tag)
+    }
+
+    private func selectCandidate(at index: Int) {
         if let text = composition.selectDisplayed(index) {
             textDocumentProxy.unmarkText()
             textDocumentProxy.insertText(text)
@@ -387,22 +381,17 @@ final class KeyboardViewController: UIInputViewController {
             var candidateX: CGFloat = 8
             let font = UIFont.preferredFont(forTextStyle: .body)
             for (index, candidate) in displayedCandidates.enumerated() {
-                var config = UIButton.Configuration.plain()
-                config.title = candidate.text
-                config.titleLineBreakMode = .byTruncatingTail
-                config.contentInsets = .zero
-                let button = UIButton(configuration: config)
-                button.titleLabel?.numberOfLines = 1
-                button.titleLabel?.lineBreakMode = .byTruncatingTail
+                let label = UILabel()
+                label.text = candidate.text
+                label.font = font
+                label.textColor = .label
+                label.textAlignment = .center
+                label.lineBreakMode = .byTruncatingTail
                 let textWidth = (candidate.text as NSString).size(withAttributes: [.font: font]).width
-                // Keep only a small hit slop around the glyph. The remaining
-                // inter-candidate space is transparent to CandidateBarView
-                // and therefore starts native scroll gestures immediately.
                 let width = max(ceil(textWidth) + 4, 22)
-                button.frame = CGRect(x: candidateX, y: 0, width: width, height: 34)
-                button.accessibilityValue = String(index)
-                button.addTarget(self, action: #selector(selectCandidate(_:)), for: .touchUpInside)
-                candidateBar.addSubview(button)
+                label.frame = CGRect(x: candidateX, y: 0, width: width, height: 34)
+                label.tag = index
+                candidateBar.addSubview(label)
                 candidateX += width + 6
             }
             candidateContentWidth = candidateX
