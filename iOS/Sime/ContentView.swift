@@ -28,7 +28,7 @@ struct ContentView: View {
                 Spacer()
             }
             .padding(24)
-            .navigationTitle("是语")
+            .navigationTitle("是语输入法")
         }
     }
 }
