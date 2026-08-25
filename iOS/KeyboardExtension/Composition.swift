@@ -291,8 +291,20 @@ final class Composition {
         // shan, for example), then append context-ranked words and phrases.
         let syllableCandidates = decoder.syllableCandidates(syllables[index])
         let contextualCandidates = decoder.decode(tail, context: context, limit: 18)
+
+        // Preserve the unmodified tail as the first choice.  A full sentence
+        // such as 性价比 may be represented by one dictionary token, while
+        // its prefix 性 cannot reproduce that token's continuation through a
+        // next-token context; the statistical suffix decode then ranks 假币.
+        // The original decoded path is a valid anchored continuation and must
+        // remain the default when the user only opens correction candidates.
+        let originalSuffix = String(Array(top.text).dropFirst(index))
+        let original = originalSuffix.isEmpty
+            ? []
+            : [Candidate(text: originalSuffix, consumed: top.consumed,
+                         tokens: [], units: tail)]
         var seen = Set<String>()
-        replacementCandidates = (contextualCandidates + syllableCandidates)
+        replacementCandidates = (original + contextualCandidates + syllableCandidates)
             .filter { seen.insert($0.text).inserted }
     }
 
