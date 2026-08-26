@@ -210,14 +210,18 @@ final class KeyboardViewController: UIInputViewController {
     private func keyButton(_ title: String) -> UIButton {
         let displayedTitle: String
         switch title {
-        case "space": displayedTitle = "空格"
+        case "space":
+            let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"
+            displayedTitle = "空格 \(build)"
         case "return": displayedTitle = returnKeyTitle()
         case "delete": displayedTitle = "⌫"
         default: displayedTitle = title
         }
         let button = UIButton(type: .system)
         button.setTitle(displayedTitle, for: .normal)
-        if title == "return" { button.accessibilityValue = "return" }
+        if title == "space" || title == "return" {
+            button.accessibilityValue = title
+        }
         button.setTitleColor(.label, for: .normal)
         button.titleLabel?.font = .systemFont(ofSize: 18)
         button.backgroundColor = .tertiarySystemBackground
@@ -272,7 +276,7 @@ final class KeyboardViewController: UIInputViewController {
     @objc private func keyTapped(_ sender: UIButton) {
         guard let title = sender.accessibilityValue ?? sender.currentTitle else { return }
         switch title {
-        case "空格":
+        case "space":
             if spaceCursorMode {
                 spaceCursorMode = false
             } else {
