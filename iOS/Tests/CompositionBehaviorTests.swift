@@ -337,6 +337,35 @@ final class CompositionEditingTests: XCTestCase {
         XCTAssertTrue(composition.displayCandidates.isEmpty)
     }
 
+    func testReturnAfterSecondRowCorrectionDecodesRemainingSyllables() {
+        let decoder = RecordingPinyinDecoder()
+        decoder.decodeResult = { pinyin in
+            pinyin == "wanquanlixian"
+                ? [Candidate(
+                    text: "完全离线",
+                    consumed: pinyin.count,
+                    tokens: [1, 2, 3, 4],
+                    units: "wan'quan'li'xian"
+                )]
+                : []
+        }
+        // Second-row replacement chosen for the tapped "离" spans two
+        // syllables ("离线") starting at syllable index 2.
+        decoder.correctionResult = [
+            Candidate(text: "离线", consumed: 0, tokens: [30, 31], units: "li'xian")
+        ]
+        let composition = Composition(decoder: decoder, inputScheme: .microsoftShuangpin)
+
+        "wjqrlixm".forEach { composition.append(String($0)) }
+        composition.activateCharacter(2)
+        XCTAssertNil(composition.selectDisplayed(0))
+
+        // Return must not fall back to the literal keys of the un-anchored
+        // "完全" prefix; it commits the decoded sentence with the anchor.
+        XCTAssertEqual(composition.commitPreeditLiterally(), "完全离线")
+        XCTAssertFalse(composition.isComposing)
+    }
+
     func testDeleteRemovesTheKeyBeforeTheCompositionCursor() {
         let composition = Composition(
             decoder: RecordingPinyinDecoder(), inputScheme: .fullPinyin

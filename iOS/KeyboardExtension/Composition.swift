@@ -358,7 +358,17 @@ final class Composition {
     /// the unconverted portion is inserted literally as English text.
     func commitPreeditLiterally() -> String? {
         guard isComposing else { return nil }
-        let result = prefixText + literalTextWithAnchors()
+        let result: String
+        if !anchorSegments.isEmpty, let candidate = candidates.first {
+            // A second-row correction anchors decoded characters inside the
+            // sentence, so the user has committed to Chinese. Decode the
+            // remaining (non-anchored) syllables via the top candidate
+            // instead of emitting their literal keys; the literal escape
+            // hatch only applies when no anchor selection is active.
+            result = prefixText + renderedText(candidate.text)
+        } else {
+            result = prefixText + literalTextWithAnchors()
+        }
         predictionCandidates = []
         clearComposition()
         return result

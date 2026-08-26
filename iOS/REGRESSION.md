@@ -19,6 +19,12 @@
 5. 模型与 ncnn runtime 必须位于 Keyboard Extension 自身资源/链接范围内。
 6. ncnn XCFramework 是本地生成物，不提交；新环境用 `iOS/scripts/build-ncnn-xcframework.sh` 构建。
 
+## App Store 上架配置
+
+61. 宿主 App 必须提供 `Sime/Assets.xcassets` 的 `AppIcon`（含 1024×1024），`project.yml` 通过 `ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon` 引用；键盘扩展不需要图标。当前 `AppIcon.png` 为占位图，正式上架前须替换为正式设计稿。
+62. 宿主与扩展的 Info.plist 均声明 `ITSAppUsesNonExemptEncryption=false`；如未来引入非豁免加密须同步更新并补交合规文档。
+63. 发布签名使用 `DEVELOPMENT_TEAM=8K3SQFBAJG`，`CODE_SIGN_STYLE=Automatic`。隐私政策 URL、隐私标签、截图等仅在 App Store Connect 维护，不入库。
+
 ## 真实模型与候选召回
 
 7. 正式键盘必须使用真实 Sime 离线模型；仅模型缺失的开发环境允许 fallback。
@@ -63,6 +69,7 @@
 38. 删除键长按连续删除，松开或取消后 timer 必须停止。
 39. 回车标题跟随宿主 `returnKeyType`，包括发送、搜索、完成、前往等语义。
 40. 第一行确认按钮提交中文但不插入换行。
+40a. 回车是字面英文逃生通道：无任何选择时按原始按键上屏；但只要用户从第二行做过改选（组合中存在锚点），回车即视为提交中文，未锚定的音节必须随顶部候选整句解码，不能吐出原始双拼/全拼按键。断言由 `iOS/Tests` 覆盖；此处只保留真机契约——须在备忘录及第三方输入框中验证不同宿主 marked-text context 下结果一致。
 
 ## 数字页与标点
 
