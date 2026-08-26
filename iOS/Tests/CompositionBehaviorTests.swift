@@ -3,6 +3,8 @@ import XCTest
 
 private final class RecordingPinyinDecoder: PinyinDecoder {
     var decodeCalls: [(pinyin: String, context: [UInt32], limit: Int)] = []
+    var decodeExpansions: [Bool] = []
+    var correctionExpansions: [Bool] = []
     var predictionCalls: [(context: [UInt32], limit: Int)] = []
     var decodeResult: (String) -> [Candidate] = { _ in [] }
     var correctionResult: [Candidate] = []
@@ -14,13 +16,28 @@ private final class RecordingPinyinDecoder: PinyinDecoder {
     }
 
     func decode(_ pinyin: String, context: [UInt32], limit: Int) -> [Candidate] {
+        decode(pinyin, context: context, limit: limit, expansion: true)
+    }
+
+    func decode(_ pinyin: String, context: [UInt32], limit: Int,
+                expansion: Bool) -> [Candidate] {
         decodeCalls.append((pinyin, context, limit))
+        decodeExpansions.append(expansion)
         return Array(decodeResult(pinyin).prefix(limit))
     }
 
     func correctionCandidates(_ pinyin: String, fixedPrefix: String,
                               prefixSyllables: Int, limit: Int) -> [Candidate] {
-        Array(correctionResult.prefix(limit))
+        correctionCandidates(pinyin, fixedPrefix: fixedPrefix,
+                             prefixSyllables: prefixSyllables, limit: limit,
+                             expansion: true)
+    }
+
+    func correctionCandidates(_ pinyin: String, fixedPrefix: String,
+                              prefixSyllables: Int, limit: Int,
+                              expansion: Bool) -> [Candidate] {
+        correctionExpansions.append(expansion)
+        return Array(correctionResult.prefix(limit))
     }
 
     func tokenize(_ text: String) -> [UInt32] {
@@ -186,6 +203,31 @@ final class CompositionCandidateSelectionTests: XCTestCase {
         "xih".forEach { composition.append(String($0)) }
 
         XCTAssertEqual(composition.candidates.map(\.text), ["西红", "喜"])
+    }
+
+    func testShuangpinCorrectionCandidatesRespectLockedFinals() {
+        let decoder = RecordingPinyinDecoder()
+        decoder.decodeResult = { pinyin in
+            pinyin == "shiyu"
+                ? [Candidate(text: "是语", consumed: 5, tokens: [1, 2], units: "shi'yu")]
+                : []
+        }
+        // Second-row corrections for the tapped first character span into the
+        // locked second syllable "yu"; 石原/诗云 expand it to yuan/yun.
+        decoder.correctionResult = [
+            Candidate(text: "始于", consumed: 5, tokens: [3, 4], units: "shi'yu"),
+            Candidate(text: "石原", consumed: 7, tokens: [5, 6], units: "shi'yuan"),
+            Candidate(text: "诗云", consumed: 6, tokens: [7, 8], units: "shi'yun"),
+            Candidate(text: "视域", consumed: 5, tokens: [9, 10], units: "shi'yu")
+        ]
+        let composition = Composition(decoder: decoder, inputScheme: .microsoftShuangpin)
+
+        // shi = "ui" (sh + i), yu = "yu" in Microsoft Shuangpin.
+        "uiyu".forEach { composition.append(String($0)) }
+        composition.activateCharacter(0)
+
+        // Corrections that lengthen the locked "yu" final are dropped.
+        XCTAssertEqual(composition.displayCandidates.map(\.text), ["始于", "视域"])
     }
 
     func testNormalCandidateOrderIsNotResortedByComposition() {
@@ -410,6 +452,36 @@ final class CompositionEditingTests: XCTestCase {
         // "完全" prefix; it commits the decoded sentence with the anchor.
         XCTAssertEqual(composition.commitPreeditLiterally(), "完全离线")
         XCTAssertFalse(composition.isComposing)
+    }
+
+    func testShuangpinDisablesEngineExpansionButFullPinyinKeepsIt() {
+        let decoder = RecordingPinyinDecoder()
+        decoder.decodeResult = { _ in
+            [Candidate(text: "是语", consumed: 5, tokens: [1, 2], units: "shi'yu")]
+        }
+        decoder.correctionResult = [
+            Candidate(text: "已于", consumed: 5, tokens: [3, 4], units: "shi'yu")
+        ]
+
+        // Abbreviation/expansion is a full-pinyin convenience only; Shuangpin
+        // syllables are fully typed, so the engine must not expand finals
+        // (this is what removed 石原/十元 from the correction row).
+        let shuangpin = Composition(decoder: decoder, inputScheme: .microsoftShuangpin)
+        "uiyu".forEach { shuangpin.append(String($0)) }
+        shuangpin.activateCharacter(0)
+        XCTAssertEqual(decoder.decodeExpansions.last, false)
+        XCTAssertEqual(decoder.correctionExpansions.last, false)
+
+        decoder.decodeExpansions.removeAll()
+        decoder.correctionExpansions.removeAll()
+        decoder.decodeResult = { _ in
+            [Candidate(text: "你好", consumed: 5, tokens: [1, 2], units: "ni'hao")]
+        }
+        let fullPinyin = Composition(decoder: decoder, inputScheme: .fullPinyin)
+        "nihao".forEach { fullPinyin.append(String($0)) }
+        fullPinyin.activateCharacter(0)
+        XCTAssertEqual(decoder.decodeExpansions.last, true)
+        XCTAssertEqual(decoder.correctionExpansions.last, true)
     }
 
     func testDeleteRemovesTheKeyBeforeTheCompositionCursor() {

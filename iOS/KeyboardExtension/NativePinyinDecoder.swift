@@ -34,9 +34,18 @@ final class NativePinyinDecoder: PinyinDecoder {
 
     func correctionCandidates(_ pinyin: String, fixedPrefix: String,
                               prefixSyllables: Int, limit: Int) -> [Candidate] {
+        correctionCandidates(pinyin, fixedPrefix: fixedPrefix,
+                             prefixSyllables: prefixSyllables, limit: limit,
+                             expansion: true)
+    }
+
+    func correctionCandidates(_ pinyin: String, fixedPrefix: String,
+                              prefixSyllables: Int, limit: Int,
+                              expansion: Bool) -> [Candidate] {
         guard let handle, !pinyin.isEmpty, prefixSyllables >= 0, limit > 0 else { return [] }
         var results = sime_decode_correction(
-            handle, pinyin, fixedPrefix, Int32(prefixSyllables), Int32(limit)
+            handle, pinyin, fixedPrefix, Int32(prefixSyllables), Int32(limit),
+            expansion
         )
         defer { sime_free_results(&results) }
         return unpack(results)
@@ -64,12 +73,18 @@ final class NativePinyinDecoder: PinyinDecoder {
     }
 
     func decode(_ pinyin: String, context: [UInt32], limit: Int) -> [Candidate] {
+        decode(pinyin, context: context, limit: limit, expansion: true)
+    }
+
+    func decode(_ pinyin: String, context: [UInt32], limit: Int,
+                expansion: Bool) -> [Candidate] {
         guard let handle, !pinyin.isEmpty else { return [] }
         var sentence = context.withUnsafeBufferPointer { buffer in
             context.isEmpty
-                ? sime_decode_sentence(handle, pinyin, 2)
+                ? sime_decode_sentence(handle, pinyin, 2, expansion)
                 : sime_decode_sentence_with_context(
-                    handle, pinyin, buffer.baseAddress, Int32(context.count), 2)
+                    handle, pinyin, buffer.baseAddress, Int32(context.count), 2,
+                    expansion)
         }
         defer { sime_free_results(&sentence) }
         var results = unpack(sentence)

@@ -323,11 +323,15 @@ final class Composition {
             top.units,
             fixedPrefix: fixedPrefix,
             prefixSyllables: relativeIndex,
-            limit: 60
+            limit: 60,
+            expansion: inputScheme != .microsoftShuangpin
         ).filter { candidate in
             let span = max(1, candidate.units.split(separator: "'")
                 .filter { !$0.isEmpty }.count)
-            return span <= maximumSpan
+            guard span <= maximumSpan else { return false }
+            // Correction candidates begin at the active syllable, so their
+            // finals are locked just like normal decode candidates.
+            return unitsMatchLockedFinals(candidate.units, fromSyllable: relativeIndex)
         }
     }
 
@@ -404,10 +408,11 @@ final class Composition {
         let decoded = input.isEmpty ? [] : decoder.decode(
             input,
             context: hostContextTokens ?? contextTokens,
-            limit: 60
+            limit: 60,
+            expansion: inputScheme != .microsoftShuangpin
         )
         candidates = inputScheme == .microsoftShuangpin
-            ? decoded.filter(matchesLockedShuangpinFinals) : decoded
+            ? decoded.filter { matchesLockedShuangpinFinals($0) } : decoded
     }
 
     /// The exact pinyin of every *completed* Microsoft Shuangpin syllable.
@@ -424,19 +429,30 @@ final class Composition {
         return syllables
     }
 
+    /// True unless the syllables of `units` (which begin at syllable `offset`
+    /// of the composition) shorten or otherwise disagree with an already
+    /// locked Shuangpin final. Syllables past the completed region — the
+    /// trailing incomplete key — are unconstrained.
+    private func unitsMatchLockedFinals(_ units: String, fromSyllable offset: Int) -> Bool {
+        guard inputScheme == .microsoftShuangpin else { return true }
+        let syllables = units.split(separator: "'").map(String.init)
+        let locked = lockedShuangpinSyllables()
+        for index in 0..<syllables.count {
+            let lockedIndex = offset + index
+            guard lockedIndex < locked.count else { break }
+            if syllables[index] != locked[lockedIndex] { return false }
+        }
+        return true
+    }
+
     /// In Shuangpin a completed syllable's final is fixed, so the decoder must
     /// not offer paths that shorten it (for example `xi'hu`/`xi'hua` for the
     /// typed `xi`+`huan`). Reject any multi-syllable candidate whose syllables
     /// disagree with the locked finals; single-syllable character alternatives
-    /// (including the trailing incomplete syllable) always pass through.
+    /// (which may target either end of the sentence) always pass through.
     private func matchesLockedShuangpinFinals(_ candidate: Candidate) -> Bool {
         let syllables = candidate.units.split(separator: "'").map(String.init)
         guard syllables.count >= 2 else { return true }
-        let locked = lockedShuangpinSyllables()
-        for index in 0..<min(syllables.count, locked.count)
-            where syllables[index] != locked[index] {
-            return false
-        }
-        return true
+        return unitsMatchLockedFinals(candidate.units, fromSyllable: 0)
     }
 }

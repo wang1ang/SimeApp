@@ -21,11 +21,16 @@ struct Candidate {
 protocol PinyinDecoder {
     func decode(_ pinyin: String, limit: Int) -> [Candidate]
     func decode(_ pinyin: String, context: [UInt32], limit: Int) -> [Candidate]
+    func decode(_ pinyin: String, context: [UInt32], limit: Int,
+                expansion: Bool) -> [Candidate]
     /// High-recall candidates for one exact pinyin span, used to recover the
     /// token path for a fixed correction prefix.
     func exactCandidates(_ pinyin: String, limit: Int) -> [Candidate]
     func correctionCandidates(_ pinyin: String, fixedPrefix: String,
                               prefixSyllables: Int, limit: Int) -> [Candidate]
+    func correctionCandidates(_ pinyin: String, fixedPrefix: String,
+                              prefixSyllables: Int, limit: Int,
+                              expansion: Bool) -> [Candidate]
     func tokenize(_ text: String) -> [UInt32]
     func syllableCandidates(_ pinyin: String) -> [Candidate]
     func predict(_ context: [UInt32], limit: Int) -> [Candidate]
@@ -36,6 +41,13 @@ extension PinyinDecoder {
         decode(pinyin, limit: limit)
     }
 
+    // Abbreviation/tail expansion is a full-pinyin convenience; default to it
+    // so existing callers keep their behavior. Shuangpin passes false.
+    func decode(_ pinyin: String, context: [UInt32], limit: Int,
+                expansion: Bool) -> [Candidate] {
+        decode(pinyin, context: context, limit: limit)
+    }
+
     func exactCandidates(_ pinyin: String, limit: Int) -> [Candidate] {
         decode(pinyin, limit: limit)
     }
@@ -43,6 +55,13 @@ extension PinyinDecoder {
     func correctionCandidates(_ pinyin: String, fixedPrefix: String,
                               prefixSyllables: Int, limit: Int) -> [Candidate] {
         exactCandidates(pinyin, limit: limit)
+    }
+
+    func correctionCandidates(_ pinyin: String, fixedPrefix: String,
+                              prefixSyllables: Int, limit: Int,
+                              expansion: Bool) -> [Candidate] {
+        correctionCandidates(pinyin, fixedPrefix: fixedPrefix,
+                             prefixSyllables: prefixSyllables, limit: limit)
     }
 
     func tokenize(_ text: String) -> [UInt32] { [] }

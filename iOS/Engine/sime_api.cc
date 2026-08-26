@@ -69,14 +69,15 @@ static SimeResults to_c(const std::vector<sime::DecodeResult> &results) {
 }
 
 SimeResults sime_decode_sentence(const SimeHandle *h, const char *input,
-                                 int extra) {
+                                 int extra, bool expansion) {
   if (!h || !h->sime || !h->sime->Ready()) { SimeResults z{}; z.items=nullptr; z.count=0; return z; }
-  return to_c(h->sime->DecodeSentence(input, static_cast<size_t>(extra)));
+  return to_c(h->sime->DecodeSentence(input, static_cast<size_t>(extra),
+                                      expansion));
 }
 
 SimeResults sime_decode_sentence_with_context(
     const SimeHandle *h, const char *input, const uint32_t *context,
-    int context_count, int extra) {
+    int context_count, int extra, bool expansion) {
   if (!h || !h->sime || !h->sime->Ready() || !input) {
     SimeResults z{};
     z.items = nullptr;
@@ -88,7 +89,7 @@ SimeResults sime_decode_sentence_with_context(
     ctx.assign(context, context + context_count);
   }
   return to_c(h->sime->DecodeSentence(input, ctx,
-                                      static_cast<size_t>(extra)));
+                                      static_cast<size_t>(extra), expansion));
 }
 
 SimeResults sime_decode_str(const SimeHandle *h, const char *input, int num) {
@@ -98,7 +99,8 @@ SimeResults sime_decode_str(const SimeHandle *h, const char *input, int num) {
 
 SimeResults sime_decode_correction(const SimeHandle *h, const char *input,
                                    const char *fixed_prefix,
-                                   int prefix_syllables, int num) {
+                                   int prefix_syllables, int num,
+                                   bool expansion) {
   if (!h || !h->sime || !h->sime->Ready() || !input || !fixed_prefix ||
       prefix_syllables < 0 || num <= 0) {
     SimeResults z{};
@@ -106,7 +108,7 @@ SimeResults sime_decode_correction(const SimeHandle *h, const char *input,
   }
   return to_c(h->sime->DecodeCorrection(
       input, fixed_prefix, static_cast<size_t>(prefix_syllables),
-      static_cast<size_t>(num)));
+      static_cast<size_t>(num), expansion));
 }
 
 SimeResults sime_next_tokens(const SimeHandle *h, const uint32_t *tokens,

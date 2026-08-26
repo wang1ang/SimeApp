@@ -41,19 +41,22 @@ void sime_free_tokens(SimeTokens *tokens);
 
 // Decoding
 // decode_sentence: full Viterbi sentence decode; extra = number of N-best
-// alternatives beyond the top result.
+// alternatives beyond the top result. `expansion` enables abbreviation/tail
+// completion (a full-pinyin convenience); pass false for Shuangpin, whose
+// syllables are fully typed and whose finals are already locked.
 SimeResults sime_decode_sentence(const SimeHandle *h, const char *input,
-                                 int extra);
+                                 int extra, bool expansion);
 SimeResults sime_decode_sentence_with_context(
     const SimeHandle *h, const char *input, const uint32_t *context,
-    int context_count, int extra);
+    int context_count, int extra, bool expansion);
 // decode_str: single-word / multi-word candidates (all starting at input[0])
 SimeResults sime_decode_str(const SimeHandle *h, const char *input, int num);
 // One ordered correction list: fixed_prefix remains unchanged and returned
-// texts replace only the suffix at prefix_syllables.
+// texts replace only the suffix at prefix_syllables. See above for expansion.
 SimeResults sime_decode_correction(const SimeHandle *h, const char *input,
                                    const char *fixed_prefix,
-                                   int prefix_syllables, int num);
+                                   int prefix_syllables, int num,
+                                   bool expansion);
 
 // Prediction: given LM context token IDs, return likely next words.
 SimeResults sime_next_tokens(const SimeHandle *h, const uint32_t *tokens,
