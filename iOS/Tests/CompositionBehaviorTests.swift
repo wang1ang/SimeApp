@@ -142,6 +142,52 @@ final class CompositionCandidateSelectionTests: XCTestCase {
         XCTAssertEqual(decoder.predictionCalls.last?.context, [1, 2, 3, 4, 5])
     }
 
+    func testShuangpinLocksCompletedFinalsAgainstShorterExpansions() {
+        let decoder = RecordingPinyinDecoder()
+        decoder.decodeResult = { pinyin in
+            pinyin == "xihuan"
+                ? [
+                    // Correct locked path and single-character alternatives.
+                    Candidate(text: "喜欢", consumed: 6, tokens: [1, 2], units: "xi'huan"),
+                    Candidate(text: "喜", consumed: 2, tokens: [1], units: "xi"),
+                    Candidate(text: "欢", consumed: 6, tokens: [2], units: "huan"),
+                    // Under-expanded finals the engine offers for full pinyin
+                    // but which Shuangpin has already locked out.
+                    Candidate(text: "喜互", consumed: 4, tokens: [1, 3], units: "xi'hu"),
+                    Candidate(text: "喜花", consumed: 5, tokens: [1, 4], units: "xi'hua")
+                ]
+                : []
+        }
+        let composition = Composition(decoder: decoder, inputScheme: .microsoftShuangpin)
+
+        // xi = "xi", huan = "hr" (h + uan) in Microsoft Shuangpin.
+        "xihr".forEach { composition.append(String($0)) }
+
+        XCTAssertEqual(decoder.decodeCalls.last?.pinyin, "xihuan")
+        // The under-expanded two-syllable paths are dropped; the locked path
+        // and single-character alternatives survive.
+        XCTAssertEqual(composition.candidates.map(\.text), ["喜欢", "喜", "欢"])
+    }
+
+    func testShuangpinTrailingIncompleteSyllableStillExpands() {
+        let decoder = RecordingPinyinDecoder()
+        decoder.decodeResult = { pinyin in
+            pinyin == "xih"
+                ? [
+                    Candidate(text: "西红", consumed: 5, tokens: [1, 5], units: "xi'hong"),
+                    Candidate(text: "喜", consumed: 2, tokens: [1], units: "xi")
+                ]
+                : []
+        }
+        let composition = Composition(decoder: decoder, inputScheme: .microsoftShuangpin)
+
+        // Odd key count: "xi" is locked but the trailing "h" is still an
+        // incomplete syllable, so its final may expand.
+        "xih".forEach { composition.append(String($0)) }
+
+        XCTAssertEqual(composition.candidates.map(\.text), ["西红", "喜"])
+    }
+
     func testNormalCandidateOrderIsNotResortedByComposition() {
         let decoder = RecordingPinyinDecoder()
         decoder.decodeResult = { _ in

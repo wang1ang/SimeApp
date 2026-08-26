@@ -401,10 +401,42 @@ final class Composition {
         // before continuing with the remaining syllables.
         let input = inputScheme == .microsoftShuangpin
             ? MicrosoftShuangpin.expand(raw) : raw
-        candidates = input.isEmpty ? [] : decoder.decode(
+        let decoded = input.isEmpty ? [] : decoder.decode(
             input,
             context: hostContextTokens ?? contextTokens,
             limit: 60
         )
+        candidates = inputScheme == .microsoftShuangpin
+            ? decoded.filter(matchesLockedShuangpinFinals) : decoded
+    }
+
+    /// The exact pinyin of every *completed* Microsoft Shuangpin syllable.
+    /// Each syllable is two keys, so a trailing odd key is still incomplete
+    /// and its final is not yet locked.
+    private func lockedShuangpinSyllables() -> [String] {
+        let keys = Array(raw)
+        var syllables: [String] = []
+        var index = 0
+        while index + 1 < keys.count {
+            syllables.append(MicrosoftShuangpin.expand(String(keys[index...index + 1])))
+            index += 2
+        }
+        return syllables
+    }
+
+    /// In Shuangpin a completed syllable's final is fixed, so the decoder must
+    /// not offer paths that shorten it (for example `xi'hu`/`xi'hua` for the
+    /// typed `xi`+`huan`). Reject any multi-syllable candidate whose syllables
+    /// disagree with the locked finals; single-syllable character alternatives
+    /// (including the trailing incomplete syllable) always pass through.
+    private func matchesLockedShuangpinFinals(_ candidate: Candidate) -> Bool {
+        let syllables = candidate.units.split(separator: "'").map(String.init)
+        guard syllables.count >= 2 else { return true }
+        let locked = lockedShuangpinSyllables()
+        for index in 0..<min(syllables.count, locked.count)
+            where syllables[index] != locked[index] {
+            return false
+        }
+        return true
     }
 }
