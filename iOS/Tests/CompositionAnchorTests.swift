@@ -19,6 +19,12 @@ private struct CorrectionCandidateDecoder: PinyinDecoder {
 
     func correctionCandidates(_ pinyin: String, fixedPrefix: String,
                               prefixSyllables: Int, limit: Int) -> [Candidate] {
+        if prefixSyllables == 0 {
+            return [
+                Candidate(text: "型假币", consumed: 0, tokens: [], units: "xing'jia'bi"),
+                Candidate(text: "行", consumed: 0, tokens: [], units: "xing")
+            ]
+        }
         return ["价比", "假币", "家比", "强", "将", "家", "假"].map {
             Candidate(
                 text: $0,
@@ -73,5 +79,21 @@ final class CompositionCorrectionTests: XCTestCase {
 
         composition.append("x")
         XCTAssertTrue(composition.sentencePreview.hasPrefix("性假币"))
+    }
+
+    func testEarlierCharacterCanBeEditedWithoutChangingLaterAnchor() {
+        let composition = Composition(
+            decoder: CorrectionCandidateDecoder(), inputScheme: .fullPinyin
+        )
+        "xingjiabi".forEach { composition.append(String($0)) }
+        composition.activateCharacter(1)
+        XCTAssertNil(composition.selectDisplayed(6)) // anchor 假 at syllable 1
+        XCTAssertEqual(composition.sentencePreview, "性假比")
+
+        composition.activateCharacter(0)
+        // The three-syllable candidate crosses the later anchor and is hidden.
+        XCTAssertEqual(composition.displayCandidates.map(\.text), ["行"])
+        XCTAssertNil(composition.selectDisplayed(0))
+        XCTAssertEqual(composition.sentencePreview, "行假比")
     }
 }

@@ -25,7 +25,11 @@ final class Composition {
     private var hostContextTokens: [UInt32]?
     private var contextTokens: [UInt32] = []
     private var committedTokens: [UInt32] = []
-    private var fixedSegments: [CompositionSegment] = []
+    // Sequential selections before `raw` and sparse user corrections inside
+    // `raw` use the same source-aligned segment representation. Correction
+    // anchors stay sparse so every sentence position remains editable.
+    private var prefixSegments: [CompositionSegment] = []
+    private var anchorSegments: [CompositionSegment] = []
 
     init(decoder: PinyinDecoder = BuiltinPinyinDecoder(),
          inputScheme: InputScheme = InputSettings.scheme) {
@@ -33,15 +37,17 @@ final class Composition {
         self.inputScheme = inputScheme
     }
 
-    private var fixedText: String { fixedSegments.map(\.text).joined() }
-    private var consumedKeyCount: Int { fixedSegments.last?.sourceKeyRange.upperBound ?? 0 }
-    private var consumedSyllableCount: Int { fixedSegments.last?.syllableRange.upperBound ?? 0 }
-    var preedit: String { fixedText + raw }
+    private var prefixText: String { prefixSegments.map(\.text).joined() }
+    private var consumedKeyCount: Int { prefixSegments.last?.sourceKeyRange.upperBound ?? 0 }
+    private var consumedSyllableCount: Int { prefixSegments.last?.syllableRange.upperBound ?? 0 }
+    var preedit: String { prefixText + raw }
     var selectionLocation: Int {
-        fixedText.utf16.count + String(raw.prefix(cursor)).utf16.count
+        prefixText.utf16.count + String(raw.prefix(cursor)).utf16.count
     }
-    var isComposing: Bool { !raw.isEmpty || !fixedSegments.isEmpty }
-    var sentencePreview: String { fixedText + (candidates.first?.text ?? "") }
+    var isComposing: Bool { !raw.isEmpty || !prefixSegments.isEmpty }
+    var sentencePreview: String {
+        prefixText + renderedText(candidates.first?.text ?? "")
+    }
     var displayCandidates: [Candidate] {
         if !replacementCandidates.isEmpty { return replacementCandidates }
         return isComposing ? candidates : predictionCandidates
@@ -55,7 +61,7 @@ final class Composition {
         guard let active = activeCharacterIndex,
               let units = candidates.first?.units else { return nil }
         let syllables = units.split(separator: "'").map(String.init)
-        let rawSyllableIndex = active - fixedText.count
+        let rawSyllableIndex = active - prefixText.count
         guard syllables.indices.contains(rawSyllableIndex) else { return nil }
         let groups = enteredKeyGroups(for: syllables)
         guard groups.indices.contains(rawSyllableIndex) else { return nil }
@@ -96,12 +102,65 @@ final class Composition {
         return groups.prefix(count).reduce(0) { $0 + $1.count }
     }
 
+    private func renderedText(_ decoded: String) -> String {
+        let base = Array(decoded)
+        let anchors = anchorSegments.sorted {
+            $0.syllableRange.lowerBound < $1.syllableRange.lowerBound
+        }
+        var output = ""
+        var syllable = 0
+        var anchorIndex = 0
+        while syllable < base.count {
+            if anchorIndex < anchors.count,
+               anchors[anchorIndex].syllableRange.lowerBound == syllable {
+                let anchor = anchors[anchorIndex]
+                output += anchor.text
+                syllable = anchor.syllableRange.upperBound
+                anchorIndex += 1
+            } else {
+                output.append(base[syllable])
+                syllable += 1
+            }
+        }
+        return output
+    }
+
+    private func literalTextWithAnchors() -> String {
+        guard let units = candidates.first?.units, !anchorSegments.isEmpty else {
+            return raw
+        }
+        let syllables = units.split(separator: "'").map(String.init)
+        let groups = enteredKeyGroups(for: syllables)
+        guard groups.count == syllables.count else { return raw }
+        let anchors = Dictionary(uniqueKeysWithValues: anchorSegments.map {
+            ($0.syllableRange.lowerBound, $0)
+        })
+        var output = ""
+        var syllable = 0
+        while syllable < groups.count {
+            if let anchor = anchors[syllable] {
+                output += anchor.text
+                syllable = anchor.syllableRange.upperBound
+            } else {
+                output += groups[syllable]
+                syllable += 1
+            }
+        }
+        return output
+    }
+
+    private func invalidateAnchorsForSourceEdit(at keyOffset: Int) {
+        // An edit inside or before an anchor invalidates its pinyin alignment.
+        // Anchors entirely before the edit remain source-aligned.
+        anchorSegments.removeAll { $0.sourceKeyRange.upperBound > keyOffset }
+    }
+
     func restore(raw: String, committed: String) {
         guard !raw.isEmpty || !committed.isEmpty else { return }
         self.raw = raw
         self.committed = committed
         if !committed.isEmpty {
-            fixedSegments = [CompositionSegment(
+            prefixSegments = [CompositionSegment(
                 sourceKeyRange: 0..<0,
                 syllableRange: 0..<0,
                 text: committed,
@@ -124,6 +183,9 @@ final class Composition {
     }
 
     func append(_ letter: String) {
+        if cursor < raw.count {
+            invalidateAnchorsForSourceEdit(at: cursor)
+        }
         let insertion = raw.index(raw.startIndex, offsetBy: cursor)
         raw.insert(contentsOf: letter.lowercased(), at: insertion)
         cursor += letter.count
@@ -137,10 +199,12 @@ final class Composition {
         guard !raw.isEmpty else {
             committed = ""
             committedTokens = []
-            fixedSegments = []
+            prefixSegments = []
+            anchorSegments = []
             return
         }
         guard cursor > 0 else { return }
+        invalidateAnchorsForSourceEdit(at: cursor - 1)
         let deletion = raw.index(raw.startIndex, offsetBy: cursor - 1)
         raw.remove(at: deletion)
         cursor -= 1
@@ -153,7 +217,7 @@ final class Composition {
         let consumed = rawConsumption(of: candidate)
         let syllables = max(1, candidate.units.split(separator: "'")
             .filter { !$0.isEmpty }.count)
-        appendFixedSegment(
+        appendPrefixSegment(
             text: candidate.text,
             keyCount: consumed,
             syllableCount: syllables,
@@ -163,25 +227,25 @@ final class Composition {
         cursor = max(0, cursor - consumed)
         refresh()
         guard raw.isEmpty else { return nil }
-        let result = fixedText
+        let result = prefixText
         publishPredictions(for: committedTokens)
         clearComposition()
         return result
     }
 
-    private func appendFixedSegment(text: String, keyCount: Int,
-                                    syllableCount: Int, tokens: [UInt32]) {
+    private func appendPrefixSegment(text: String, keyCount: Int,
+                                     syllableCount: Int, tokens: [UInt32]) {
         guard keyCount > 0, syllableCount > 0 else { return }
         let keyStart = consumedKeyCount
         let syllableStart = consumedSyllableCount
-        fixedSegments.append(CompositionSegment(
+        prefixSegments.append(CompositionSegment(
             sourceKeyRange: keyStart..<(keyStart + keyCount),
             syllableRange: syllableStart..<(syllableStart + syllableCount),
             text: text,
             tokens: tokens
         ))
-        committed = fixedText
-        committedTokens = fixedSegments.flatMap(\.tokens)
+        committed = prefixText
+        committedTokens = prefixSegments.flatMap(\.tokens)
     }
 
     private func rawConsumption(of candidate: Candidate) -> Int {
@@ -206,29 +270,34 @@ final class Composition {
             let replacement = replacementCandidates[index]
             let span = max(1, replacement.units.split(separator: "'")
                 .filter { !$0.isEmpty }.count)
-            let relativeActive = active - fixedText.count
-            guard relativeActive >= 0 else { return nil }
+            let relativeActive = active - prefixText.count
+            let syllables = top.units.split(separator: "'").map(String.init)
+            guard relativeActive >= 0,
+                  relativeActive + span <= syllables.count else { return nil }
 
-            // Materialize the selected prefix and consume exactly its source
-            // syllables. Subsequent input can therefore only decode the raw
-            // suffix; it cannot retranslate this user anchor.
-            let fixed = String(Array(sentencePreview).prefix(active))
-            let consumed = rawLength(forSyllables: relativeActive + span,
+            let keyStart = rawLength(forSyllables: relativeActive,
                                      units: top.units)
-            guard consumed > 0 else { return nil }
-            appendFixedSegment(
-                text: String(fixed.dropFirst(fixedText.count)) + replacement.text,
-                keyCount: consumed,
-                syllableCount: relativeActive + span,
+            let keyEnd = rawLength(forSyllables: relativeActive + span,
+                                   units: top.units)
+            guard keyEnd > keyStart else { return nil }
+            let selectedRange = relativeActive..<(relativeActive + span)
+            anchorSegments.removeAll { $0.syllableRange.overlaps(selectedRange) }
+            anchorSegments.append(CompositionSegment(
+                sourceKeyRange: keyStart..<keyEnd,
+                syllableRange: selectedRange,
+                text: replacement.text,
                 tokens: replacement.tokens
-            )
-            raw.removeFirst(min(consumed, raw.count))
-            cursor = max(0, cursor - consumed)
+            ))
+            anchorSegments.sort {
+                $0.syllableRange.lowerBound < $1.syllableRange.lowerBound
+            }
             activeCharacterIndex = nil
             replacementCandidates = []
             refresh()
-            if !raw.isEmpty {
-                activateCharacter(fixedText.count)
+
+            let next = selectedRange.upperBound
+            if next < syllables.count {
+                activateCharacter(prefixText.count + next)
             }
             return nil
         }
@@ -240,19 +309,26 @@ final class Composition {
         guard Array(sentence).indices.contains(index),
               let top = candidates.first else { return }
         let syllables = top.units.split(separator: "'").map(String.init)
-        let relativeIndex = index - fixedText.count
+        let relativeIndex = index - prefixText.count
         guard syllables.indices.contains(relativeIndex) else { return }
         activeCharacterIndex = index
-        // Sime owns both normal correction layers: full constrained suffix
-        // paths first, then short/character alternatives at this syllable.
-        // Swift neither filters complete paths nor appends a separate table.
-        let fixedPrefix = String(Array(top.text).prefix(relativeIndex))
+        let current = renderedText(top.text)
+        let fixedPrefix = String(Array(current).prefix(relativeIndex))
+        let nextAnchor = anchorSegments
+            .map(\.syllableRange.lowerBound)
+            .filter { $0 > relativeIndex }
+            .min() ?? syllables.count
+        let maximumSpan = max(1, nextAnchor - relativeIndex)
         replacementCandidates = decoder.correctionCandidates(
             top.units,
             fixedPrefix: fixedPrefix,
             prefixSyllables: relativeIndex,
             limit: 60
-        )
+        ).filter { candidate in
+            let span = max(1, candidate.units.split(separator: "'")
+                .filter { !$0.isEmpty }.count)
+            return span <= maximumSpan
+        }
     }
 
     func commitBestOrRaw() -> String? {
@@ -261,8 +337,12 @@ final class Composition {
         // does not yet expose segmented selection, and retaining it caused
         // the final pinyin letter to remain in composition.
         if let candidate = candidates.first {
-            let result = fixedText + candidate.text
-            publishPredictions(for: committedTokens + candidate.tokens)
+            let result = prefixText + renderedText(candidate.text)
+            if anchorSegments.isEmpty {
+                publishPredictions(for: committedTokens + candidate.tokens)
+            } else {
+                predictionCandidates = []
+            }
             clearComposition()
             return result
         }
@@ -278,7 +358,7 @@ final class Composition {
     /// the unconverted portion is inserted literally as English text.
     func commitPreeditLiterally() -> String? {
         guard isComposing else { return nil }
-        let result = preedit
+        let result = prefixText + literalTextWithAnchors()
         predictionCandidates = []
         clearComposition()
         return result
@@ -297,7 +377,8 @@ final class Composition {
         raw = ""
         committed = ""
         committedTokens = []
-        fixedSegments = []
+        prefixSegments = []
+        anchorSegments = []
         cursor = 0
         candidates = []
         activeCharacterIndex = nil
