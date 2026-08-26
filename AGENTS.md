@@ -39,6 +39,17 @@ candidate selection, and layout switching. Verify native integration with an
 APK build. Exercise macOS and Fcitx5 changes on their target platform and list
 the exact build commands in the PR.
 
+## iOS Regression Contract
+Before implementing or evaluating any new iOS request, read
+`iOS/REGRESSION.md` and check the request against every relevant recorded
+behavior contract. If the new request conflicts with that document, explicitly
+notify the user before implementation, explain the conflicting entries, and
+confirm the intended behavior. After the conflict is resolved, update
+`iOS/REGRESSION.md` in the same change so it remains the source of truth. New
+requirements and newly discovered regressions must also be added to the
+regression document with their expected behavior and test coverage; do not let
+code and the document silently diverge.
+
 ## Commit & Pull Request Guidelines
 Use short, imperative, platform-scoped subjects such as `Android: fix T9
 selection`. PRs should describe the affected frontend, required Sime engine
