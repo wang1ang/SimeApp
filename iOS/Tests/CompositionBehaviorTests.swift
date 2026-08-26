@@ -203,6 +203,76 @@ final class CompositionContextTests: XCTestCase {
         XCTAssertEqual(decoder.decodeCalls.last?.limit, 60)
     }
 
+    func testLocalCommittedTokensFeedTheNextComposition() {
+        let decoder = RecordingPinyinDecoder()
+        decoder.decodeResult = { pinyin in
+            switch pinyin {
+            case "ni":
+                return [Candidate(text: "你", consumed: 2, tokens: [11], units: "ni")]
+            case "hao":
+                return [Candidate(text: "好", consumed: 3, tokens: [22], units: "hao")]
+            default:
+                return []
+            }
+        }
+        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
+
+        "ni".forEach { composition.append(String($0)) }
+        XCTAssertEqual(composition.select(0), "你")
+        "hao".forEach { composition.append(String($0)) }
+
+        XCTAssertEqual(decoder.decodeCalls.last?.pinyin, "hao")
+        XCTAssertEqual(decoder.decodeCalls.last?.context, [11])
+    }
+
+    func testHostContextSupersedesTheLocalFallbackForDecode() {
+        let decoder = RecordingPinyinDecoder()
+        decoder.tokenizedText["宿主文本"] = [90, 91]
+        decoder.decodeResult = { pinyin in
+            [Candidate(text: pinyin, consumed: pinyin.count, tokens: [11], units: pinyin)]
+        }
+        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
+
+        "ni".forEach { composition.append(String($0)) }
+        XCTAssertEqual(composition.select(0), "ni")
+        composition.updateHostContext(from: "宿主文本")
+        composition.append("h")
+
+        XCTAssertEqual(decoder.decodeCalls.last?.context, [90, 91])
+    }
+
+    func testEquivalentHostTokensDoNotDecodeAgain() {
+        let decoder = RecordingPinyinDecoder()
+        decoder.tokenizedText["第一种文本"] = [7, 8]
+        decoder.tokenizedText["相同分词文本"] = [7, 8]
+        decoder.decodeResult = { _ in
+            [Candidate(text: "你", consumed: 2, tokens: [9], units: "ni")]
+        }
+        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
+        "ni".forEach { composition.append(String($0)) }
+
+        composition.updateHostContext(from: "第一种文本")
+        let callsAfterFirstUpdate = decoder.decodeCalls.count
+        composition.updateHostContext(from: "相同分词文本")
+
+        XCTAssertEqual(decoder.decodeCalls.count, callsAfterFirstUpdate)
+        XCTAssertEqual(decoder.decodeCalls.last?.context, [7, 8])
+    }
+
+    func testPredictionContextIsBoundedToTheMostRecent32Tokens() {
+        let decoder = RecordingPinyinDecoder()
+        let tokens = (0..<40).map(UInt32.init)
+        decoder.decodeResult = { _ in
+            [Candidate(text: "长上下文", consumed: 2, tokens: tokens, units: "ni")]
+        }
+        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
+
+        "ni".forEach { composition.append(String($0)) }
+        XCTAssertEqual(composition.select(0), "长上下文")
+
+        XCTAssertEqual(decoder.predictionCalls.last?.context, Array(tokens.suffix(32)))
+    }
+
     func testPredictionSelectionContinuesTheLocalTokenContext() {
         let decoder = RecordingPinyinDecoder()
         decoder.decodeResult = { _ in
