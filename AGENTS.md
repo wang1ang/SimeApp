@@ -1,5 +1,24 @@
 # Repository Guidelines
 
+## Default Session Context (READ FIRST)
+Unless the user explicitly names another platform (Android / macOS / Linux),
+assume every request in this repository refers to the **iOS input method
+implementation** (“是语输入法” / 是语键盘). All iOS code, build, and
+behavior details live under `iOS/`.
+
+At the start of an iOS session, read in this order:
+1. `iOS/README.md` — what the product is, how to generate/build/run.
+2. `iOS/AGENTS.md` — architecture, engine wiring, candidate/composition
+   interaction rules, 微软双拼, and UI constraints.
+3. `iOS/REGRESSION.md` — the behavior contract you must not break (per the
+   iOS Regression Contract below).
+4. `iOS/TODO.md` — outstanding work.
+
+Key facts: XcodeGen project source is `iOS/project.yml` (never hand-edit or
+commit `iOS/Sime.xcodeproj/`); the C++ engine comes from the sibling `Sime`
+repo via `require/Sime`; keyboard extension logic is in
+`iOS/KeyboardExtension/` (`Composition.swift`, `NativePinyinDecoder.swift`).
+
 ## Project Structure & Module Organization
 `Android/` contains the Gradle APK project, Java IME code, JNI bridge, resources,
 and JUnit tests. `macOS/` contains the InputMethodKit frontend, Swift UI, C API
