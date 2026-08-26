@@ -26,6 +26,10 @@ cmake --build build/fcitx5
 ```
 On macOS, configure `macOS/` with the Xcode generator. Generated `sime.dict`
 and `sime.cnt` come from the engine repository and are not committed here.
+For local iOS device deployment, use `.local/bin/ios-install` when it exists
+instead of reconstructing the XcodeGen, signed build, and `devicectl` install
+commands manually. It defaults to Release and accepts the configuration as its
+first argument.
 
 ## Coding Style & Naming Conventions
 Use 4-space indentation. Java types use `PascalCase` and methods/fields use
