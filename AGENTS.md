@@ -45,10 +45,13 @@ Before implementing or evaluating any new iOS request, read
 behavior contract. If the new request conflicts with that document, explicitly
 notify the user before implementation, explain the conflicting entries, and
 confirm the intended behavior. After the conflict is resolved, update
-`iOS/REGRESSION.md` in the same change so it remains the source of truth. New
-requirements and newly discovered regressions must also be added to the
-regression document with their expected behavior and test coverage; do not let
-code and the document silently diverge.
+`iOS/REGRESSION.md` in the same change so it remains accurate. Before adding an
+entry, search the automated tests: if a behavior is already covered, the test
+is its source of truth and the contract document must not duplicate it.
+`iOS/REGRESSION.md` records only requirements and manual/device regressions
+that automated tests do not cover. New regressions should preferably become
+tests; add them to the document only while they still require manual coverage.
+Do not let code, tests, and the document silently diverge.
 
 ## Commit & Pull Request Guidelines
 Use short, imperative, platform-scoped subjects such as `Android: fix T9
