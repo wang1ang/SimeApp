@@ -405,11 +405,17 @@ final class Composition {
         // before continuing with the remaining syllables.
         let input = inputScheme == .microsoftShuangpin
             ? MicrosoftShuangpin.expand(raw) : raw
+        // Main decode keeps expansion enabled for both schemes: a lone
+        // Shuangpin initial (an odd trailing key) needs tail completion to
+        // offer candidates, and shorter partial-match paths are removed by
+        // the locked-final filter below. Only correction — which feeds the
+        // decoder apostrophe-delimited, already-complete syllables — disables
+        // expansion to stop a locked final being abbreviation-matched to a
+        // longer syllable (石原/十元 for the typed yu).
         let decoded = input.isEmpty ? [] : decoder.decode(
             input,
             context: hostContextTokens ?? contextTokens,
-            limit: 60,
-            expansion: inputScheme != .microsoftShuangpin
+            limit: 60
         )
         candidates = inputScheme == .microsoftShuangpin
             ? decoded.filter { matchesLockedShuangpinFinals($0) } : decoded

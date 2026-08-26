@@ -203,6 +203,11 @@ final class CompositionCandidateSelectionTests: XCTestCase {
         "xih".forEach { composition.append(String($0)) }
 
         XCTAssertEqual(composition.candidates.map(\.text), ["西红", "喜"])
+        // The fake decoder ignores the expansion flag, so this alone cannot
+        // prove the engine completes a trailing initial. Guard the wiring
+        // that makes it possible: main decode must request expansion (the
+        // engine semantics itself is covered by require/Sime correction_test).
+        XCTAssertEqual(decoder.decodeExpansions.last, true)
     }
 
     func testShuangpinCorrectionCandidatesRespectLockedFinals() {
@@ -454,7 +459,7 @@ final class CompositionEditingTests: XCTestCase {
         XCTAssertFalse(composition.isComposing)
     }
 
-    func testShuangpinDisablesEngineExpansionButFullPinyinKeepsIt() {
+    func testShuangpinDisablesEngineExpansionForCorrectionOnly() {
         let decoder = RecordingPinyinDecoder()
         decoder.decodeResult = { _ in
             [Candidate(text: "是语", consumed: 5, tokens: [1, 2], units: "shi'yu")]
@@ -463,13 +468,15 @@ final class CompositionEditingTests: XCTestCase {
             Candidate(text: "已于", consumed: 5, tokens: [3, 4], units: "shi'yu")
         ]
 
-        // Abbreviation/expansion is a full-pinyin convenience only; Shuangpin
-        // syllables are fully typed, so the engine must not expand finals
-        // (this is what removed 石原/十元 from the correction row).
+        // Correction faces already-complete syllables, so it disables
+        // expansion to stop a locked final being abbreviation-matched to a
+        // longer syllable (this is what removed 石原/十元). Main decode must
+        // keep expansion so a lone Shuangpin initial still completes.
         let shuangpin = Composition(decoder: decoder, inputScheme: .microsoftShuangpin)
         "uiyu".forEach { shuangpin.append(String($0)) }
         shuangpin.activateCharacter(0)
-        XCTAssertEqual(decoder.decodeExpansions.last, false)
+        XCTAssertEqual(decoder.decodeExpansions, [true, true, true, true],
+                       "main decode must keep expansion for lone-initial completion")
         XCTAssertEqual(decoder.correctionExpansions.last, false)
 
         decoder.decodeExpansions.removeAll()
