@@ -19,6 +19,12 @@ commit `iOS/Sime.xcodeproj/`); the C++ engine comes from the sibling `Sime`
 repo via `require/Sime`; keyboard extension logic is in
 `iOS/KeyboardExtension/` (`Composition.swift`, `NativePinyinDecoder.swift`).
 
+Branch policy: develop on the `ios` branch and stay there. Do not create,
+switch to, or delete branches (this applies to both `SimeApp` and the
+`require/Sime` submodule, which also tracks `ios`). The user may Archive or
+submit for App Store review at any moment, so the working tree must always
+sit on `ios` with the latest committed fixes.
+
 ## Project Structure & Module Organization
 `Android/` contains the Gradle APK project, Java IME code, JNI bridge, resources,
 and JUnit tests. `macOS/` contains the InputMethodKit frontend, Swift UI, C API
