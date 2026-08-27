@@ -187,7 +187,7 @@ final class Composition {
             invalidateAnchorsForSourceEdit(at: cursor)
         }
         let insertion = raw.index(raw.startIndex, offsetBy: cursor)
-        raw.insert(contentsOf: letter.lowercased(), at: insertion)
+        raw.insert(contentsOf: letter, at: insertion)
         cursor += letter.count
         predictionCandidates = []
         activeCharacterIndex = nil
@@ -400,25 +400,50 @@ final class Composition {
     }
 
     private func refresh() {
-        // Keep the full first-syllable character set reachable during normal
-        // input too; otherwise low-frequency characters cannot be selected
-        // before continuing with the remaining syllables.
-        let input = inputScheme == .microsoftShuangpin
-            ? MicrosoftShuangpin.expand(raw) : raw
-        // Main decode keeps expansion enabled for both schemes: a lone
-        // Shuangpin initial (an odd trailing key) needs tail completion to
-        // offer candidates, and shorter partial-match paths are removed by
-        // the locked-final filter below. Only correction — which feeds the
-        // decoder apostrophe-delimited, already-complete syllables — disables
-        // expansion to stop a locked final being abbreviation-matched to a
-        // longer syllable (石原/十元 for the typed yu).
-        let decoded = input.isEmpty ? [] : decoder.decode(
-            input,
-            context: hostContextTokens ?? contextTokens,
-            limit: 60
-        )
-        candidates = inputScheme == .microsoftShuangpin
-            ? decoded.filter { matchesLockedShuangpinFinals($0) } : decoded
+        // Chinese-English mixed input: split at the first uppercase letter.
+        // The lowercase prefix decodes as pinyin; from the first capital to
+        // the end is a literal English tail. Decoding only the prefix keeps
+        // the pinyin segmentation clean (the tail must not pollute it).
+        let upperIndex = raw.firstIndex(where: { $0.isUppercase })
+        let pinyinPart = upperIndex.map { String(raw[..<$0]) } ?? raw
+        let englishTail = upperIndex.map { String(raw[$0...]) } ?? ""
+
+        var result: [Candidate] = []
+        if !pinyinPart.isEmpty {
+            let lower = pinyinPart.lowercased()
+            let input = inputScheme == .microsoftShuangpin
+                ? MicrosoftShuangpin.expand(lower) : lower
+            let decoded = input.isEmpty ? [] : decoder.decode(
+                input, context: hostContextTokens ?? contextTokens, limit: 60)
+            let chinese = inputScheme == .microsoftShuangpin
+                ? decoded.filter { matchesLockedShuangpinFinals($0) } : decoded
+            if englishTail.isEmpty {
+                result = chinese
+            } else {
+                // Append the literal English tail to each Chinese path. Units
+                // are cleared and consumed spans the whole buffer so one
+                // commit takes it all through the normal segment path.
+                result = chinese.map {
+                    Candidate(text: $0.text + englishTail, consumed: raw.count,
+                              tokens: $0.tokens, units: "")
+                }
+            }
+        }
+        // The literal typed string (case preserved; raw keys in Shuangpin) is
+        // the same kind of candidate as a word. A leading capital signals
+        // English intent and ranks it first; otherwise it trails the Chinese
+        // so a clean pinyin sentence looks free of English, and surfaces on
+        // top only when no Chinese path exists.
+        if !raw.isEmpty {
+            let literal = Candidate(text: raw, consumed: raw.count,
+                                    tokens: [], units: "", isEnglish: true)
+            if raw.first?.isUppercase == true {
+                result.insert(literal, at: 0)
+            } else {
+                result.append(literal)
+            }
+        }
+        candidates = result
     }
 
     /// The exact pinyin of every *completed* Microsoft Shuangpin syllable.

@@ -128,7 +128,9 @@ final class CompositionCandidateSelectionTests: XCTestCase {
         XCTAssertEqual(composition.raw, "xcg")
         XCTAssertEqual(composition.cursor, 3)
         XCTAssertEqual(decoder.decodeCalls.last?.pinyin, "xiaog")
-        XCTAssertTrue(composition.candidates.isEmpty)
+        // No Chinese path yet, so only the literal English fallback competes.
+        XCTAssertEqual(composition.candidates.map(\.text), ["xcg"])
+        XCTAssertEqual(composition.candidates.first?.isEnglish, true)
 
         composition.append("o")
 
@@ -183,7 +185,7 @@ final class CompositionCandidateSelectionTests: XCTestCase {
         XCTAssertEqual(decoder.decodeCalls.last?.pinyin, "xihuan")
         // The under-expanded two-syllable paths are dropped; the locked path
         // and single-character alternatives survive.
-        XCTAssertEqual(composition.candidates.map(\.text), ["喜欢", "喜", "欢"])
+        XCTAssertEqual(composition.candidates.map(\.text), ["喜欢", "喜", "欢", "xihr"])
     }
 
     func testShuangpinTrailingIncompleteSyllableStillExpands() {
@@ -202,7 +204,7 @@ final class CompositionCandidateSelectionTests: XCTestCase {
         // incomplete syllable, so its final may expand.
         "xih".forEach { composition.append(String($0)) }
 
-        XCTAssertEqual(composition.candidates.map(\.text), ["西红", "喜"])
+        XCTAssertEqual(composition.candidates.map(\.text), ["西红", "喜", "xih"])
         // The fake decoder ignores the expansion flag, so this alone cannot
         // prove the engine completes a trailing initial. Guard the wiring
         // that makes it possible: main decode must request expansion (the
@@ -248,8 +250,73 @@ final class CompositionCandidateSelectionTests: XCTestCase {
 
         "zhongguo".forEach { composition.append(String($0)) }
 
-        XCTAssertEqual(composition.displayCandidates.map(\.text), ["中国", "中过", "种过"])
-        XCTAssertEqual(composition.displayCandidates.map(\.score), [-6, -13, -15])
+        XCTAssertEqual(composition.displayCandidates.map(\.text), ["中国", "中过", "种过", "zhongguo"])
+        XCTAssertEqual(composition.displayCandidates.map(\.score), [-6, -13, -15, 0])
+    }
+
+    func testLowercaseAppendsLiteralEnglishCandidateAfterChinese() {
+        let decoder = RecordingPinyinDecoder()
+        decoder.decodeResult = { _ in
+            [Candidate(text: "啊", consumed: 1, tokens: [1], units: "a")]
+        }
+        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
+
+        "app".forEach { composition.append(String($0)) }
+
+        // Chinese ranks first; the literal English candidate competes from the
+        // tail (and would be first if no Chinese path existed).
+        let candidates = composition.candidates
+        XCTAssertEqual(candidates.map(\.text), ["啊", "app"])
+        XCTAssertEqual(candidates.last?.isEnglish, true)
+    }
+
+    func testLeadingCapitalRanksLiteralEnglishFirstAndCommits() {
+        let decoder = RecordingPinyinDecoder()
+        decoder.decodeResult = { _ in [] }
+        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
+
+        // A one-shot Shift capitalises the first letter; the rest stay as
+        // typed. The literal string (case preserved) ranks first and commits
+        // through the same path as a Chinese word.
+        ["H", "i"].forEach { composition.append($0) }
+        XCTAssertEqual(composition.candidates.first?.text, "Hi")
+        XCTAssertEqual(composition.candidates.first?.isEnglish, true)
+        XCTAssertEqual(composition.select(0), "Hi")
+        XCTAssertFalse(composition.isComposing)
+    }
+
+    func testShuangpinLiteralEnglishCandidateIsRawKeys() {
+        let decoder = RecordingPinyinDecoder()
+        decoder.decodeResult = { _ in [] }
+        let composition = Composition(decoder: decoder, inputScheme: .microsoftShuangpin)
+
+        // In Shuangpin the literal candidate is the raw keys, not the
+        // expanded pinyin, and consumes every key on commit.
+        ["A", "p", "p"].forEach { composition.append($0) }
+        XCTAssertEqual(composition.candidates.first?.text, "App")
+        XCTAssertEqual(composition.select(0), "App")
+        XCTAssertFalse(composition.isComposing)
+    }
+
+    func testMixedPinyinPrefixWithEnglishTail() {
+        let decoder = RecordingPinyinDecoder()
+        decoder.decodeResult = { pinyin in
+            pinyin == "nihao"
+                ? [Candidate(text: "你好", consumed: 5, tokens: [1, 2], units: "ni'hao")]
+                : []
+        }
+        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
+
+        // Lowercase pinyin then a capitalised English tail: decode the pinyin
+        // prefix and keep the tail literal, combined into one candidate.
+        "nihao".forEach { composition.append(String($0)) }
+        ["A", "A"].forEach { composition.append($0) }
+
+        // The tail must not pollute the pinyin decode.
+        XCTAssertEqual(decoder.decodeCalls.last?.pinyin, "nihao")
+        XCTAssertEqual(composition.candidates.first?.text, "你好AA")
+        XCTAssertEqual(composition.select(0), "你好AA")
+        XCTAssertFalse(composition.isComposing)
     }
 
     func testSelectingAllSegmentsUsesEveryFixedTokenForPrediction() {

@@ -7,13 +7,19 @@ struct Candidate {
     let units: String
     /// Sime's log score, retained so correction can prune weak lattice paths.
     let score: Double
+    /// A literal, case-preserved English candidate (the raw typed string).
+    /// It carries no pinyin units or LM tokens and commits through the same
+    /// segment path as a Chinese word.
+    let isEnglish: Bool
 
-    init(text: String, consumed: Int, tokens: [UInt32], units: String = "", score: Double = 0) {
+    init(text: String, consumed: Int, tokens: [UInt32], units: String = "",
+         score: Double = 0, isEnglish: Bool = false) {
         self.text = text
         self.consumed = consumed
         self.tokens = tokens
         self.units = units
         self.score = score
+        self.isEnglish = isEnglish
     }
 }
 

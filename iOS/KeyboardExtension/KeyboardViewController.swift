@@ -11,7 +11,13 @@ final class KeyboardViewController: UIInputViewController {
     private var candidateContentWidth: CGFloat = 0
     private let keyboardStack = UIStackView()
     private var numberMode = false
-    private var shifted = false
+    // Shift mirrors the system keyboard's default: a single tap uppercases
+    // the next letter only (one-shot), then reverts. There is no caps lock.
+    // Uppercase letters are literal English and never join the pinyin
+    // composition.
+    private enum ShiftState { case off, oneShot }
+    private var shiftState: ShiftState = .off
+    private var shifted: Bool { shiftState != .off }
     private var keyboardScheme = InputSettings.scheme
     private var keyboardNeedsRebuild = false
     private var displayedReturnKeyType: UIReturnKeyType?
@@ -196,14 +202,19 @@ final class KeyboardViewController: UIInputViewController {
         let mode = keyButton(numberMode ? "拼音" : "123")
         let space = keyButton("space")
         let enter = keyButton("return")
+        // Add every key to the row before activating cross-key width
+        // constraints. Constraining against a sibling that is not yet in the
+        // shared stack view has no common ancestor and aborts (crashes when
+        // the globe key is present, e.g. on iPad).
+        var globe: UIButton?
         if needsInputModeSwitchKey {
-            let globe = inputModeButton()
-            row.addArrangedSubview(globe)
-            globe.widthAnchor.constraint(equalTo: mode.widthAnchor, multiplier: 0.75).isActive = true
+            globe = inputModeButton()
+            row.addArrangedSubview(globe!)
         }
         [mode, space, enter].forEach { row.addArrangedSubview($0) }
         mode.widthAnchor.constraint(equalTo: enter.widthAnchor).isActive = true
         space.widthAnchor.constraint(equalTo: mode.widthAnchor, multiplier: 2.1).isActive = true
+        globe?.widthAnchor.constraint(equalTo: mode.widthAnchor, multiplier: 0.75).isActive = true
         return row
     }
 
@@ -211,20 +222,21 @@ final class KeyboardViewController: UIInputViewController {
         let displayedTitle: String
         switch title {
         case "space":
-            let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"
-            displayedTitle = "空格 \(build)"
+            displayedTitle = "空格"
         case "return": displayedTitle = returnKeyTitle()
         case "delete": displayedTitle = "⌫"
         default: displayedTitle = title
         }
         let button = UIButton(type: .system)
         button.setTitle(displayedTitle, for: .normal)
-        if title == "space" || title == "return" {
+        if title == "space" || title == "return" || title == "⇧" {
             button.accessibilityValue = title
         }
         button.setTitleColor(.label, for: .normal)
         button.titleLabel?.font = .systemFont(ofSize: 18)
-        button.backgroundColor = .tertiarySystemBackground
+        // Highlight Shift while a one-shot uppercase is armed.
+        button.backgroundColor = (title == "⇧" && shifted)
+            ? UIColor.label.withAlphaComponent(0.18) : .tertiarySystemBackground
         button.layer.cornerRadius = 10
         button.layer.cornerCurve = .continuous
         if displayedTitle == "⌫" {
@@ -294,13 +306,16 @@ final class KeyboardViewController: UIInputViewController {
                 textDocumentProxy.insertText("\n")
             }
         case "⇧":
-            shifted.toggle()
+            shiftState = (shiftState == .off) ? .oneShot : .off
             keyboardNeedsRebuild = true
             render()
         case "123", "拼音":
-            commitComposition()
+            // Switching to the number/symbol page must not force-commit the
+            // composition; keep it marked and commit only when a digit or
+            // symbol is actually inserted (see the numberMode branch and
+            // insertPunctuation).
             numberMode.toggle()
-            shifted = false
+            shiftState = .off
             keyboardNeedsRebuild = true
             render()
         case ";" where keyboardScheme == .microsoftShuangpin:
@@ -311,10 +326,20 @@ final class KeyboardViewController: UIInputViewController {
             insertPunctuation(title)
         default:
             if numberMode {
+                // Commit any pending composition before the digit so the
+                // marked pinyin isn't dropped; deferred from the 123 tap.
+                commitComposition()
                 textDocumentProxy.insertText(title.lowercased())
             } else {
+                // `title` is already uppercase when Shift is active; the
+                // composition preserves its case and surfaces it as a literal
+                // English candidate (committed on space/enter/tap), so
+                // uppercase does not go straight to the document.
                 composition.append(title)
-                shifted = false
+                if shiftState == .oneShot {
+                    shiftState = .off
+                    keyboardNeedsRebuild = true
+                }
                 updateMarkedText()
                 render()
             }
@@ -378,7 +403,7 @@ final class KeyboardViewController: UIInputViewController {
         textDocumentProxy.insertText(punctuation == ";" ? "；" : punctuation)
         if numberMode {
             numberMode = false
-            shifted = false
+            shiftState = .off
             keyboardNeedsRebuild = true
         }
         render()
