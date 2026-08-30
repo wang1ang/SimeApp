@@ -40,10 +40,36 @@ final class Composition {
     private var prefixText: String { prefixSegments.map(\.text).joined() }
     private var consumedKeyCount: Int { prefixSegments.last?.sourceKeyRange.upperBound ?? 0 }
     private var consumedSyllableCount: Int { prefixSegments.last?.syllableRange.upperBound ?? 0 }
-    var preedit: String { prefixText + raw }
-    var selectionLocation: Int {
-        prefixText.utf16.count + String(raw.prefix(cursor)).utf16.count
+    private static let syllableSeparator = " "
+    // Display-only grouping of `raw`, aligned 1:1 with the top candidate's
+    // characters (first row). Computed in `refresh()`; never affects how many
+    // keys a commit consumes.
+    private var displayGroups: [String] = []
+    private var rawSyllableGroups: [String] {
+        displayGroups.isEmpty && !raw.isEmpty ? [raw] : displayGroups
     }
+    private var groupedRaw: String {
+        rawSyllableGroups.joined(separator: Self.syllableSeparator)
+    }
+    // Ungrouped preedit for commit paths: separators are display-only and must
+    // never reach the host document.
+    private var rawPreedit: String { prefixText + raw }
+    var preedit: String { prefixText + groupedRaw }
+    /// The displayed preedit up to the composition cursor (committed prefix
+    /// plus grouped raw before the cursor). Callers strip this from the host
+    /// context so the marked, grouped pinyin never becomes model input.
+    var markedPrefix: String {
+        var out = ""
+        var rawSeen = 0
+        for (index, group) in rawSyllableGroups.enumerated() {
+            guard rawSeen < cursor else { break }
+            if index > 0 { out += Self.syllableSeparator }
+            out += String(group.prefix(cursor - rawSeen))
+            rawSeen += group.count
+        }
+        return prefixText + out
+    }
+    var selectionLocation: Int { markedPrefix.utf16.count }
     var isComposing: Bool { !raw.isEmpty || !prefixSegments.isEmpty }
     var sentencePreview: String {
         prefixText + renderedText(candidates.first?.text ?? "")
@@ -351,7 +377,7 @@ final class Composition {
             return result
         }
         guard isComposing else { return nil }
-        let result = preedit
+        let result = rawPreedit
         predictionCandidates = []
         clearComposition()
         return result
@@ -397,6 +423,7 @@ final class Composition {
         candidates = []
         activeCharacterIndex = nil
         replacementCandidates = []
+        displayGroups = []
     }
 
     private func refresh() {
@@ -409,6 +436,7 @@ final class Composition {
         let englishTail = upperIndex.map { String(raw[$0...]) } ?? ""
 
         var result: [Candidate] = []
+        var pinyinUnits = ""
         if !pinyinPart.isEmpty {
             let lower = pinyinPart.lowercased()
             let input = inputScheme == .microsoftShuangpin
@@ -437,6 +465,7 @@ final class Composition {
                               tokens: $0.tokens, units: "")
                 }
             }
+            pinyinUnits = chinese.first?.units ?? ""
         }
         // The literal typed string (case preserved; raw keys in Shuangpin) is
         // the same kind of candidate as a word. A leading capital signals
@@ -453,6 +482,41 @@ final class Composition {
             }
         }
         candidates = result
+        displayGroups = computeDisplayGroups(pinyinPart: pinyinPart,
+                                             englishTail: englishTail,
+                                             pinyinUnits: pinyinUnits)
+    }
+
+    /// Segment `raw` to line up 1:1 with the top candidate's characters: the
+    /// pinyin prefix splits into syllables (two keys for Shuangpin, the pinyin
+    /// length for full pinyin), while the literal English tail splits one key
+    /// per character. Display only — never changes commit consumption.
+    private func computeDisplayGroups(pinyinPart: String, englishTail: String,
+                                      pinyinUnits: String) -> [String] {
+        var parts: [String] = []
+        if !pinyinPart.isEmpty {
+            let syllables = pinyinUnits.split(separator: "'").map(String.init)
+            if syllables.isEmpty {
+                // No Chinese decode: keep the pinyin as one ungrouped chunk.
+                parts.append(pinyinPart)
+            } else {
+                var remaining = Substring(pinyinPart)
+                for syllable in syllables {
+                    if remaining.isEmpty { break }
+                    var group = ""
+                    if remaining.first == "'" { group.append("'"); remaining.removeFirst() }
+                    let want = inputScheme == .microsoftShuangpin ? 2 : syllable.count
+                    let take = min(want, remaining.count)
+                    group += String(remaining.prefix(take))
+                    remaining.removeFirst(take)
+                    parts.append(group)
+                }
+                if !remaining.isEmpty { parts.append(String(remaining)) }
+            }
+        }
+        // The literal English tail aligns one first-row character per key.
+        parts.append(contentsOf: englishTail.map(String.init))
+        return parts
     }
 
     /// The exact pinyin of every *completed* Microsoft Shuangpin syllable.

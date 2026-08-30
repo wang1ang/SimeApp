@@ -329,6 +329,9 @@ final class CompositionCandidateSelectionTests: XCTestCase {
         // The tail must not pollute the pinyin decode.
         XCTAssertEqual(decoder.decodeCalls.last?.pinyin, "nihao")
         XCTAssertEqual(composition.candidates.first?.text, "你好AA")
+        // Inline preedit groups the pinyin prefix by syllable and aligns one
+        // group per literal English-tail character.
+        XCTAssertEqual(composition.preedit, "ni hao A A")
         XCTAssertEqual(composition.select(0), "你好AA")
         XCTAssertFalse(composition.isComposing)
     }
@@ -600,5 +603,83 @@ final class CompositionEditingTests: XCTestCase {
         XCTAssertNil(composition.commitBestOrRaw())
         XCTAssertNil(composition.commitPreeditLiterally())
         XCTAssertFalse(composition.isComposing)
+    }
+}
+
+final class CompositionPreeditGroupingTests: XCTestCase {
+    func testFullPinyinPreeditGroupsBySyllable() {
+        let decoder = RecordingPinyinDecoder()
+        decoder.decodeResult = { pinyin in
+            pinyin == "dayichuan"
+                ? [Candidate(text: "大衣船", consumed: 9, tokens: [1, 2, 3],
+                             units: "da'yi'chuan")]
+                : []
+        }
+        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
+
+        "dayichuan".forEach { composition.append(String($0)) }
+
+        // The inline preedit reads like the first-row candidate, one group per
+        // syllable. Full pinyin groups keep their own key length.
+        XCTAssertEqual(composition.preedit, "da yi chuan")
+    }
+
+    func testShuangpinPreeditGroupsTwoKeysPerSyllable() {
+        let decoder = RecordingPinyinDecoder()
+        decoder.decodeResult = { pinyin in
+            pinyin == "xiaoguo"
+                ? [Candidate(text: "小国", consumed: 7, tokens: [31, 32],
+                             units: "xiao'guo")]
+                : []
+        }
+        let composition = Composition(decoder: decoder, inputScheme: .microsoftShuangpin)
+
+        "xcgo".forEach { composition.append(String($0)) }
+
+        XCTAssertEqual(composition.preedit, "xc go")
+    }
+
+    func testKeysBeyondTheCandidateStayAsATrailingGroup() {
+        let decoder = RecordingPinyinDecoder()
+        decoder.decodeResult = { pinyin in
+            pinyin == "nihao"
+                ? [Candidate(text: "你", consumed: 2, tokens: [11], units: "ni")]
+                : []
+        }
+        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
+
+        "nihao".forEach { composition.append(String($0)) }
+
+        // The candidate only covers "ni"; the uncovered "hao" keys remain
+        // visible as their own group instead of vanishing or ungrouping all.
+        XCTAssertEqual(composition.preedit, "ni hao")
+    }
+
+    func testUndecodedLiteralPinyinIsNotSplitPerCharacter() {
+        let decoder = RecordingPinyinDecoder()
+        decoder.decodeResult = { _ in [] }
+        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
+
+        "niao".forEach { composition.append(String($0)) }
+
+        // No Chinese path: the literal keys stay as one chunk, not "n i a o".
+        XCTAssertEqual(composition.preedit, "niao")
+    }
+
+    func testSelectionLocationCountsGroupSeparatorsBeforeTheCursor() {
+        let decoder = RecordingPinyinDecoder()
+        decoder.decodeResult = { pinyin in
+            pinyin == "dayichuan"
+                ? [Candidate(text: "大衣船", consumed: 9, tokens: [1, 2, 3],
+                             units: "da'yi'chuan")]
+                : []
+        }
+        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
+
+        "dayichuan".forEach { composition.append(String($0)) }
+        composition.moveCursor(to: 4) // after "dayi" -> displayed "da yi"
+
+        // 4 raw keys + 1 separator inserted after the first group.
+        XCTAssertEqual(composition.selectionLocation, 5)
     }
 }

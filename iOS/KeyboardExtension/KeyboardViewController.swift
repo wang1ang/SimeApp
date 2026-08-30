@@ -93,8 +93,7 @@ final class KeyboardViewController: UIInputViewController {
         // UIKit normally includes the marked preedit before the cursor. It is
         // not committed host text and must not become language-model context.
         if composition.isComposing {
-            let markedPrefix = composition.committed
-                + String(composition.raw.prefix(composition.cursor))
+            let markedPrefix = composition.markedPrefix
             if before.hasSuffix(markedPrefix) {
                 before.removeLast(markedPrefix.count)
             }
