@@ -212,6 +212,20 @@ final class CompositionCandidateSelectionTests: XCTestCase {
         XCTAssertEqual(decoder.decodeExpansions.last, true)
     }
 
+    func testShuangpinCompleteSyllablesDecodeWithoutExpansion() {
+        let decoder = RecordingPinyinDecoder()
+        decoder.decodeResult = { _ in [] }
+        let composition = Composition(decoder: decoder, inputScheme: .microsoftShuangpin)
+
+        // Even key count: "li" + "vb"(zhou) are both complete syllables, so the
+        // engine must NOT expand (expansion would invent 柳州/凉州 whose units
+        // echo the typed li'zhou and slip past the locked-final filter).
+        "livb".forEach { composition.append(String($0)) }
+
+        XCTAssertEqual(decoder.decodeCalls.last?.pinyin, "lizhou")
+        XCTAssertEqual(decoder.decodeExpansions.last, false)
+    }
+
     func testShuangpinCorrectionCandidatesRespectLockedFinals() {
         let decoder = RecordingPinyinDecoder()
         decoder.decodeResult = { pinyin in
@@ -537,13 +551,16 @@ final class CompositionEditingTests: XCTestCase {
 
         // Correction faces already-complete syllables, so it disables
         // expansion to stop a locked final being abbreviation-matched to a
-        // longer syllable (this is what removed 石原/十元). Main decode must
-        // keep expansion so a lone Shuangpin initial still completes.
+        // longer syllable (this is what removed 石原/十元). Main decode expands
+        // only while a trailing syllable is still incomplete (odd key count);
+        // once every syllable is complete (even) it must stop expanding, or
+        // the engine invents wrong finals (li -> 柳州) whose units echo the
+        // typed keys and slip past the locked-final filter.
         let shuangpin = Composition(decoder: decoder, inputScheme: .microsoftShuangpin)
         "uiyu".forEach { shuangpin.append(String($0)) }
         shuangpin.activateCharacter(0)
-        XCTAssertEqual(decoder.decodeExpansions, [true, true, true, true],
-                       "main decode must keep expansion for lone-initial completion")
+        XCTAssertEqual(decoder.decodeExpansions, [true, false, true, false],
+                       "main decode expands only for an incomplete trailing syllable")
         XCTAssertEqual(decoder.correctionExpansions.last, false)
 
         decoder.decodeExpansions.removeAll()

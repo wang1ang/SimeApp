@@ -413,8 +413,17 @@ final class Composition {
             let lower = pinyinPart.lowercased()
             let input = inputScheme == .microsoftShuangpin
                 ? MicrosoftShuangpin.expand(lower) : lower
+            // Shuangpin only needs engine expansion to finish a trailing
+            // incomplete syllable (an odd, lone initial). When every syllable
+            // is complete (even key count) expansion would instead invent
+            // wrong finals (li -> 柳州/凉州) that carry the input's units and
+            // slip past the locked-final filter, so keep it off. Full pinyin
+            // still expands for abbreviation/tail completion.
+            let expansion = inputScheme != .microsoftShuangpin
+                || pinyinPart.count % 2 == 1
             let decoded = input.isEmpty ? [] : decoder.decode(
-                input, context: hostContextTokens ?? contextTokens, limit: 60)
+                input, context: hostContextTokens ?? contextTokens, limit: 60,
+                expansion: expansion)
             let chinese = inputScheme == .microsoftShuangpin
                 ? decoded.filter { matchesLockedShuangpinFinals($0) } : decoded
             if englishTail.isEmpty {
