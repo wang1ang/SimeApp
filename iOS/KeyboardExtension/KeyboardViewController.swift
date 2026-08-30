@@ -339,7 +339,7 @@ final class KeyboardViewController: UIInputViewController {
             composition.append(title)
             updateMarkedText()
             render()
-        case "，", "。", ";", "-", "/", "：", "；", "(", ")", "￥", "@", "“", "”", "、", "？", "！", ".":
+        case "，", "。", ";", "-", "/", "：", "；", "（", "）", "￥", "@", "“", "”", "、", "？", "！", ".":
             insertPunctuation(title)
         default:
             switch keyboardPage {
@@ -511,20 +511,20 @@ final class KeyboardViewController: UIInputViewController {
                 makeRow(["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"])
             )
             keyboardStack.addArrangedSubview(
-                makeRow(["-", "/", "：", "；", "(", ")", "￥", "@", "“", "”"])
+                makeRow(["-", "/", "：", "；", "（", "）", "￥", "@", "“", "”"])
             )
             keyboardStack.addArrangedSubview(
                 makeRow(["#+=", "。", "，", "、", "？", "！", ".", "⌫"])
             )
         case .symbols:
             keyboardStack.addArrangedSubview(
-                makeRow(["【", "】", "{", "}", "#", "%", "^", "*", "+", "="])
+                makeRow(["【", "】", "｛", "｝", "#", "%", "^", "*", "+", "="])
             )
             keyboardStack.addArrangedSubview(
-                makeRow(["_", "—", "\\", "|", "~", "«", "»", "$", "&", "·"])
+                makeRow(["_", "—", "\\", "｜", "～", "《", "》", "$", "&", "·"])
             )
             keyboardStack.addArrangedSubview(
-                makeRow(["123", "…", ",", "^^", "?", "!", "'", "⌫"])
+                makeRow(["123", "…", ",", "°", "?", "!", "'", "⌫"])
             )
         case .letters:
             let letters = shifted ? "QWERTYUIOP" : "qwertyuiop"
