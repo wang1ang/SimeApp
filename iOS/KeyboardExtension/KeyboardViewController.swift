@@ -10,7 +10,13 @@ final class KeyboardViewController: UIInputViewController {
     private var sentenceContentWidth: CGFloat = 0
     private var candidateContentWidth: CGFloat = 0
     private let keyboardStack = UIStackView()
-    private var numberMode = false
+    private enum KeyboardPage { case letters, numbers, symbols }
+    private var keyboardPage: KeyboardPage = .letters
+    // The letter-page toggle key reflects the active scheme so the user knows
+    // which layout tapping it returns to.
+    private var schemeLabel: String {
+        keyboardScheme == .microsoftShuangpin ? "双拼" : "拼音"
+    }
     // Shift mirrors the system keyboard's default: a single tap uppercases
     // the next letter only (one-shot), then reverts. There is no caps lock.
     // Uppercase letters are literal English and never join the pinyin
@@ -199,7 +205,7 @@ final class KeyboardViewController: UIInputViewController {
         row.heightAnchor.constraint(equalToConstant: 43).isActive = true
 
         // Mirrors the native Chinese keyboard's compact bottom row.
-        let mode = keyButton(numberMode ? "拼音" : "123")
+        let mode = keyButton(keyboardPage == .letters ? "123" : schemeLabel)
         let space = keyButton("space")
         let enter = keyButton("return")
         // Add every key to the row before activating cross-key width
@@ -309,12 +315,23 @@ final class KeyboardViewController: UIInputViewController {
             shiftState = (shiftState == .off) ? .oneShot : .off
             keyboardNeedsRebuild = true
             render()
-        case "123", "拼音":
-            // Switching to the number/symbol page must not force-commit the
+        case "123":
+            // Enter the number page from letters, or step back to it from the
+            // symbol page. Switching pages must not force-commit the
             // composition; keep it marked and commit only when a digit or
-            // symbol is actually inserted (see the numberMode branch and
+            // symbol is actually inserted (see the page branch below and
             // insertPunctuation).
-            numberMode.toggle()
+            keyboardPage = .numbers
+            shiftState = .off
+            keyboardNeedsRebuild = true
+            render()
+        case "#+=":
+            keyboardPage = .symbols
+            shiftState = .off
+            keyboardNeedsRebuild = true
+            render()
+        case "拼音", "双拼":
+            keyboardPage = .letters
             shiftState = .off
             keyboardNeedsRebuild = true
             render()
@@ -325,12 +342,18 @@ final class KeyboardViewController: UIInputViewController {
         case "，", "。", ";", "-", "/", "：", "；", "(", ")", "￥", "@", "“", "”", "、", "？", "！", ".":
             insertPunctuation(title)
         default:
-            if numberMode {
+            switch keyboardPage {
+            case .numbers:
                 // Commit any pending composition before the digit so the
                 // marked pinyin isn't dropped; deferred from the 123 tap.
                 commitComposition()
                 textDocumentProxy.insertText(title.lowercased())
-            } else {
+            case .symbols:
+                // Symbols insert literally and stay on the symbol page, like
+                // the system keyboard's #+= layout.
+                commitComposition()
+                textDocumentProxy.insertText(title)
+            case .letters:
                 // `title` is already uppercase when Shift is active; the
                 // composition preserves its case and surfaces it as a literal
                 // English candidate (committed on space/enter/tap), so
@@ -401,8 +424,8 @@ final class KeyboardViewController: UIInputViewController {
     private func insertPunctuation(_ punctuation: String) {
         commitComposition()
         textDocumentProxy.insertText(punctuation == ";" ? "；" : punctuation)
-        if numberMode {
-            numberMode = false
+        if keyboardPage != .letters {
+            keyboardPage = .letters
             shiftState = .off
             keyboardNeedsRebuild = true
         }
@@ -482,7 +505,8 @@ final class KeyboardViewController: UIInputViewController {
 
     private func rebuildKeyboard() {
         keyboardStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        if numberMode {
+        switch keyboardPage {
+        case .numbers:
             keyboardStack.addArrangedSubview(
                 makeRow(["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"])
             )
@@ -492,7 +516,17 @@ final class KeyboardViewController: UIInputViewController {
             keyboardStack.addArrangedSubview(
                 makeRow(["#+=", "。", "，", "、", "？", "！", ".", "⌫"])
             )
-        } else {
+        case .symbols:
+            keyboardStack.addArrangedSubview(
+                makeRow(["【", "】", "{", "}", "#", "%", "^", "*", "+", "="])
+            )
+            keyboardStack.addArrangedSubview(
+                makeRow(["_", "—", "\\", "|", "~", "«", "»", "$", "&", "·"])
+            )
+            keyboardStack.addArrangedSubview(
+                makeRow(["123", "…", ",", "^^", "?", "!", "'", "⌫"])
+            )
+        case .letters:
             let letters = shifted ? "QWERTYUIOP" : "qwertyuiop"
             let isDouble = keyboardScheme == .microsoftShuangpin
             let home = isDouble
