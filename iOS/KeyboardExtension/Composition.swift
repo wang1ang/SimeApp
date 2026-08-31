@@ -439,8 +439,28 @@ final class Composition {
         var pinyinUnits = ""
         if !pinyinPart.isEmpty {
             let lower = pinyinPart.lowercased()
-            let input = inputScheme == .microsoftShuangpin
-                ? MicrosoftShuangpin.expand(lower) : lower
+            let input: String
+            if inputScheme == .microsoftShuangpin {
+                let keys = Array(lower)
+                if keys.count % 2 == 1 {
+                    // The trailing lone key starts a new syllable. Expanding
+                    // the whole buffer would glue it onto the previous
+                    // syllable's pinyin (na + n -> "nan"), which the engine
+                    // then reads as one syllable and offers 男/难 instead of
+                    // 那 plus an incomplete 你. Keep an explicit boundary so
+                    // the completed syllables stay locked and only the
+                    // trailing initial expands.
+                    let head = String(keys.dropLast())
+                    let tail = String(keys.last!)
+                    input = head.isEmpty
+                        ? tail
+                        : MicrosoftShuangpin.expand(head) + "'" + tail
+                } else {
+                    input = MicrosoftShuangpin.expand(lower)
+                }
+            } else {
+                input = lower
+            }
             // Shuangpin only needs engine expansion to finish a trailing
             // incomplete syllable (an odd, lone initial). When every syllable
             // is complete (even key count) expansion would instead invent

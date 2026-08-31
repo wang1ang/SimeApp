@@ -127,7 +127,7 @@ final class CompositionCandidateSelectionTests: XCTestCase {
 
         XCTAssertEqual(composition.raw, "xcg")
         XCTAssertEqual(composition.cursor, 3)
-        XCTAssertEqual(decoder.decodeCalls.last?.pinyin, "xiaog")
+        XCTAssertEqual(decoder.decodeCalls.last?.pinyin, "xiao'g")
         // No Chinese path yet, so only the literal English fallback competes.
         XCTAssertEqual(composition.candidates.map(\.text), ["xcg"])
         XCTAssertEqual(composition.candidates.first?.isEnglish, true)
@@ -191,7 +191,7 @@ final class CompositionCandidateSelectionTests: XCTestCase {
     func testShuangpinTrailingIncompleteSyllableStillExpands() {
         let decoder = RecordingPinyinDecoder()
         decoder.decodeResult = { pinyin in
-            pinyin == "xih"
+            pinyin == "xi'h"
                 ? [
                     Candidate(text: "西红", consumed: 5, tokens: [1, 5], units: "xi'hong"),
                     Candidate(text: "喜", consumed: 2, tokens: [1], units: "xi")
@@ -210,6 +210,32 @@ final class CompositionCandidateSelectionTests: XCTestCase {
         // that makes it possible: main decode must request expansion (the
         // engine semantics itself is covered by require/Sime correction_test).
         XCTAssertEqual(decoder.decodeExpansions.last, true)
+    }
+
+    func testShuangpinTrailingInitialDoesNotMergeIntoPreviousSyllable() {
+        let decoder = RecordingPinyinDecoder()
+        decoder.decodeResult = { pinyin in
+            switch pinyin {
+            // The trailing lone "n" is a new syllable's initial, so decode
+            // input keeps the boundary: "na" stays 那, the "n" expands.
+            case "na'n":
+                return [Candidate(text: "那", consumed: 2, tokens: [1], units: "na")]
+            // Without the boundary the whole buffer would collapse to the
+            // valid syllable "nan" and offer 难/男 — the reported bug.
+            case "nan":
+                return [Candidate(text: "难", consumed: 3, tokens: [2], units: "nan")]
+            default:
+                return []
+            }
+        }
+        let composition = Composition(decoder: decoder, inputScheme: .microsoftShuangpin)
+
+        // Typing 那你: na = "na", then the first key of 你 (ni = "ni").
+        "nan".forEach { composition.append(String($0)) }
+
+        XCTAssertEqual(decoder.decodeCalls.last?.pinyin, "na'n")
+        XCTAssertEqual(composition.candidates.first?.text, "那")
+        XCTAssertEqual(composition.preedit, "na n")
     }
 
     func testShuangpinCompleteSyllablesDecodeWithoutExpansion() {
