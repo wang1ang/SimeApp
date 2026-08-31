@@ -27,8 +27,8 @@ final class MicrosoftShuangpinTests: XCTestCase {
     func testVFinalUsesSimePinyinNotation() {
         XCTAssertEqual(MicrosoftShuangpin.expand("nv"), "nv")
         XCTAssertEqual(MicrosoftShuangpin.expand("lt"), "lve")
-        XCTAssertEqual(MicrosoftShuangpin.expand("lr"), "lvan")
-        XCTAssertEqual(MicrosoftShuangpin.expand("lp"), "lvn")
+        XCTAssertEqual(MicrosoftShuangpin.expand("lr"), "luan")
+        XCTAssertEqual(MicrosoftShuangpin.expand("lp"), "lun")
     }
 
     func testSpecialInitialsSemicolonAndIncompletePair() {

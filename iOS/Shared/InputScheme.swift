@@ -60,9 +60,11 @@ enum MicrosoftShuangpin {
             case "t":
                 final = ["n", "l"].contains(initialKey) ? "ve" : "ue"
             case "r":
-                final = ["n", "l"].contains(initialKey) ? "van" : "uan"
+                // üan never follows n/l (no lüan/nüan), so l/n take plain uan (luan/nuan).
+                final = "uan"
             case "p":
-                final = ["n", "l"].contains(initialKey) ? "vn" : "un"
+                // ün never follows n/l (no lün/nün), so l/n take plain un (lun/nun).
+                final = "un"
             default:
                 final = finals[finalKey] ?? String(finalKey)
             }
