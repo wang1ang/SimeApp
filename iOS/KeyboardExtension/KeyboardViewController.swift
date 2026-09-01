@@ -259,7 +259,7 @@ final class KeyboardViewController: UIInputViewController {
         case "delete": displayedTitle = "⌫"
         default: displayedTitle = title
         }
-        let button = UIButton(type: .system)
+        let button = KeyButton(type: .system)
         button.setTitle(displayedTitle, for: .normal)
         if title == "space" || title == "return" || title == "⇧" {
             button.accessibilityValue = title
@@ -289,7 +289,7 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func inputModeButton() -> UIButton {
-        let button = UIButton(type: .system)
+        let button = KeyButton(type: .system)
         button.setImage(UIImage(systemName: "globe"), for: .normal)
         button.tintColor = .label
         button.backgroundColor = .tertiarySystemBackground
@@ -688,5 +688,23 @@ final class NearestKeyStackView: UIStackView {
         }
         walk(self)
         return buttons
+    }
+}
+
+/// Key that extends its touch area into the surrounding gaps. Snapping a tap
+/// to the nearest key is not enough on its own: `UIControl` re-checks its own
+/// `point(inside:)` when the finger lifts, so a touch whose coordinates stay
+/// in the gap counts as "touch up outside" and never fires `.touchUpInside`.
+/// Growing the hit area makes gap taps genuinely land inside a key, so the
+/// action fires.
+final class KeyButton: UIButton {
+    // Half of the widest inter-key gap (bottom row is 8pt) horizontally, and
+    // half the inter-row spacing (5pt) vertically, with margin to spare.
+    var hitInset = UIEdgeInsets(top: 6, left: 8, bottom: 6, right: 8)
+
+    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        bounds.inset(by: UIEdgeInsets(top: -hitInset.top, left: -hitInset.left,
+                                     bottom: -hitInset.bottom, right: -hitInset.right))
+            .contains(point)
     }
 }
