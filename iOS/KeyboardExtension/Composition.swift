@@ -444,21 +444,22 @@ final class Composition {
             if inputScheme == .microsoftShuangpin {
                 let keys = Array(lower)
                 let hasLoneInitial = keys.count % 2 == 1
-                if hasLoneInitial {
-                    // Trailing lone initial: delimit it from the completed head
-                    // and expand so it completes (nghem -> 能喝吗). The engine
-                    // locks apostrophe-delimited finals, so the head is safe.
-                    let headExpanded = MicrosoftShuangpin.expand(String(keys.dropLast()))
-                    let tail = MicrosoftShuangpin.initial(for: keys.last!)
-                    let input = headExpanded.isEmpty ? tail : headExpanded + "'" + tail
-                    chinese = decoder.decode(
-                        input, context: context, limit: 60, expansion: true)
-                } else {
-                    // All syllables complete: no expansion (else li -> 柳州).
-                    chinese = decoder.decode(
-                        MicrosoftShuangpin.expand(lower), context: context,
-                        limit: 60, expansion: false)
+                // Delimit every syllable with an apostrophe. Each Shuangpin
+                // syllable is exactly two keys, so this hands the engine exact
+                // boundaries and stops it re-segmenting a syllable (pie -> pi+e,
+                // so rong'yi'pie'jiao stays 撇, not 被阿). A trailing lone key is
+                // a single initial (v/i/u -> zh/ch/sh) that still expands.
+                var syllables = stride(from: 0, to: keys.count - 1, by: 2).map {
+                    MicrosoftShuangpin.expand(String(keys[$0..<$0 + 2]))
                 }
+                if hasLoneInitial {
+                    syllables.append(MicrosoftShuangpin.initial(for: keys.last!))
+                }
+                let input = syllables.joined(separator: "'")
+                // Expand only to complete a trailing lone initial; complete
+                // syllables must not expand (else li -> 柳州).
+                chinese = input.isEmpty ? [] : decoder.decode(
+                    input, context: context, limit: 60, expansion: hasLoneInitial)
                 chinese = chinese.filter { matchesLockedShuangpinFinals($0) }
             } else {
                 // Full pinyin expands for abbreviation/tail completion.

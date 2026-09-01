@@ -7,6 +7,10 @@ import XCTest
 /// sequence a user types; assertions look at the actual candidate texts.
 final class ShuangpinEndToEndTests: XCTestCase {
     private func candidates(for keys: String) throws -> [String] {
+        try composition(for: keys).candidates.map(\.text)
+    }
+
+    private func composition(for keys: String) throws -> Composition {
         let bundle = Bundle(for: Self.self)
         guard let decoder = NativePinyinDecoder(bundle: bundle) else {
             throw XCTSkip("sime.dict/sime.cnt not bundled into the test target")
@@ -14,7 +18,7 @@ final class ShuangpinEndToEndTests: XCTestCase {
         let composition = Composition(decoder: decoder,
                                       inputScheme: .microsoftShuangpin)
         keys.forEach { composition.append(String($0)) }
-        return composition.candidates.map(\.text)
+        return composition
     }
 
     // A lone trailing initial completes exactly one syllable, using the
@@ -85,5 +89,54 @@ final class ShuangpinEndToEndTests: XCTestCase {
         XCTAssertFalse(u.contains("us"), "u must not surface English us")
         XCTAssertTrue(try candidates(for: "i").contains("陈"), "i -> ch should offer 陈")
         XCTAssertTrue(try candidates(for: "v").contains("中"), "v -> zh should offer 中")
+    }
+
+    // rsyipxjc = rong(rs)+yi(yi)+pie(px)+jiao(jc). Each syllable is delimited,
+    // so the engine must not re-segment the pie chunk into pi+e (容易被阿胶);
+    // 撇 must be reachable.
+    func testRongYiPieJiaoCanProducePie() throws {
+        let c = try candidates(for: "rsyipxjc")
+        XCTAssertTrue(c.contains { $0.contains("撇") },
+                      "rsyipxjc should offer a candidate containing 撇")
+        XCTAssertFalse(c.contains { $0.contains("被阿") },
+                      "pie must not split into pi+e (被阿)")
+    }
+
+    // Each syllable is two keys: the preedit groups xc|go and 效果 decodes.
+    func testTwoKeysPerSyllable() throws {
+        let composition = try composition(for: "xcgo")
+        XCTAssertEqual(composition.preedit, "xc go")
+        XCTAssertTrue(composition.candidates.map(\.text).contains("效果"),
+                      "xcgo should decode 效果")
+    }
+
+    // An odd trailing key stays in the composition until its pair completes.
+    func testOddKeyRemainsUntilPairCompletes() throws {
+        let composition = try composition(for: "xcg")
+        XCTAssertEqual(composition.raw, "xcg")
+        XCTAssertTrue(composition.isComposing)
+        XCTAssertEqual(composition.candidates.last?.text, "xcg",
+                       "the literal English fallback trails the candidates")
+        composition.append("o")
+        XCTAssertTrue(composition.candidates.map(\.text).contains("效果"))
+    }
+
+    // A long sentence keeps every syllable boundary through to commit.
+    func testLongSentenceCommits() throws {
+        // womfdevsgo = wo+men+de+zhong+guo.
+        let composition = try composition(for: "womfdevsgo")
+        let texts = composition.candidates.map(\.text)
+        guard let index = texts.firstIndex(of: "我们的中国") else {
+            return XCTFail("womfdevsgo should offer 我们的中国; got \(texts)")
+        }
+        XCTAssertEqual(composition.select(index), "我们的中国")
+        XCTAssertFalse(composition.isComposing)
+    }
+
+    // Activating the first character exposes its literal two-key code.
+    func testCorrectionRetainsLiteralKeys() throws {
+        let composition = try composition(for: "xcgo")
+        composition.activateCharacter(0)
+        XCTAssertEqual(composition.activeEnteredKeys, "xc")
     }
 }
