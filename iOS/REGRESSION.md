@@ -108,7 +108,7 @@
 
 ## 微软双拼解码不变量
 
-64. 微软双拼里已打全的音节其韵母是确定的，解码时**不得**被引擎扩展改写成别的韵母（`he` 只能是 喝/和/河，绝不能变成 黑/很）；仅末尾单个孤立声母（奇数尾键）才允许扩展补全其音节（`nghem` 应能到达 能喝吗，而非 能很忙/能黑马）。引擎的 expansion 是全局开关，实现须靠“头部不扩展解码锁定读音 + 整串扩展解码后按头部读音过滤”两步达成，不能改成整体开/关。具体用例与断言以 `iOS/Tests/CompositionBehaviorTests.swift` 为唯一来源（`testShuangpinNghemKeepsHeAndReachesNengHeMa`、`testShuangpinTrailingLoneInitialExpandsButKeepsLockedFinals` 等）。
+64. 微软双拼：**韵母不走扩展，单个声母才走扩展**。打全的音节韵母固定（`he` 只能是 喝/和，不能变 黑/很），只有末尾孤立声母才补全（`nghem` → 能喝吗，非 能很忙/能黑马）。用例与断言见 `iOS/Tests/CompositionBehaviorTests.swift`（`testShuangpinNghemKeepsHeAndReachesNengHeMa` 等）。
 
 ## 人工验证命令
 

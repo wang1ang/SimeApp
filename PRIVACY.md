@@ -8,7 +8,7 @@
 
 ### 概述
 
-是语输入法（以下简称"本应用"）是一款离线运行的中文拼音输入法，包含 Android 与 Linux（Fcitx5 插件）两个发行版本。本政策说明本应用在使用过程中如何处理用户数据。
+是语输入法（以下简称"本应用"）是一款离线运行的中文拼音输入法，包含 iOS、Android 与 Linux（Fcitx5 插件）多个发行版本。本政策说明本应用在使用过程中如何处理用户数据。
 
 ### 我们不收集任何数据
 
@@ -16,7 +16,7 @@
 
 - 不收集、不记录、不上传用户的任何输入内容（拼音、汉字、英文等）；
 - 不收集设备标识、位置、联系人、通话记录、相册等任何隐私信息；
-- 不进行任何形式的网络请求；本应用的 Android 包未声明 `INTERNET` 权限，Linux 插件不主动建立网络连接。
+- 不进行任何形式的网络请求；本应用的 Android 包未声明 `INTERNET` 权限，iOS 键盘扩展不请求"完全访问"（Full Access），Linux 插件不主动建立网络连接。
 
 ### 本机存储
 
@@ -27,7 +27,7 @@
 - 用户授权剪贴板功能时，最近若干条剪贴板内容（仅在剪贴板面板内可见，可随时清空）；
 - 输入法设置项（候选页大小、繁简切换、声音/振动等）。
 
-以上数据保存在 Android 的 `SharedPreferences` 或 Linux 的 `~/.config` 目录下，删除或卸载本应用时随之清除。
+以上数据保存在 iOS 的 App Group 容器、Android 的 `SharedPreferences` 或 Linux 的 `~/.config` 目录下，删除或卸载本应用时随之清除。
 
 ### 隐私字段保护
 
@@ -54,7 +54,7 @@
 
 ### Overview
 
-Sime IME ("the App") is an offline Chinese pinyin input method, distributed as an Android app and a Linux Fcitx5 plugin. This policy describes how the App handles user data.
+Sime IME ("the App") is an offline Chinese pinyin input method, distributed as an iOS app, an Android app, and a Linux Fcitx5 plugin. This policy describes how the App handles user data.
 
 ### We collect no data
 
@@ -62,7 +62,7 @@ The App runs **entirely on the user's device**. None of the following occur:
 
 - No keystrokes, pinyin, characters, or other input is collected, logged, or uploaded.
 - No device identifiers, location, contacts, call logs, photos, or other personal information are accessed.
-- No network requests are made. The Android package does not declare the `INTERNET` permission; the Linux plugin opens no network connections.
+- No network requests are made. The Android package does not declare the `INTERNET` permission; the iOS keyboard extension does not request Full Access; the Linux plugin opens no network connections.
 
 ### Local storage
 
@@ -73,7 +73,7 @@ To deliver IME functionality, the App stores the following on the user's device 
 - When clipboard support is enabled by the user, a small history of recent clipboard entries — visible only inside the clipboard panel and can be cleared at any time.
 - IME preferences (candidate page size, simplified/traditional switch, sound/vibration, etc.).
 
-This data lives in Android `SharedPreferences` or under the Linux `~/.config` directory, and is removed when the App is uninstalled.
+This data lives in the iOS App Group container, Android `SharedPreferences`, or under the Linux `~/.config` directory, and is removed when the App is uninstalled.
 
 ### Sensitive-field protection
 

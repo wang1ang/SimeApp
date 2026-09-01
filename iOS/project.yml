@@ -6,7 +6,7 @@ options:
 settings:
   base:
     SWIFT_VERSION: "5.0"
-    DEVELOPMENT_TEAM: ""
+    DEVELOPMENT_TEAM: "8K3SQFBAJG"
 schemes:
   Sime:
     build:
@@ -30,6 +30,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.ismantic.sime
         INFOPLIST_FILE: Sime/Info.plist
         CODE_SIGN_ENTITLEMENTS: Sime/Sime.entitlements
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     dependencies:
       - target: SimeKeyboard
         embed: true
