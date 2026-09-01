@@ -259,7 +259,7 @@ final class KeyboardViewController: UIInputViewController {
         case "delete": displayedTitle = "⌫"
         default: displayedTitle = title
         }
-        let button = KeyButton(type: .system)
+        let button = KeyButton()
         button.setTitle(displayedTitle, for: .normal)
         if title == "space" || title == "return" || title == "⇧" {
             button.accessibilityValue = title
@@ -289,7 +289,7 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func inputModeButton() -> UIButton {
-        let button = KeyButton(type: .system)
+        let button = KeyButton()
         button.setImage(UIImage(systemName: "globe"), for: .normal)
         button.tintColor = .label
         button.backgroundColor = .tertiarySystemBackground
@@ -701,6 +701,12 @@ final class KeyButton: UIButton {
     // Half of the widest inter-key gap (bottom row is 8pt) horizontally, and
     // half the inter-row spacing (5pt) vertically, with margin to spare.
     var hitInset = UIEdgeInsets(top: 6, left: 8, bottom: 6, right: 8)
+
+    // `.custom` buttons do not dim on press like `.system` did, so restore a
+    // lightweight pressed-state feedback.
+    override var isHighlighted: Bool {
+        didSet { alpha = isHighlighted ? 0.4 : 1 }
+    }
 
     override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
         bounds.inset(by: UIEdgeInsets(top: -hitInset.top, left: -hitInset.left,
