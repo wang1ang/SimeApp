@@ -139,4 +139,30 @@ final class ShuangpinEndToEndTests: XCTestCase {
         composition.activateCharacter(0)
         XCTAssertEqual(composition.activeEnteredKeys, "xc")
     }
+
+    // 双拼 -> 首选: pin the real top candidate for each key sequence so any
+    // decode/segmentation regression shows up here (candidates.first is the
+    // top Chinese path; the literal English fallback trails it).
+    func testShuangpinTopCandidates() throws {
+        let cases: [(keys: String, top: String)] = [
+            ("xcgo", "效果"),        // xiao guo
+            ("xihr", "喜欢"),        // xi huan
+            ("livb", "里周"),        // li zhou (complete syllables, no expand)
+            ("womfdevsgo", "我们的中国"),
+            ("rsyipxjc", "容易撇较"),  // rong yi pie jiao
+            ("nghem", "能盒马"),      // neng he m(a)
+            ("nghema", "能盒马"),
+            ("nan", "那你"),         // na n(i)
+            ("hamig", "哈密瓜"),
+            ("kdqru", "矿泉水"),
+            ("qru", "全省"),         // quan sh(...)
+            ("xih", "喜欢"),
+            ("hfhem", "很盒马"),
+            ("u", "是"), ("i", "陈"), ("v", "中")
+        ]
+        for c in cases {
+            let top = try candidates(for: c.keys).first
+            XCTAssertEqual(top, c.top, "\(c.keys) top candidate")
+        }
+    }
 }
