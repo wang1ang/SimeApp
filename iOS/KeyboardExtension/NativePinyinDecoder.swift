@@ -43,9 +43,9 @@ final class NativePinyinDecoder: PinyinDecoder {
         }
     }
 
-    init?() {
-        guard let dict = Bundle.main.path(forResource: "sime", ofType: "dict"),
-              let cnt = Bundle.main.path(forResource: "sime", ofType: "cnt") else {
+    init?(bundle: Bundle = .main) {
+        guard let dict = bundle.path(forResource: "sime", ofType: "dict"),
+              let cnt = bundle.path(forResource: "sime", ofType: "cnt") else {
             return nil
         }
         let created = sime_create(dict, cnt)

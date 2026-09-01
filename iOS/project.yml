@@ -41,13 +41,27 @@ targets:
       - path: Tests
       - path: KeyboardExtension/Composition.swift
       - path: KeyboardExtension/PinyinDecoder.swift
+      - path: KeyboardExtension/NativePinyinDecoder.swift
+      - path: Engine
+      - path: ../require/Sime/src
+        includes:
+          - "*.cc"
       - path: Shared/InputScheme.swift
     dependencies:
       - target: Sime
+    preBuildScripts:
+      - name: Copy Sime models for end-to-end tests
+        script: |
+          cp "$SRCROOT/../require/Sime/save/sime.dict" "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/sime.dict"
+          cp "$SRCROOT/../require/Sime/save/sime.cnt" "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/sime.cnt"
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.ismantic.sime.tests
         GENERATE_INFOPLIST_FILE: YES
+        SWIFT_OBJC_BRIDGING_HEADER: "$(SRCROOT)/Engine/sime_api.h"
+        HEADER_SEARCH_PATHS: "$(SRCROOT)/../require/Sime/include $(SRCROOT)/../require/Sime/src"
+        CLANG_CXX_LANGUAGE_STANDARD: c++20
+        CLANG_CXX_LIBRARY: "libc++"
   SimeKeyboard:
     type: app-extension
     platform: iOS

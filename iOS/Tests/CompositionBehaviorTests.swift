@@ -268,7 +268,10 @@ final class CompositionCandidateSelectionTests: XCTestCase {
         XCTAssertEqual(lastPinyin(for: "u"), "sh")
         XCTAssertEqual(lastPinyin(for: "i"), "ch")
         XCTAssertEqual(lastPinyin(for: "v"), "zh")
+        // kdqru = kuang+quan+sh (矿泉水); qru = quan+sh (全身). The Chinese
+        // results are asserted in require/Sime correction_test.
         XCTAssertEqual(lastPinyin(for: "kdqru"), "kuangquan'sh")
+        XCTAssertEqual(lastPinyin(for: "qru"), "quan'sh")
     }
 
     func testShuangpinTrailingInitialDecodesWithExplicitBoundary() {
