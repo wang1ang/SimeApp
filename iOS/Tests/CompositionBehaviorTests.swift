@@ -231,6 +231,28 @@ final class CompositionCandidateSelectionTests: XCTestCase {
         XCTAssertEqual(composition.candidates.map(\.text), ["能喝吗", "能喝", "nghem"])
     }
 
+    func testShuangpinHamigDecodesHaMiGua() {
+        // Regression (哈密瓜): ha + mi + the lone initial of gua. Head delimited
+        // from "g", expansion on; the engine keeps ha/mi exact and completes
+        // g -> gua (word-alignment asserted in require/Sime correction_test).
+        let decoder = RecordingPinyinDecoder()
+        decoder.decodeResult = { pinyin in
+            pinyin == "hami'g"
+                ? [
+                    Candidate(text: "哈密瓜", consumed: 6, tokens: [1], units: "ha'mi'g"),
+                    Candidate(text: "哈密", consumed: 4, tokens: [2], units: "ha'mi")
+                ]
+                : []
+        }
+        let composition = Composition(decoder: decoder, inputScheme: .microsoftShuangpin)
+
+        "hamig".forEach { composition.append(String($0)) }
+
+        XCTAssertEqual(decoder.decodeCalls.last?.pinyin, "hami'g")
+        XCTAssertEqual(decoder.decodeExpansions.last, true)
+        XCTAssertEqual(composition.candidates.map(\.text), ["哈密瓜", "哈密", "hamig"])
+    }
+
     func testShuangpinTrailingInitialDecodesWithExplicitBoundary() {
         let decoder = RecordingPinyinDecoder()
         decoder.decodeResult = { pinyin in
