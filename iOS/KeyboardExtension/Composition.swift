@@ -445,61 +445,16 @@ final class Composition {
                 let keys = Array(lower)
                 let hasLoneInitial = keys.count % 2 == 1
                 if hasLoneInitial {
-                    // A trailing lone key is a single initial (声母) with no
-                    // final yet, so it SHOULD expand to let its syllable
-                    // complete (m -> ma, so nghem can reach 能喝吗). But a
-                    // completed syllable's 韵母 is already fixed and must NOT
-                    // expand (he stays 喝/和, never 黑/很). The engine expands
-                    // every syllable uniformly, so guard the head: decode the
-                    // completed syllables WITHOUT expansion to collect their
-                    // locked readings, then keep only expansion paths whose
-                    // completed-syllable prefix is one of those readings.
+                    // Trailing lone initial: delimit it from the completed head
+                    // and expand so it completes (nghem -> 能喝吗). The engine
+                    // locks apostrophe-delimited finals, so the head is safe.
                     let headExpanded = MicrosoftShuangpin.expand(String(keys.dropLast()))
                     let tail = String(keys.last!)
-                    if headExpanded.isEmpty {
-                        // The whole buffer is the lone initial; nothing locked.
-                        chinese = decoder.decode(
-                            tail, context: context, limit: 60, expansion: true)
-                    } else {
-                        // The completed head, syllable by syllable (each two
-                        // keys), e.g. nghem -> ["neng", "he"].
-                        let headSyllables = stride(from: 0, to: keys.count - 1, by: 2)
-                            .map { MicrosoftShuangpin.expand(String(keys[$0..<$0 + 2])) }
-                        let headReadings = Set(decoder.decode(
-                            headExpanded, context: context, limit: 60,
-                            expansion: false).map(\.text))
-                        let expanded = decoder.decode(
-                            headExpanded + "'" + tail, context: context,
-                            limit: 60, expansion: true)
-                        chinese = expanded.filter { candidate in
-                            let syllables = candidate.units
-                                .split(separator: "'").map(String.init)
-                            // 1) The head syllables must survive intact: the
-                            //    engine ignores the boundary under expansion and
-                            //    may merge na + n into "nan" (南) or add extra
-                            //    syllables. Require the head units unchanged and
-                            //    at most one extra (the lone initial's syllable).
-                            guard syllables.count >= headSyllables.count,
-                                  syllables.count <= headSyllables.count + 1
-                            else { return false }
-                            for index in 0..<headSyllables.count
-                            where syllables[index] != headSyllables[index] {
-                                return false
-                            }
-                            // 2) The head reading must be one the engine yields
-                            //    WITHOUT expansion, so a locked final is never
-                            //    abbreviation-expanded (xi stays 西, never 先).
-                            //    A path that completed the trailing syllable adds
-                            //    exactly one character; drop it before matching.
-                            let consumedTail = syllables.count == headSyllables.count + 1
-                            let headText = consumedTail
-                                ? String(candidate.text.dropLast()) : candidate.text
-                            return headReadings.contains(headText)
-                        }
-                    }
+                    let input = headExpanded.isEmpty ? tail : headExpanded + "'" + tail
+                    chinese = decoder.decode(
+                        input, context: context, limit: 60, expansion: true)
                 } else {
-                    // Every syllable is complete: no expansion, or the engine
-                    // re-reads locked finals as abbreviations (li -> 柳州).
+                    // All syllables complete: no expansion (else li -> 柳州).
                     chinese = decoder.decode(
                         MicrosoftShuangpin.expand(lower), context: context,
                         limit: 60, expansion: false)
