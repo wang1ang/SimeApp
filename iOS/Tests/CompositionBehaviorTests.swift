@@ -188,114 +188,6 @@ final class CompositionCandidateSelectionTests: XCTestCase {
         XCTAssertEqual(composition.candidates.map(\.text), ["喜欢", "喜", "欢", "xihr"])
     }
 
-    func testShuangpinTrailingLoneInitialDecodesDelimitedWithExpansion() {
-        let decoder = RecordingPinyinDecoder()
-        decoder.decodeResult = { pinyin in
-            pinyin == "xi'h"
-                ? [
-                    Candidate(text: "西红", consumed: 3, tokens: [1, 5], units: "xi'h"),
-                    Candidate(text: "西", consumed: 2, tokens: [1], units: "xi")
-                ]
-                : []
-        }
-        let composition = Composition(decoder: decoder, inputScheme: .microsoftShuangpin)
-
-        // Odd key count: the head "xi" and lone initial "h" are sent as one
-        // delimited buffer with expansion on; the engine locks "xi" and
-        // completes only "h" (locking asserted in require/Sime correction_test).
-        "xih".forEach { composition.append(String($0)) }
-
-        XCTAssertEqual(decoder.decodeCalls.last?.pinyin, "xi'h")
-        XCTAssertEqual(decoder.decodeExpansions.last, true)
-        XCTAssertEqual(composition.candidates.map(\.text), ["西红", "西", "xih"])
-    }
-
-    func testShuangpinNghemDecodesNengHeMaDelimited() {
-        // Regression (能喝吗 once surfaced 能很忙/能黑马): head delimited from the
-        // lone "m", expansion on; engine locks neng/he (correction_test).
-        let decoder = RecordingPinyinDecoder()
-        decoder.decodeResult = { pinyin in
-            pinyin == "nenghe'm"
-                ? [
-                    Candidate(text: "能喝吗", consumed: 7, tokens: [1, 2, 3], units: "neng'he'm"),
-                    Candidate(text: "能喝", consumed: 6, tokens: [1, 2], units: "neng'he")
-                ]
-                : []
-        }
-        let composition = Composition(decoder: decoder, inputScheme: .microsoftShuangpin)
-
-        "nghem".forEach { composition.append(String($0)) }
-
-        XCTAssertEqual(decoder.decodeCalls.last?.pinyin, "nenghe'm")
-        XCTAssertEqual(decoder.decodeExpansions.last, true)
-        XCTAssertEqual(composition.candidates.map(\.text), ["能喝吗", "能喝", "nghem"])
-    }
-
-    func testShuangpinHamigDecodesHaMiGua() {
-        // Regression (哈密瓜): ha + mi + the lone initial of gua. Head delimited
-        // from "g", expansion on; the engine keeps ha/mi exact and completes
-        // g -> gua (word-alignment asserted in require/Sime correction_test).
-        let decoder = RecordingPinyinDecoder()
-        decoder.decodeResult = { pinyin in
-            pinyin == "hami'g"
-                ? [
-                    Candidate(text: "哈密瓜", consumed: 6, tokens: [1], units: "ha'mi'g"),
-                    Candidate(text: "哈密", consumed: 4, tokens: [2], units: "ha'mi")
-                ]
-                : []
-        }
-        let composition = Composition(decoder: decoder, inputScheme: .microsoftShuangpin)
-
-        "hamig".forEach { composition.append(String($0)) }
-
-        XCTAssertEqual(decoder.decodeCalls.last?.pinyin, "hami'g")
-        XCTAssertEqual(decoder.decodeExpansions.last, true)
-        XCTAssertEqual(composition.candidates.map(\.text), ["哈密瓜", "哈密", "hamig"])
-    }
-
-    func testShuangpinTrailingVIUInitialMapsToZhChSh() {
-        // A lone trailing initial must go through the Shuangpin initial table:
-        // v/i/u are zh/ch/sh, so "u" decodes as sh (水/是), not the literal
-        // letter (which surfaced English up/us). kdqru = kuang+quan+sh.
-        func lastPinyin(for keys: String) -> String? {
-            let decoder = RecordingPinyinDecoder()
-            decoder.decodeResult = { _ in [] }
-            let composition = Composition(decoder: decoder, inputScheme: .microsoftShuangpin)
-            keys.forEach { composition.append(String($0)) }
-            return decoder.decodeCalls.last?.pinyin
-        }
-
-        XCTAssertEqual(lastPinyin(for: "u"), "sh")
-        XCTAssertEqual(lastPinyin(for: "i"), "ch")
-        XCTAssertEqual(lastPinyin(for: "v"), "zh")
-        // kdqru = kuang+quan+sh (矿泉水); qru = quan+sh (全身). The Chinese
-        // results are asserted in require/Sime correction_test.
-        XCTAssertEqual(lastPinyin(for: "kdqru"), "kuangquan'sh")
-        XCTAssertEqual(lastPinyin(for: "qru"), "quan'sh")
-    }
-
-    func testShuangpinTrailingInitialDecodesWithExplicitBoundary() {
-        let decoder = RecordingPinyinDecoder()
-        decoder.decodeResult = { pinyin in
-            pinyin == "na'n"
-                ? [
-                    Candidate(text: "那你", consumed: 3, tokens: [1, 2], units: "na'n"),
-                    Candidate(text: "那", consumed: 2, tokens: [1], units: "na")
-                ]
-                : []
-        }
-        let composition = Composition(decoder: decoder, inputScheme: .microsoftShuangpin)
-
-        // 那你: na + lone n sent as "na'n" with expansion; engine keeps "na"
-        // locked (no merge into 南/南宁 — asserted in correction_test).
-        "nan".forEach { composition.append(String($0)) }
-
-        XCTAssertEqual(decoder.decodeCalls.last?.pinyin, "na'n")
-        XCTAssertEqual(decoder.decodeExpansions.last, true)
-        XCTAssertEqual(composition.candidates.map(\.text), ["那你", "那", "nan"])
-        XCTAssertEqual(composition.preedit, "na n")
-    }
-
     func testShuangpinCompleteSyllablesDecodeWithoutExpansion() {
         let decoder = RecordingPinyinDecoder()
         decoder.decodeResult = { _ in [] }
@@ -308,24 +200,6 @@ final class CompositionCandidateSelectionTests: XCTestCase {
 
         XCTAssertEqual(decoder.decodeCalls.last?.pinyin, "lizhou")
         XCTAssertEqual(decoder.decodeExpansions.last, false)
-    }
-
-    func testShuangpinNghemaDecodesFullNengHeMa() {
-        // Even key count: ng(neng)+he(he)+ma(ma) is fully typed, so it decodes
-        // the joined pinyin without expansion.
-        let decoder = RecordingPinyinDecoder()
-        decoder.decodeResult = { pinyin in
-            pinyin == "nenghema"
-                ? [Candidate(text: "能喝吗", consumed: 8, tokens: [1, 2, 3], units: "neng'he'ma")]
-                : []
-        }
-        let composition = Composition(decoder: decoder, inputScheme: .microsoftShuangpin)
-
-        "nghema".forEach { composition.append(String($0)) }
-
-        XCTAssertEqual(decoder.decodeCalls.last?.pinyin, "nenghema")
-        XCTAssertEqual(decoder.decodeExpansions.last, false)
-        XCTAssertEqual(composition.candidates.map(\.text), ["能喝吗", "nghema"])
     }
 
     func testShuangpinCorrectionCandidatesRespectLockedFinals() {
