@@ -210,7 +210,7 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func makeRow(_ keys: [String], indented: Bool = false) -> UIStackView {
-        let row = UIStackView()
+        let row = NearestKeyStackView()
         row.axis = .horizontal
         row.spacing = 4
         row.distribution = .fillEqually
@@ -224,7 +224,7 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func makeBottomRow() -> UIStackView {
-        let row = UIStackView()
+        let row = NearestKeyStackView()
         row.axis = .horizontal
         row.spacing = 8
         row.distribution = .fill
