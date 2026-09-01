@@ -26,6 +26,9 @@ final class KeyboardViewController: UIInputViewController {
     private var shifted: Bool { shiftState != .off }
     private var keyboardScheme = InputSettings.scheme
     private var keyboardNeedsRebuild = false
+    // True once `composition` is backed by the native engine, so we only swap
+    // decoders once per controller lifetime.
+    private var usesNativeDecoder = false
     private var displayedReturnKeyType: UIReturnKeyType?
     private var restoringMarkedText = false
     private var spaceCursorMode = false
@@ -34,14 +37,35 @@ final class KeyboardViewController: UIInputViewController {
     private var deleteRepeatTimer: Timer?
 
     private static func makeComposition(inputScheme: InputScheme = InputSettings.scheme) -> Composition {
+        // Start with whichever decoder is available without blocking: the
+        // shared native engine if it already loaded in this process,
+        // otherwise the lightweight builtin so the keyboard stays responsive
+        // while the native engine loads in the background.
         Composition(
-            decoder: NativePinyinDecoder() ?? BuiltinPinyinDecoder(),
+            decoder: NativePinyinDecoder.sharedIfLoaded ?? BuiltinPinyinDecoder(),
             inputScheme: inputScheme
         )
     }
 
+    /// Load the native engine off the main thread and swap it into the current
+    /// composition when ready, preserving any in-progress raw pinyin. Cheap
+    /// no-op once the native decoder is already active.
+    private func activateNativeDecoder() {
+        guard !usesNativeDecoder else { return }
+        NativePinyinDecoder.loadShared { [weak self] decoder in
+            guard let self, let decoder, !self.usesNativeDecoder else { return }
+            self.usesNativeDecoder = true
+            let raw = self.composition.raw
+            let committed = self.composition.committed
+            self.composition = Composition(decoder: decoder, inputScheme: self.keyboardScheme)
+            self.composition.restore(raw: raw, committed: committed)
+            self.render()
+        }
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
+        usesNativeDecoder = NativePinyinDecoder.sharedIfLoaded != nil
         setupView()
         displayedReturnKeyType = textDocumentProxy.returnKeyType
         composition.restore(
@@ -49,6 +73,7 @@ final class KeyboardViewController: UIInputViewController {
             committed: InputSettings.pendingCommitted
         )
         render()
+        activateNativeDecoder()
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -59,10 +84,12 @@ final class KeyboardViewController: UIInputViewController {
         if keyboardScheme != scheme {
             keyboardScheme = scheme
             composition = Self.makeComposition(inputScheme: scheme)
+            usesNativeDecoder = NativePinyinDecoder.sharedIfLoaded != nil
             keyboardNeedsRebuild = true
         }
         refreshReturnKeyAppearance()
         render()
+        activateNativeDecoder()
     }
 
     override func textDidChange(_ textInput: UITextInput?) {

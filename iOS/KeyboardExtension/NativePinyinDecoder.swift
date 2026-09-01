@@ -4,6 +4,45 @@ import Foundation
 final class NativePinyinDecoder: PinyinDecoder {
     private var handle: OpaquePointer?
 
+    // Loading the ~9MB GRU embedding, the two ncnn models, and touching the
+    // mmap'd score tables costs hundreds of ms. Doing that on the main thread
+    // during keyboard activation freezes touches and makes the layout flash,
+    // so build it on a background queue and cache the result for the lifetime
+    // of the extension process. All access to the cache below is confined to
+    // the main thread.
+    private static let loadQueue = DispatchQueue(
+        label: "com.ismantic.sime.decoder-load", qos: .userInitiated)
+    private static var shared: NativePinyinDecoder?
+    private static var loading = false
+    private static var waiters: [(NativePinyinDecoder?) -> Void] = []
+
+    /// The already-loaded native decoder, if it finished loading earlier in
+    /// this process. Main-thread only.
+    static var sharedIfLoaded: NativePinyinDecoder? { shared }
+
+    /// Load (or reuse) the shared native decoder without blocking the main
+    /// thread. `completion` runs on the main thread; synchronously when the
+    /// decoder is already cached. Main-thread only.
+    static func loadShared(_ completion: @escaping (NativePinyinDecoder?) -> Void) {
+        if let shared {
+            completion(shared)
+            return
+        }
+        waiters.append(completion)
+        guard !loading else { return }
+        loading = true
+        loadQueue.async {
+            let decoder = NativePinyinDecoder()
+            DispatchQueue.main.async {
+                shared = decoder
+                loading = false
+                let pending = waiters
+                waiters.removeAll()
+                pending.forEach { $0(decoder) }
+            }
+        }
+    }
+
     init?() {
         guard let dict = Bundle.main.path(forResource: "sime", ofType: "dict"),
               let cnt = Bundle.main.path(forResource: "sime", ofType: "cnt") else {

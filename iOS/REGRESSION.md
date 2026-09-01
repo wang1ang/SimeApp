@@ -106,6 +106,11 @@
 59. 设备日志出现 `SimeKeyboard` 的 `per-process-limit`、`exceeded mem limit` 或 Jetsam 即失败。
 60. 已知设备上限为 77 MB；引擎资源或模型加载变更必须重新记录 footprint。
 
+## 键盘激活响应
+
+61. 切换到“是语键盘”时布局不得闪烁、按键不得在数百毫秒内失效。原生引擎（GRU embedding、ncnn 模型、score 表）加载昂贵，**不得在主线程/控制器属性初始化时同步构建**：`KeyboardViewController` 必须先用轻量 `BuiltinPinyinDecoder` 立即呈现可用键盘，再在后台队列加载 `NativePinyinDecoder` 并在就绪后换入、保留在打 raw。
+62. 已加载的原生引擎须以 `NativePinyinDecoder.shared` 在扩展进程内跨控制器实例复用，避免每次切换重新加载。换入不得丢失/错位当前 marked 组合（沿用 `restore(raw:committed:)`）。
+
 ## 微软双拼解码不变量
 
 64. 微软双拼：**韵母不走扩展，单个声母才走扩展**。打全的音节韵母固定（`he` 只能是 喝/和，不能变 黑/很），只有末尾孤立声母才补全（`nghem` → 能喝吗，非 能很忙/能黑马）。用例与断言见 `iOS/Tests/CompositionBehaviorTests.swift`（`testShuangpinNghemKeepsHeAndReachesNengHeMa` 等）。
