@@ -253,6 +253,24 @@ final class CompositionCandidateSelectionTests: XCTestCase {
         XCTAssertEqual(composition.candidates.map(\.text), ["哈密瓜", "哈密", "hamig"])
     }
 
+    func testShuangpinTrailingVIUInitialMapsToZhChSh() {
+        // A lone trailing initial must go through the Shuangpin initial table:
+        // v/i/u are zh/ch/sh, so "u" decodes as sh (水/是), not the literal
+        // letter (which surfaced English up/us). kdqru = kuang+quan+sh.
+        func lastPinyin(for keys: String) -> String? {
+            let decoder = RecordingPinyinDecoder()
+            decoder.decodeResult = { _ in [] }
+            let composition = Composition(decoder: decoder, inputScheme: .microsoftShuangpin)
+            keys.forEach { composition.append(String($0)) }
+            return decoder.decodeCalls.last?.pinyin
+        }
+
+        XCTAssertEqual(lastPinyin(for: "u"), "sh")
+        XCTAssertEqual(lastPinyin(for: "i"), "ch")
+        XCTAssertEqual(lastPinyin(for: "v"), "zh")
+        XCTAssertEqual(lastPinyin(for: "kdqru"), "kuangquan'sh")
+    }
+
     func testShuangpinTrailingInitialDecodesWithExplicitBoundary() {
         let decoder = RecordingPinyinDecoder()
         decoder.decodeResult = { pinyin in

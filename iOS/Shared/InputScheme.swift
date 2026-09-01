@@ -7,6 +7,13 @@ enum InputScheme: String {
 
 enum MicrosoftShuangpin {
     private static let initials: [Character: String] = ["v": "zh", "i": "ch", "u": "sh"]
+
+    /// The initial (声母) a single key stands for on its own: v/i/u map to
+    /// zh/ch/sh, every other key is itself. Used for a trailing lone key so a
+    /// bare "u" decodes as sh (水) rather than the literal letter (English up).
+    static func initial(for key: Character) -> String {
+        initials[key] ?? String(key)
+    }
     private static let finals: [Character: String] = [
         "a": "a", "e": "e", "i": "i", "u": "u", "v": "ü",
         "l": "ai", "z": "ei", "k": "ao", "b": "ou", "q": "iu",

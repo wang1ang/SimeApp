@@ -449,7 +449,7 @@ final class Composition {
                     // and expand so it completes (nghem -> 能喝吗). The engine
                     // locks apostrophe-delimited finals, so the head is safe.
                     let headExpanded = MicrosoftShuangpin.expand(String(keys.dropLast()))
-                    let tail = String(keys.last!)
+                    let tail = MicrosoftShuangpin.initial(for: keys.last!)
                     let input = headExpanded.isEmpty ? tail : headExpanded + "'" + tail
                     chinese = decoder.decode(
                         input, context: context, limit: 60, expansion: true)
