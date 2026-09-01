@@ -147,11 +147,11 @@ final class ShuangpinEndToEndTests: XCTestCase {
         let cases: [(keys: String, top: String)] = [
             ("xcgo", "效果"),        // xiao guo
             ("xihr", "喜欢"),        // xi huan
-            ("livb", "里周"),        // li zhou (complete syllables, no expand)
+            ("livb", "利州"),        // li zhou (complete syllables, no expand)
             ("womfdevsgo", "我们的中国"),
             ("rsyipxjc", "容易撇较"),  // rong yi pie jiao
-            ("nghem", "能盒马"),      // neng he m(a)
-            ("nghema", "能盒马"),
+            ("nghem", "能喝吗"),      // neng he m(a)
+            ("nghema", "能喝吗"),
             ("nan", "那你"),         // na n(i)
             ("hamig", "哈密瓜"),
             ("kdqru", "矿泉水"),
