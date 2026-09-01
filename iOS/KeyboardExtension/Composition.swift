@@ -439,41 +439,56 @@ final class Composition {
         var pinyinUnits = ""
         if !pinyinPart.isEmpty {
             let lower = pinyinPart.lowercased()
-            let input: String
+            let context = hostContextTokens ?? contextTokens
+            var chinese: [Candidate] = []
             if inputScheme == .microsoftShuangpin {
                 let keys = Array(lower)
-                if keys.count % 2 == 1 {
-                    // The trailing lone key starts a new syllable. Expanding
-                    // the whole buffer would glue it onto the previous
-                    // syllable's pinyin (na + n -> "nan"), which the engine
-                    // then reads as one syllable and offers 男/难 instead of
-                    // 那 plus an incomplete 你. Keep an explicit boundary so
-                    // the completed syllables stay locked and only the
-                    // trailing initial expands.
-                    let head = String(keys.dropLast())
+                let hasLoneInitial = keys.count % 2 == 1
+                if hasLoneInitial {
+                    // A trailing lone key is a single initial (声母) with no
+                    // final yet, so it SHOULD expand to let its syllable
+                    // complete (m -> ma, so nghem can reach 能喝吗). But a
+                    // completed syllable's 韵母 is already fixed and must NOT
+                    // expand (he stays 喝/和, never 黑/很). The engine expands
+                    // every syllable uniformly, so guard the head: decode the
+                    // completed syllables WITHOUT expansion to collect their
+                    // locked readings, then keep only expansion paths whose
+                    // completed-syllable prefix is one of those readings.
+                    let headExpanded = MicrosoftShuangpin.expand(String(keys.dropLast()))
                     let tail = String(keys.last!)
-                    input = head.isEmpty
-                        ? tail
-                        : MicrosoftShuangpin.expand(head) + "'" + tail
+                    if headExpanded.isEmpty {
+                        // The whole buffer is the lone initial; nothing locked.
+                        chinese = decoder.decode(
+                            tail, context: context, limit: 60, expansion: true)
+                    } else {
+                        let headReadings = Set(decoder.decode(
+                            headExpanded, context: context, limit: 60,
+                            expansion: false).map(\.text))
+                        let expanded = decoder.decode(
+                            headExpanded + "'" + tail, context: context,
+                            limit: 60, expansion: true)
+                        chinese = expanded.filter { candidate in
+                            // A head-only path (didn't consume the lone initial)
+                            // is already final-locked. A path that completed the
+                            // trailing syllable adds exactly one character, so
+                            // dropping it must land on a locked head reading.
+                            headReadings.contains(candidate.text)
+                                || headReadings.contains(String(candidate.text.dropLast()))
+                        }
+                    }
                 } else {
-                    input = MicrosoftShuangpin.expand(lower)
+                    // Every syllable is complete: no expansion, or the engine
+                    // re-reads locked finals as abbreviations (li -> 柳州).
+                    chinese = decoder.decode(
+                        MicrosoftShuangpin.expand(lower), context: context,
+                        limit: 60, expansion: false)
                 }
+                chinese = chinese.filter { matchesLockedShuangpinFinals($0) }
             } else {
-                input = lower
+                // Full pinyin expands for abbreviation/tail completion.
+                chinese = lower.isEmpty ? [] : decoder.decode(
+                    lower, context: context, limit: 60, expansion: true)
             }
-            // Shuangpin only needs engine expansion to finish a trailing
-            // incomplete syllable (an odd, lone initial). When every syllable
-            // is complete (even key count) expansion would instead invent
-            // wrong finals (li -> 柳州/凉州) that carry the input's units and
-            // slip past the locked-final filter, so keep it off. Full pinyin
-            // still expands for abbreviation/tail completion.
-            let expansion = inputScheme != .microsoftShuangpin
-                || pinyinPart.count % 2 == 1
-            let decoded = input.isEmpty ? [] : decoder.decode(
-                input, context: hostContextTokens ?? contextTokens, limit: 60,
-                expansion: expansion)
-            let chinese = inputScheme == .microsoftShuangpin
-                ? decoded.filter { matchesLockedShuangpinFinals($0) } : decoded
             if englishTail.isEmpty {
                 result = chinese
             } else {

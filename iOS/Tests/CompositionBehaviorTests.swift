@@ -188,34 +188,87 @@ final class CompositionCandidateSelectionTests: XCTestCase {
         XCTAssertEqual(composition.candidates.map(\.text), ["喜欢", "喜", "欢", "xihr"])
     }
 
-    func testShuangpinTrailingIncompleteSyllableStillExpands() {
+    func testShuangpinTrailingLoneInitialExpandsButKeepsLockedFinals() {
         let decoder = RecordingPinyinDecoder()
         decoder.decodeResult = { pinyin in
-            pinyin == "xi'h"
-                ? [
-                    Candidate(text: "西红", consumed: 5, tokens: [1, 5], units: "xi'hong"),
-                    Candidate(text: "喜", consumed: 2, tokens: [1], units: "xi")
+            switch pinyin {
+            // Completed head, decoded WITHOUT expansion: "xi" is locked to its
+            // real readings, so its final is never re-read as xie/xian/xia.
+            case "xi":
+                return [Candidate(text: "西", consumed: 2, tokens: [1], units: "xi")]
+            // Full buffer, decoded WITH expansion so the lone initial "h"
+            // completes. 西红 keeps the locked 西 head; 先后 illegally rewrote
+            // the locked "xi" final (xi -> xian) and must be dropped.
+            case "xi'h":
+                return [
+                    Candidate(text: "西红", consumed: 3, tokens: [1, 5], units: "xi'h"),
+                    Candidate(text: "先后", consumed: 3, tokens: [7, 8], units: "xi'h"),
+                    Candidate(text: "西", consumed: 2, tokens: [1], units: "xi")
                 ]
-                : []
+            default:
+                return []
+            }
         }
         let composition = Composition(decoder: decoder, inputScheme: .microsoftShuangpin)
 
-        // Odd key count: "xi" is locked but the trailing "h" is still an
-        // incomplete syllable, so its final may expand.
+        // Odd key count: "xi" is a completed, locked syllable; the trailing
+        // "h" is a lone initial that should expand to finish its syllable.
         "xih".forEach { composition.append(String($0)) }
 
-        XCTAssertEqual(composition.candidates.map(\.text), ["西红", "喜", "xih"])
-        // The fake decoder ignores the expansion flag, so this alone cannot
-        // prove the engine completes a trailing initial. Guard the wiring
-        // that makes it possible: main decode must request expansion (the
-        // engine semantics itself is covered by require/Sime correction_test).
-        XCTAssertEqual(decoder.decodeExpansions.last, true)
+        // 先后 is rejected (its head 先 is not a locked "xi" reading); 西红
+        // survives (head 西 is), as does the head-only 西.
+        XCTAssertEqual(composition.candidates.map(\.text), ["西红", "西", "xih"])
+        // The lone initial's decode requests expansion; the head guard uses a
+        // non-expanding decode to lock the completed finals.
+        XCTAssertEqual(Array(decoder.decodeExpansions.suffix(2)), [false, true])
+    }
+
+    func testShuangpinNghemKeepsHeAndReachesNengHeMa() {
+        // Regression: typing 能喝吗 as ng(neng) + he(he) + m(the lone initial
+        // of ma) once surfaced 能很忙/能黑马 because the global expansion flag
+        // re-read the completed "he" as hen/hei. The completed 韵母 must stay
+        // locked while the lone "m" still expands toward 吗.
+        let decoder = RecordingPinyinDecoder()
+        decoder.decodeResult = { pinyin in
+            switch pinyin {
+            // Head "nghe" -> nenghe decoded WITHOUT expansion: he stays 喝.
+            case "nenghe":
+                return [
+                    Candidate(text: "能喝", consumed: 6, tokens: [1, 2], units: "neng'he"),
+                    Candidate(text: "能", consumed: 4, tokens: [1], units: "neng")
+                ]
+            // Full buffer decoded WITH expansion so the lone "m" completes.
+            // 能喝吗 keeps the locked 能喝 head; 能黑马/能很忙 rewrote the locked
+            // "he" final and must be dropped.
+            case "nenghe'm":
+                return [
+                    Candidate(text: "能黑马", consumed: 7, tokens: [9, 8, 7], units: "neng'he'm"),
+                    Candidate(text: "能喝吗", consumed: 7, tokens: [1, 2, 3], units: "neng'he'm"),
+                    Candidate(text: "能很忙", consumed: 7, tokens: [4, 5, 6], units: "neng'he'm"),
+                    Candidate(text: "能喝", consumed: 6, tokens: [1, 2], units: "neng'he")
+                ]
+            default:
+                return []
+            }
+        }
+        let composition = Composition(decoder: decoder, inputScheme: .microsoftShuangpin)
+
+        "nghem".forEach { composition.append(String($0)) }
+
+        // 能喝吗 (lone initial completed) and 能喝 (head only) survive; the
+        // final-rewriting 能黑马/能很忙 are filtered out.
+        XCTAssertEqual(composition.candidates.map(\.text), ["能喝吗", "能喝", "nghem"])
+        // Head guard decodes without expansion; the lone initial with it.
+        XCTAssertEqual(Array(decoder.decodeExpansions.suffix(2)), [false, true])
     }
 
     func testShuangpinTrailingInitialDoesNotMergeIntoPreviousSyllable() {
         let decoder = RecordingPinyinDecoder()
         decoder.decodeResult = { pinyin in
             switch pinyin {
+            // Head decoded WITHOUT expansion locks "na" to its real readings.
+            case "na":
+                return [Candidate(text: "那", consumed: 2, tokens: [1], units: "na")]
             // The trailing lone "n" is a new syllable's initial, so decode
             // input keeps the boundary: "na" stays 那, the "n" expands.
             case "na'n":
@@ -581,15 +634,15 @@ final class CompositionEditingTests: XCTestCase {
         // Correction faces already-complete syllables, so it disables
         // expansion to stop a locked final being abbreviation-matched to a
         // longer syllable (this is what removed 石原/十元). Main decode expands
-        // only while a trailing syllable is still incomplete (odd key count);
-        // once every syllable is complete (even) it must stop expanding, or
-        // the engine invents wrong finals (li -> 柳州) whose units echo the
-        // typed keys and slip past the locked-final filter.
+        // ONLY the trailing lone initial: each odd keystroke decodes the
+        // completed head without expansion (to lock its finals) and then the
+        // full buffer with expansion (to finish the lone initial); each even
+        // keystroke is a single non-expanding decode.
         let shuangpin = Composition(decoder: decoder, inputScheme: .microsoftShuangpin)
         "uiyu".forEach { shuangpin.append(String($0)) }
         shuangpin.activateCharacter(0)
-        XCTAssertEqual(decoder.decodeExpansions, [true, false, true, false],
-                       "main decode expands only for an incomplete trailing syllable")
+        XCTAssertEqual(decoder.decodeExpansions, [true, false, false, true, false],
+                       "only a trailing lone initial expands; completed finals never do")
         XCTAssertEqual(decoder.correctionExpansions.last, false)
 
         decoder.decodeExpansions.removeAll()
