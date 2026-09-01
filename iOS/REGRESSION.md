@@ -110,6 +110,7 @@
 
 61. 切换到“是语键盘”时布局不得闪烁、按键不得在数百毫秒内失效。原生引擎（GRU embedding、ncnn 模型、score 表）加载昂贵，**不得在主线程/控制器属性初始化时同步构建**：`KeyboardViewController` 必须先用轻量 `BuiltinPinyinDecoder` 立即呈现可用键盘，再在后台队列加载 `NativePinyinDecoder` 并在就绪后换入、保留在打 raw。
 62. 已加载的原生引擎须以 `NativePinyinDecoder.shared` 在扩展进程内跨控制器实例复用，避免每次切换重新加载。换入不得丢失/错位当前 marked 组合（沿用 `restore(raw:committed:)`）。
+63. 按键点偏时，落在键与键**缝隙**（行内间距、行间间距、缩进行两侧边距）的触摸不得落空，必须吸附到最近的键（`NearestKeyStackView.hitTest`）；命中相邻键不管。吸附仅限 `keyboardStack` 区域内且未命中任何 `UIControl` 时生效，不得影响候选栏、第一行、空格滑动或地球键菜单。
 
 ## 微软双拼解码不变量
 

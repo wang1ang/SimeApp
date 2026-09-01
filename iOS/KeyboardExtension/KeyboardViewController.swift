@@ -9,7 +9,7 @@ final class KeyboardViewController: UIInputViewController {
     private let candidateTap = UITapGestureRecognizer()
     private var sentenceContentWidth: CGFloat = 0
     private var candidateContentWidth: CGFloat = 0
-    private let keyboardStack = UIStackView()
+    private let keyboardStack = NearestKeyStackView()
     private enum KeyboardPage { case letters, numbers, symbols }
     private var keyboardPage: KeyboardPage = .letters
     // The letter-page toggle key reflects the active scheme so the user knows
@@ -643,5 +643,50 @@ final class KeyboardViewController: UIInputViewController {
         sentenceScrollView.setContentOffset(.zero, animated: false)
         candidateScrollView.setContentOffset(.zero, animated: false)
         view.setNeedsLayout()
+    }
+}
+
+/// Keyboard grid container that rescues taps landing in the dead space
+/// between keys. A touch that misses every button (row spacing, inter-row
+/// spacing, or the indented row margins) would otherwise do nothing; instead
+/// it snaps to the nearest key so a slightly-off tap still registers.
+final class NearestKeyStackView: UIStackView {
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        let result = super.hitTest(point, with: event)
+        // A real key (or a nested control) was hit — leave it alone. Missing a
+        // key onto an adjacent key is fine; only gaps need rescuing.
+        if let result, result is UIControl { return result }
+        // Only snap for touches inside the keyboard grid itself.
+        guard bounds.contains(point) else { return result }
+
+        var nearest: UIButton?
+        var nearestDistance = CGFloat.greatestFiniteMagnitude
+        for button in keyButtons() where button.isEnabled && !button.isHidden {
+            let frame = button.convert(button.bounds, to: self)
+            // Squared distance from the point to the button's frame (0 inside).
+            let dx = max(frame.minX - point.x, 0, point.x - frame.maxX)
+            let dy = max(frame.minY - point.y, 0, point.y - frame.maxY)
+            let distance = dx * dx + dy * dy
+            if distance < nearestDistance {
+                nearestDistance = distance
+                nearest = button
+            }
+        }
+        return nearest ?? result
+    }
+
+    private func keyButtons() -> [UIButton] {
+        var buttons: [UIButton] = []
+        func walk(_ view: UIView) {
+            for sub in view.subviews {
+                if let button = sub as? UIButton {
+                    buttons.append(button)
+                } else {
+                    walk(sub)
+                }
+            }
+        }
+        walk(self)
+        return buttons
     }
 }
