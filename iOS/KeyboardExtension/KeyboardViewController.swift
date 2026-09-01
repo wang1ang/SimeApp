@@ -262,7 +262,7 @@ final class KeyboardViewController: UIInputViewController {
         case "delete": displayedTitle = "⌫"
         default: displayedTitle = title
         }
-        let button = UIButton(type: .system)
+        let button = KeyButton()
         button.setTitle(displayedTitle, for: .normal)
         if title == "space" || title == "return" || title == "⇧" {
             button.accessibilityValue = title
@@ -292,7 +292,7 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func inputModeButton() -> UIButton {
-        let button = UIButton(type: .system)
+        let button = KeyButton()
         button.setImage(UIImage(systemName: "globe"), for: .normal)
         button.tintColor = .label
         button.backgroundColor = .tertiarySystemBackground
@@ -646,5 +646,24 @@ final class KeyboardViewController: UIInputViewController {
         sentenceScrollView.setContentOffset(.zero, animated: false)
         candidateScrollView.setContentOffset(.zero, animated: false)
         view.setNeedsLayout()
+    }
+}
+
+final class KeyButton: UIButton {
+    // Grow the touch area horizontally into the gaps between keys so a tap in
+    // the spacing lands inside a key and fires. (Only horizontal: the vertical
+    // inter-row spacing sits outside the row frame, so a key there is never
+    // consulted anyway.)
+    var hitInset = UIEdgeInsets(top: 0, left: 8, bottom: 0, right: 8)
+
+    // Custom-type buttons don't dim on press; restore light feedback.
+    override var isHighlighted: Bool {
+        didSet { alpha = isHighlighted ? 0.4 : 1 }
+    }
+
+    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        bounds.inset(by: UIEdgeInsets(top: -hitInset.top, left: -hitInset.left,
+                                     bottom: -hitInset.bottom, right: -hitInset.right))
+            .contains(point)
     }
 }
