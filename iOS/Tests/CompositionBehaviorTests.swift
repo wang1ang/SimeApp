@@ -267,12 +267,23 @@ final class CompositionCandidateSelectionTests: XCTestCase {
         decoder.decodeResult = { pinyin in
             switch pinyin {
             // Head decoded WITHOUT expansion locks "na" to its real readings.
+            // The engine offers 南 (really "nan") as a fuzzy single-char here,
+            // so a text-only guard would wrongly accept the merged 南 below.
             case "na":
-                return [Candidate(text: "那", consumed: 2, tokens: [1], units: "na")]
-            // The trailing lone "n" is a new syllable's initial, so decode
-            // input keeps the boundary: "na" stays 那, the "n" expands.
+                return [
+                    Candidate(text: "那", consumed: 2, tokens: [1], units: "na"),
+                    Candidate(text: "南", consumed: 2, tokens: [9], units: "na")
+                ]
+            // Full buffer decoded WITH expansion. The engine ignores the
+            // boundary and merges na + n into "nan" (南), and also offers the
+            // intended 那你 with the head kept as its own syllable. Only the
+            // non-merged 那你 / 那 (head units unchanged) may survive.
             case "na'n":
-                return [Candidate(text: "那", consumed: 2, tokens: [1], units: "na")]
+                return [
+                    Candidate(text: "南", consumed: 3, tokens: [9], units: "nan"),
+                    Candidate(text: "那你", consumed: 3, tokens: [1, 2], units: "na'n"),
+                    Candidate(text: "那", consumed: 2, tokens: [1], units: "na")
+                ]
             // Without the boundary the whole buffer would collapse to the
             // valid syllable "nan" and offer 难/男 — the reported bug.
             case "nan":
@@ -287,7 +298,11 @@ final class CompositionCandidateSelectionTests: XCTestCase {
         "nan".forEach { composition.append(String($0)) }
 
         XCTAssertEqual(decoder.decodeCalls.last?.pinyin, "na'n")
-        XCTAssertEqual(composition.candidates.first?.text, "那")
+        // 那你 (head kept) is first; the merged 南 (units "nan") is rejected
+        // even though 南 is a fuzzy single-char reading the engine offers for
+        // the head "na". Only non-merged paths survive.
+        XCTAssertEqual(composition.candidates.map(\.text), ["那你", "那", "nan"])
+        XCTAssertFalse(composition.candidates.contains { $0.text == "南" })
         XCTAssertEqual(composition.preedit, "na n")
     }
 

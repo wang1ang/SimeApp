@@ -461,6 +461,10 @@ final class Composition {
                         chinese = decoder.decode(
                             tail, context: context, limit: 60, expansion: true)
                     } else {
+                        // The completed head, syllable by syllable (each two
+                        // keys), e.g. nghem -> ["neng", "he"].
+                        let headSyllables = stride(from: 0, to: keys.count - 1, by: 2)
+                            .map { MicrosoftShuangpin.expand(String(keys[$0..<$0 + 2])) }
                         let headReadings = Set(decoder.decode(
                             headExpanded, context: context, limit: 60,
                             expansion: false).map(\.text))
@@ -468,12 +472,29 @@ final class Composition {
                             headExpanded + "'" + tail, context: context,
                             limit: 60, expansion: true)
                         chinese = expanded.filter { candidate in
-                            // A head-only path (didn't consume the lone initial)
-                            // is already final-locked. A path that completed the
-                            // trailing syllable adds exactly one character, so
-                            // dropping it must land on a locked head reading.
-                            headReadings.contains(candidate.text)
-                                || headReadings.contains(String(candidate.text.dropLast()))
+                            let syllables = candidate.units
+                                .split(separator: "'").map(String.init)
+                            // 1) The head syllables must survive intact: the
+                            //    engine ignores the boundary under expansion and
+                            //    may merge na + n into "nan" (南) or add extra
+                            //    syllables. Require the head units unchanged and
+                            //    at most one extra (the lone initial's syllable).
+                            guard syllables.count >= headSyllables.count,
+                                  syllables.count <= headSyllables.count + 1
+                            else { return false }
+                            for index in 0..<headSyllables.count
+                            where syllables[index] != headSyllables[index] {
+                                return false
+                            }
+                            // 2) The head reading must be one the engine yields
+                            //    WITHOUT expansion, so a locked final is never
+                            //    abbreviation-expanded (xi stays 西, never 先).
+                            //    A path that completed the trailing syllable adds
+                            //    exactly one character; drop it before matching.
+                            let consumedTail = syllables.count == headSyllables.count + 1
+                            let headText = consumedTail
+                                ? String(candidate.text.dropLast()) : candidate.text
+                            return headReadings.contains(headText)
                         }
                     }
                 } else {
