@@ -267,6 +267,24 @@ final class CompositionCandidateSelectionTests: XCTestCase {
         XCTAssertEqual(decoder.decodeExpansions.last, false)
     }
 
+    func testShuangpinNghemaDecodesFullNengHeMa() {
+        // Even key count: ng(neng)+he(he)+ma(ma) is fully typed, so it decodes
+        // the joined pinyin without expansion.
+        let decoder = RecordingPinyinDecoder()
+        decoder.decodeResult = { pinyin in
+            pinyin == "nenghema"
+                ? [Candidate(text: "能喝吗", consumed: 8, tokens: [1, 2, 3], units: "neng'he'ma")]
+                : []
+        }
+        let composition = Composition(decoder: decoder, inputScheme: .microsoftShuangpin)
+
+        "nghema".forEach { composition.append(String($0)) }
+
+        XCTAssertEqual(decoder.decodeCalls.last?.pinyin, "nenghema")
+        XCTAssertEqual(decoder.decodeExpansions.last, false)
+        XCTAssertEqual(composition.candidates.map(\.text), ["能喝吗", "nghema"])
+    }
+
     func testShuangpinCorrectionCandidatesRespectLockedFinals() {
         let decoder = RecordingPinyinDecoder()
         decoder.decodeResult = { pinyin in
