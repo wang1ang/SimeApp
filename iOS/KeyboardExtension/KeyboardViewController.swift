@@ -9,7 +9,7 @@ final class KeyboardViewController: UIInputViewController {
     private let candidateTap = UITapGestureRecognizer()
     private var sentenceContentWidth: CGFloat = 0
     private var candidateContentWidth: CGFloat = 0
-    private let keyboardStack = NearestKeyStackView()
+    private let keyboardStack = UIStackView()
     private enum KeyboardPage { case letters, numbers, symbols }
     private var keyboardPage: KeyboardPage = .letters
     // The letter-page toggle key reflects the active scheme so the user knows
@@ -166,7 +166,10 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func setupView() {
-        view.backgroundColor = .clear
+        // The root view must be near-opaque: a transparent keyboard lets gap
+        // taps fall through to the host (they never reach hitTest), and an
+        // opaque subview backdrop doesn't help — iOS samples this view itself.
+        view.backgroundColor = UIColor.secondarySystemBackground.withAlphaComponent(0.9)
         let root = UIStackView()
         root.axis = .vertical
         root.spacing = 4
@@ -210,7 +213,7 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func makeRow(_ keys: [String], indented: Bool = false) -> UIStackView {
-        let row = NearestKeyStackView()
+        let row = UIStackView()
         row.axis = .horizontal
         row.spacing = 4
         row.distribution = .fillEqually
@@ -224,7 +227,7 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func makeBottomRow() -> UIStackView {
-        let row = NearestKeyStackView()
+        let row = UIStackView()
         row.axis = .horizontal
         row.spacing = 8
         row.distribution = .fill
@@ -259,7 +262,7 @@ final class KeyboardViewController: UIInputViewController {
         case "delete": displayedTitle = "⌫"
         default: displayedTitle = title
         }
-        let button = KeyButton()
+        let button = UIButton(type: .system)
         button.setTitle(displayedTitle, for: .normal)
         if title == "space" || title == "return" || title == "⇧" {
             button.accessibilityValue = title
@@ -289,7 +292,7 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func inputModeButton() -> UIButton {
-        let button = KeyButton()
+        let button = UIButton(type: .system)
         button.setImage(UIImage(systemName: "globe"), for: .normal)
         button.tintColor = .label
         button.backgroundColor = .tertiarySystemBackground
@@ -643,74 +646,5 @@ final class KeyboardViewController: UIInputViewController {
         sentenceScrollView.setContentOffset(.zero, animated: false)
         candidateScrollView.setContentOffset(.zero, animated: false)
         view.setNeedsLayout()
-    }
-}
-
-/// Keyboard grid container that rescues taps landing in the dead space
-/// between keys. A touch that misses every button (row spacing, inter-row
-/// spacing, or the indented row margins) would otherwise do nothing; instead
-/// it snaps to the nearest key so a slightly-off tap still registers.
-final class NearestKeyStackView: UIStackView {
-    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
-        let result = super.hitTest(point, with: event)
-        // A real key (or a nested control) was hit — leave it alone. Missing a
-        // key onto an adjacent key is fine; only gaps need rescuing.
-        if let result, result is UIControl { return result }
-        // Only snap for touches inside the keyboard grid itself.
-        guard bounds.contains(point) else { return result }
-
-        var nearest: UIButton?
-        var nearestDistance = CGFloat.greatestFiniteMagnitude
-        for button in keyButtons() where button.isEnabled && !button.isHidden {
-            let frame = button.convert(button.bounds, to: self)
-            // Squared distance from the point to the button's frame (0 inside).
-            let dx = max(frame.minX - point.x, 0, point.x - frame.maxX)
-            let dy = max(frame.minY - point.y, 0, point.y - frame.maxY)
-            let distance = dx * dx + dy * dy
-            if distance < nearestDistance {
-                nearestDistance = distance
-                nearest = button
-            }
-        }
-        return nearest ?? result
-    }
-
-    private func keyButtons() -> [UIButton] {
-        var buttons: [UIButton] = []
-        func walk(_ view: UIView) {
-            for sub in view.subviews {
-                if let button = sub as? UIButton {
-                    buttons.append(button)
-                } else {
-                    walk(sub)
-                }
-            }
-        }
-        walk(self)
-        return buttons
-    }
-}
-
-/// Key that extends its touch area into the surrounding gaps. Snapping a tap
-/// to the nearest key is not enough on its own: `UIControl` re-checks its own
-/// `point(inside:)` when the finger lifts, so a touch whose coordinates stay
-/// in the gap counts as "touch up outside" and never fires `.touchUpInside`.
-/// Growing the hit area makes gap taps genuinely land inside a key, so the
-/// action fires.
-final class KeyButton: UIButton {
-    // Half of the widest inter-key gap (bottom row is 8pt) horizontally, and
-    // half the inter-row spacing (5pt) vertically, with margin to spare.
-    var hitInset = UIEdgeInsets(top: 6, left: 8, bottom: 6, right: 8)
-
-    // `.custom` buttons do not dim on press like `.system` did, so restore a
-    // lightweight pressed-state feedback.
-    override var isHighlighted: Bool {
-        didSet { alpha = isHighlighted ? 0.4 : 1 }
-    }
-
-    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
-        bounds.inset(by: UIEdgeInsets(top: -hitInset.top, left: -hitInset.left,
-                                     bottom: -hitInset.bottom, right: -hitInset.right))
-            .contains(point)
     }
 }
