@@ -495,6 +495,10 @@ final class KeyboardViewController: UIInputViewController {
         guard composition.isComposing else {
             InputSettings.pendingRaw = ""
             InputSettings.pendingCommitted = ""
+            // Replace any lingering marked preedit with empty before unmarking:
+            // unmarkText() alone finalizes the marked text into the document,
+            // so deleting the last composing key would leave that key behind.
+            textDocumentProxy.setMarkedText("", selectedRange: NSRange(location: 0, length: 0))
             textDocumentProxy.unmarkText()
             return
         }
