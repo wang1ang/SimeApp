@@ -116,7 +116,7 @@
 
 64. 微软双拼：**韵母不走扩展，单个声母才走扩展**。打全的音节韵母固定（`he` 只能是 喝/和，不能变 黑/很），只有末尾孤立声母才补全（`nghem` → 能喝吗，非 能很忙/能黑马）。用例与断言见 `iOS/Tests/ShuangpinEndToEndTests.swift`（真机引擎端到端）。
 
-64b. 微软双拼下打完声母（当前音节只有一个待配对的键）时，字母页上**高亮那些能与该声母组成合法音节的韵母键**（蓝色底）；合法性由对展开后的两键音节解码得出，不得用每声母的手写韵母白名单。音节打满（偶数键）后高亮清除；全拼不高亮。高亮集合逻辑由 `iOS/Tests` 覆盖（`testShuangpinHighlightsValidFinalKeysAfterInitial`、`testFullPinyinNeverHighlightsFinalKeys`）；此处只留真机回归：高亮不得闪烁、不得阻碍连打，且双拼引擎换入/切方案后仍一致。
+64b. 微软双拼下打完声母（当前音节只有一个待配对的键）时，字母页上**高亮那些与该声母能组成合法拼音音节的韵母键**（蓝色底）。合法性以引擎为准：将两键用 `MicrosoftShuangpin.expand` 展开后，只有当解码器能把它作为单个音节返回汉字候选（`units` 恰好等于该拼音）才算合法；非法串（如 `wuan`/`wue`/`wuai`）要么只回显字面字母、要么只能拆成多音节（`wu'ai`），均不高亮。不得用每声母的手写韵母白名单。音节打满（偶数键）后高亮清除；全拼不高亮。高亮集合逻辑由 `iOS/Tests` 覆盖（`testShuangpinHighlightsValidFinalKeysAfterInitial`、`testShuangpinRejectsMultiSyllableSplitAsFinal`、`testFullPinyinNeverHighlightsFinalKeys`）；此处只留真机回归：高亮不得闪烁、不得阻碍连打，且双拼引擎换入/切方案后仍一致。
 
 65. 微软双拼每个音节以撇号分隔发给引擎（`neng'he'ma`），撇号只表示**分词边界**：整句解码（`DecodeSentence`）必须**跨撇号保留 n-gram 上下文**（`Process(keep_sep_context=true)`），使同一串拼音带不带撇号打分一致（`neng'he'ma`=`nenghema`→能喝吗，`li'zhou`=`lizhou`→利州）。改选（`DecodeCorrection`）**保留**撇号处的上下文重置（`keep_sep_context=false`）——两条路径不可统一：全局去掉重置会破坏 `xing'jia'bi` 改选，去掉保留会让双拼整句排序退化。断言见 `iOS/Tests/ShuangpinEndToEndTests.swift`（双拼与全拼首选一致）与 `require/Sime/tests/correction_test.cc`（改选不变）。
 

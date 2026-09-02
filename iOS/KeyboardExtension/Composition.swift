@@ -124,11 +124,12 @@ final class Composition {
         if let cached = shuangpinFinalHighlightCache[key] { return cached }
         let highlights = MicrosoftShuangpin.finalKeyCandidates.filter { finalKey in
             let syllable = MicrosoftShuangpin.expand(String([key, finalKey]))
-            // Valid iff the decoder recognizes the expansion as ONE syllable
-            // (units == the whole pinyin, no separator) with a Han candidate.
-            // Invalid combos either echo the literal letters back or only
-            // parse by splitting into multiple syllables (e.g. wuai -> wu'ai),
-            // both of which must be rejected.
+            // Highlight only keys whose expansion is a legal pinyin syllable.
+            // The decoder confirms legality by returning a Han candidate whose
+            // units are exactly this syllable. Illegal strings (e.g. wuan/wue/
+            // wuai) never decode as one syllable: they either echo the literal
+            // letters back or only parse by splitting (wu'ai), so neither
+            // matches `units == syllable` with Han text.
             return decoder.syllableCandidates(syllable).contains { candidate in
                 candidate.units == syllable && candidate.text.contains { !$0.isASCII }
             }
