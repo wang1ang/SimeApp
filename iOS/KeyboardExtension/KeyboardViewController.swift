@@ -10,6 +10,10 @@ final class KeyboardViewController: UIInputViewController {
     private var sentenceContentWidth: CGFloat = 0
     private var candidateContentWidth: CGFloat = 0
     private let keyboardStack = UIStackView()
+    // Single-letter key buttons on the current layout, keyed by their
+    // lowercase character, so Shuangpin final-key highlighting can be applied
+    // without rebuilding the whole keyboard on every keystroke.
+    private var letterKeyButtons: [Character: KeyButton] = [:]
     private enum KeyboardPage { case letters, numbers, symbols }
     private var keyboardPage: KeyboardPage = .letters
     // The letter-page toggle key reflects the active scheme so the user knows
@@ -288,6 +292,13 @@ final class KeyboardViewController: UIInputViewController {
             }
             button.addTarget(self, action: #selector(keyTapped(_:)), for: .touchUpInside)
         }
+        // Register single letters (and the `;` final) so Shuangpin can tint
+        // the valid final keys after an initial. Number/symbol keys are not in
+        // `finalKeyCandidates`, so they are never registered or highlighted.
+        if title.count == 1, let ch = title.lowercased().first,
+           MicrosoftShuangpin.finalKeyCandidates.contains(ch) {
+            letterKeyButtons[ch] = button
+        }
         return button
     }
 
@@ -538,6 +549,7 @@ final class KeyboardViewController: UIInputViewController {
 
     private func rebuildKeyboard() {
         keyboardStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        letterKeyButtons.removeAll()
         switch keyboardPage {
         case .numbers:
             keyboardStack.addArrangedSubview(
@@ -582,6 +594,7 @@ final class KeyboardViewController: UIInputViewController {
             rebuildKeyboard()
             keyboardNeedsRebuild = false
         }
+        updateFinalKeyHighlights()
         sentenceBar.subviews.forEach { $0.removeFromSuperview() }
         var sentenceX: CGFloat = 8
         if composition.isComposing {
@@ -650,6 +663,18 @@ final class KeyboardViewController: UIInputViewController {
         sentenceScrollView.setContentOffset(.zero, animated: false)
         candidateScrollView.setContentOffset(.zero, animated: false)
         view.setNeedsLayout()
+    }
+
+    // Tint the letter keys that complete a valid syllable with the Shuangpin
+    // initial the user just typed; clear the tint once no initial is pending.
+    private func updateFinalKeyHighlights() {
+        let highlights = keyboardPage == .letters
+            ? composition.shuangpinFinalKeyHighlights() : []
+        for (char, button) in letterKeyButtons {
+            button.backgroundColor = highlights.contains(char)
+                ? UIColor.systemBlue.withAlphaComponent(0.28)
+                : .tertiarySystemBackground
+        }
     }
 }
 

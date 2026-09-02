@@ -14,6 +14,12 @@ enum MicrosoftShuangpin {
     static func initial(for key: Character) -> String {
         initials[key] ?? String(key)
     }
+
+    /// Every key that can be the second (韵母) key of a Microsoft Shuangpin
+    /// syllable. `expand` maps each to the actual final for a given initial,
+    /// so validity is decided by decoding the expanded syllable, never by a
+    /// per-initial hand table here.
+    static let finalKeyCandidates: Set<Character> = Set("abcdefghijklmnopqrstuvwxyz;")
     private static let finals: [Character: String] = [
         "a": "a", "e": "e", "i": "i", "u": "u", "v": "ü",
         "l": "ai", "z": "ei", "k": "ao", "b": "ou", "q": "iu",

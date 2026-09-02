@@ -38,6 +38,11 @@ final class Composition {
     // anchors stay sparse so every sentence position remains editable.
     private var prefixSegments: [CompositionSegment] = []
     private var anchorSegments: [CompositionSegment] = []
+    // Per-initial cache of the final keys that complete a valid Shuangpin
+    // syllable. Bounded by the alphabet, so each initial is validated through
+    // the decoder at most once for this Composition (a decoder swap builds a
+    // fresh Composition, which resets the cache).
+    private var shuangpinFinalHighlightCache: [Character: Set<Character>] = [:]
 
     init(decoder: PinyinDecoder = BuiltinPinyinDecoder(),
          inputScheme: InputScheme = InputSettings.scheme) {
@@ -101,6 +106,30 @@ final class Composition {
         let groups = enteredKeyGroups(for: syllables)
         guard groups.indices.contains(rawSyllableIndex) else { return nil }
         return groups[rawSyllableIndex]
+    }
+
+    /// Letter-layout keys that complete a valid syllable with the Shuangpin
+    /// initial the user just typed. Non-empty only while a lone initial (the
+    /// odd key at the composition cursor) awaits its final; empty for full
+    /// pinyin and once the syllable is complete. Validity comes from decoding
+    /// each expanded two-key syllable, so the highlighted set always tracks
+    /// what the engine can actually produce.
+    func shuangpinFinalKeyHighlights() -> Set<Character> {
+        guard inputScheme == .microsoftShuangpin else { return [] }
+        // Syllables are exactly two keys, so a pending initial exists only when
+        // an odd number of keys precede the cursor; it is the key before it.
+        guard cursor >= 1, cursor <= raw.count, cursor % 2 == 1 else { return [] }
+        let keyIndex = raw.index(raw.startIndex, offsetBy: cursor - 1)
+        guard let key = raw[keyIndex].lowercased().first else { return [] }
+        if let cached = shuangpinFinalHighlightCache[key] { return cached }
+        let highlights = MicrosoftShuangpin.finalKeyCandidates.filter { finalKey in
+            let syllable = MicrosoftShuangpin.expand(String([key, finalKey]))
+            return decoder.syllableCandidates(syllable)
+                .contains { !$0.isEnglish && !$0.text.isEmpty }
+        }
+        let set = Set(highlights)
+        shuangpinFinalHighlightCache[key] = set
+        return set
     }
 
     private func enteredKeyGroups(for syllables: [String]) -> [String] {

@@ -123,6 +123,37 @@ final class CompositionCandidateSelectionTests: XCTestCase {
         XCTAssertEqual(composition.displayCandidates.map(\.text), ["晓"])
     }
 
+    func testShuangpinHighlightsValidFinalKeysAfterInitial() {
+        let valid: Set<String> = ["xi", "xiao", "xian", "xie", "xin"]
+        let decoder = RecordingPinyinDecoder()
+        decoder.decodeResult = { pinyin in
+            valid.contains(pinyin)
+                ? [Candidate(text: "x", consumed: pinyin.count, tokens: [], units: pinyin)]
+                : []
+        }
+        let composition = Composition(decoder: decoder, inputScheme: .microsoftShuangpin)
+
+        // Typing the lone initial highlights exactly the keys whose expanded
+        // two-key syllable the decoder can produce (i->xi, c->xiao, m->xian,
+        // x->xie, n->xin).
+        composition.append("x")
+        XCTAssertEqual(composition.shuangpinFinalKeyHighlights(), Set("icmxn"))
+
+        // Completing the syllable clears the highlight (no pending initial).
+        composition.append("i")
+        XCTAssertTrue(composition.shuangpinFinalKeyHighlights().isEmpty)
+    }
+
+    func testFullPinyinNeverHighlightsFinalKeys() {
+        let decoder = RecordingPinyinDecoder()
+        decoder.decodeResult = { _ in
+            [Candidate(text: "x", consumed: 1, tokens: [])]
+        }
+        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
+        composition.append("x")
+        XCTAssertTrue(composition.shuangpinFinalKeyHighlights().isEmpty)
+    }
+
     func testOddShuangpinKeyRemainsInCompositionUntilPairCompletes() {
         let decoder = RecordingPinyinDecoder()
         decoder.decodeResult = { pinyin in
