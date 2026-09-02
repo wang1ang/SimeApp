@@ -28,6 +28,10 @@ int sime_context_size(const SimeHandle *h) {
   return (h && h->sime) ? h->sime->ContextSize() : 0;
 }
 
+void sime_reset_caches(const SimeHandle *h) {
+  if (h && h->sime) h->sime->ResetCaches();
+}
+
 SimeTokens sime_tokenize_text(const SimeHandle *h, const char *text) {
   SimeTokens result{};
   if (!h || !h->sime || !h->sime->Ready() || !text) return result;

@@ -60,6 +60,14 @@ final class NativePinyinDecoder: PinyinDecoder {
         if let handle { sime_destroy(handle) }
     }
 
+    /// Release the engine's internal caches to shrink the resident footprint
+    /// under memory pressure. Memory-only hint; decode results are unchanged.
+    /// Main-thread only, matching the rest of the shared-decoder access.
+    func resetCaches() {
+        guard let handle else { return }
+        sime_reset_caches(handle)
+    }
+
     func decode(_ pinyin: String, limit: Int) -> [Candidate] {
         decode(pinyin, context: [], limit: limit)
     }

@@ -92,6 +92,14 @@ final class KeyboardViewController: UIInputViewController {
         activateNativeDecoder()
     }
 
+    override func didReceiveMemoryWarning() {
+        super.didReceiveMemoryWarning()
+        // Shrink the engine's caches instead of risking a jetsam kill (which
+        // shows to the user as the keyboard flashing/reloading). Memory-only
+        // hint: decode results are unchanged and caches rebuild on demand.
+        NativePinyinDecoder.sharedIfLoaded?.resetCaches()
+    }
+
     override func textDidChange(_ textInput: UITextInput?) {
         super.textDidChange(textInput)
         guard !restoringMarkedText else { return }

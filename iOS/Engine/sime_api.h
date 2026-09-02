@@ -35,6 +35,10 @@ SimeHandle *sime_create(const char *dict_path, const char *cnt_path);
 void sime_destroy(SimeHandle *h);
 bool sime_ready(const SimeHandle *h);
 int sime_context_size(const SimeHandle *h);
+// Release the engine's internal trie/decode caches to shrink the resident
+// footprint under memory pressure. Purely a memory hint: decode results are
+// unchanged, caches simply rebuild on demand. Safe to call any time.
+void sime_reset_caches(const SimeHandle *h);
 // Segment already-written UTF-8 text for use as language-model context.
 SimeTokens sime_tokenize_text(const SimeHandle *h, const char *text);
 void sime_free_tokens(SimeTokens *tokens);
