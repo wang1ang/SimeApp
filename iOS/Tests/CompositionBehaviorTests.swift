@@ -146,6 +146,21 @@ final class CompositionCandidateSelectionTests: XCTestCase {
         XCTAssertTrue(composition.shuangpinFinalKeyHighlights().isEmpty)
     }
 
+    func testShuangpinRejectsMultiSyllableSplitAsFinal() {
+        let decoder = RecordingPinyinDecoder()
+        decoder.decodeResult = { pinyin in
+            // "wuai" is not one syllable; the decoder splits it into wu'ai and
+            // still returns Han. That split must not count as a valid final.
+            pinyin == "wuai"
+                ? [Candidate(text: "无碍", consumed: 4, tokens: [], units: "wu'ai")]
+                : [Candidate(text: pinyin, consumed: pinyin.count, tokens: [], units: pinyin)]
+        }
+        let composition = Composition(decoder: decoder, inputScheme: .microsoftShuangpin)
+        composition.append("w")
+        // 'y' expands to wuai for the 'w' initial; the split parse is rejected.
+        XCTAssertFalse(composition.shuangpinFinalKeyHighlights().contains("y"))
+    }
+
     func testFullPinyinNeverHighlightsFinalKeys() {
         let decoder = RecordingPinyinDecoder()
         decoder.decodeResult = { _ in
