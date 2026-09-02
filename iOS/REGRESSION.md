@@ -105,7 +105,8 @@
 58. 使用 `iOS/Tests/DeviceMemoryBaseline.md` 的固定 workload 做 Release 真机存活测试。
 59. 设备日志出现 `SimeKeyboard` 的 `per-process-limit`、`exceeded mem limit` 或 Jetsam 即失败。
 60. 已知设备上限为 77 MB；引擎资源或模型加载变更必须重新记录 footprint。
-60a. 收到内存告警（`didReceiveMemoryWarning`）时键盘须调 `sime_reset_caches()` 主动释放引擎缓存（纯内存提示，不改解码结果，缓存按需重建），以降低被 jetsam 回收重载的概率。
+60a. 收到内存告警（`didReceiveMemoryWarning`）时键盘调 `sime_reset_caches()` 清引擎缓存（纯内存提示，不改解码结果）。注：`free` 后页不一定立即还给系统，此调用是尽力而为，不能依赖它降 footprint。
+60b. 引擎 trie 的分隔符缓存（`sep_cache_`）必须稀疏存储（按访问到的节点 `unordered_map`），**不得恢复为按整棵 trie `size_` 预分配的稠密 `vector`**：后者在现版词典上首次解码就会分配 ~14MB 脏内存且不归还系统，是键盘撞 77MB 上限的主因之一。稀疏化不得改变解码结果（由引擎与 iOS 测试兑现）。
 
 ## 键盘激活响应
 
