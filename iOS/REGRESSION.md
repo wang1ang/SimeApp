@@ -93,7 +93,7 @@
 ## GRU / ncnn
 
 51. iOS 使用 CPU-only ncnn，并定义 `SIME_ENABLE_NCNN=1`。
-52. GRU 的 embedding、pinyin/t9 param/bin 必须全部打包到扩展。
+52. GRU 的 embedding、pinyin/t9 param/bin 必须全部打包到扩展。`gru.embedding.i8` 以只读 `mmap`（非读入堆内存）加载，以降低常驻；换回读取式加载必须重新记录 footprint。
 53. Simulator arm64/x86_64 与真机 arm64 都必须可链接构建。
 54. GRU 只重排候选，不负责键盘页选择，也不能突破锚点约束。
 
@@ -105,6 +105,7 @@
 58. 使用 `iOS/Tests/DeviceMemoryBaseline.md` 的固定 workload 做 Release 真机存活测试。
 59. 设备日志出现 `SimeKeyboard` 的 `per-process-limit`、`exceeded mem limit` 或 Jetsam 即失败。
 60. 已知设备上限为 77 MB；引擎资源或模型加载变更必须重新记录 footprint。
+60a. 收到内存告警（`didReceiveMemoryWarning`）时键盘须调 `sime_reset_caches()` 主动释放引擎缓存（纯内存提示，不改解码结果，缓存按需重建），以降低被 jetsam 回收重载的概率。
 
 ## 键盘激活响应
 
