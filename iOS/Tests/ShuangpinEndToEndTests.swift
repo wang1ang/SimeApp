@@ -133,9 +133,12 @@ final class ShuangpinEndToEndTests: XCTestCase {
         XCTAssertFalse(composition.isComposing)
     }
 
-    // Activating the first character exposes its literal two-key code.
+    // The first tap highlights the character; a second tap on the same
+    // character exposes its literal two-key code.
     func testCorrectionRetainsLiteralKeys() throws {
         let composition = try composition(for: "xcgo")
+        composition.activateCharacter(0)
+        XCTAssertNil(composition.activeEnteredKeys)
         composition.activateCharacter(0)
         XCTAssertEqual(composition.activeEnteredKeys, "xc")
     }

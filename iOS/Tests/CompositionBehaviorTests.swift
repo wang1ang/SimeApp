@@ -110,6 +110,15 @@ final class CompositionCandidateSelectionTests: XCTestCase {
         "xcgo".forEach { composition.append(String($0)) }
         composition.activateCharacter(0)
 
+        // First tap only highlights the character; it keeps the decoded glyph
+        // and lists replacement candidates, but does not reveal the raw keys.
+        XCTAssertEqual(composition.activeCharacterIndex, 0)
+        XCTAssertNil(composition.activeEnteredKeys)
+        XCTAssertEqual(composition.displayCandidates.map(\.text), ["晓"])
+
+        // Second tap on the same character reveals its literal two-key code.
+        composition.activateCharacter(0)
+
         XCTAssertEqual(composition.activeEnteredKeys, "xc")
         XCTAssertEqual(composition.displayCandidates.map(\.text), ["晓"])
     }
@@ -653,5 +662,46 @@ final class CompositionPreeditGroupingTests: XCTestCase {
 
         // 4 raw keys + 1 separator inserted after the first group.
         XCTAssertEqual(composition.selectionLocation, 5)
+    }
+}
+
+final class CompositionPrefixReselectionTests: XCTestCase {
+    func testTappingACommittedPrefixCharacterReopensItsSelection() {
+        let decoder = RecordingPinyinDecoder()
+        decoder.decodeResult = { pinyin in
+            switch pinyin {
+            case "nihao":
+                return [
+                    Candidate(text: "你好", consumed: 5, tokens: [1, 2],
+                              units: "ni'hao"),
+                    Candidate(text: "你", consumed: 2, tokens: [1], units: "ni")
+                ]
+            case "hao":
+                return [Candidate(text: "好", consumed: 3, tokens: [2],
+                                  units: "hao")]
+            default:
+                return []
+            }
+        }
+        decoder.correctionResult = [
+            Candidate(text: "尼", consumed: 0, tokens: [3], units: "ni")
+        ]
+        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
+
+        "nihao".forEach { composition.append(String($0)) }
+        // Sequentially commit the single-character "你"; the remaining "hao"
+        // keeps composing.
+        XCTAssertNil(composition.select(1))
+        XCTAssertEqual(composition.committed, "你")
+        XCTAssertEqual(composition.raw, "hao")
+
+        // Tapping the already-committed first-row "你" must restore its keys
+        // and re-open selection for that syllable instead of doing nothing.
+        composition.activateCharacter(0)
+
+        XCTAssertEqual(composition.raw, "nihao")
+        XCTAssertEqual(composition.committed, "")
+        XCTAssertEqual(composition.activeCharacterIndex, 0)
+        XCTAssertEqual(composition.displayCandidates.map(\.text), ["尼"])
     }
 }

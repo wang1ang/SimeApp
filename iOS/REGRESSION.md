@@ -39,7 +39,7 @@
 13. 点选位置之前的当前文字参与约束和排序，但只有用户明确选择过的范围成为永久锚点。
 14. 新选择与旧锚点重叠时，只替换被覆盖范围，不能清空其他锚点。
 15. 追加输入、退格、移动 marked-text 光标、切换宿主字段和锁屏恢复后，仍应保持合法锚点。
-20. 第一行当前活动标签显示用户实际按键：全拼保留原输入及分隔符，双拼显示原始双拼码。
+20. 第一行整句预览逐字可点，且分两段交互：第一次点某字**只高亮选中该字（变蓝色）**并在第二行列出其替换候选，第一行仍显示解码后的汉字，不变成拼音；**再点同一字**才把该字标签切换为用户实际按键（全拼保留原输入及分隔符，双拼显示原始双拼码）。点选其它字或改选后自动跳到下一字时，均按“首次点选”处理（重新高亮、不显示按键）。
 21. GRU 只能在满足全部锚点约束的合法路径之间重排。
 22. 字选择和词选择必须走相同的 segment 状态转移，不得出现 UI 特判分支。
 23. 锚点应携带原始按键范围、音节范围、显示文字和 token；人工审查不得出现以汉字长度反推拼音边界的逻辑。
@@ -110,11 +110,13 @@
 
 61. 切换到“是语键盘”时布局不得闪烁、按键不得在数百毫秒内失效。原生引擎（GRU embedding、ncnn 模型、score 表）加载昂贵，**不得在主线程/控制器属性初始化时同步构建**：`KeyboardViewController` 必须先用轻量 `BuiltinPinyinDecoder` 立即呈现可用键盘，再在后台队列加载 `NativePinyinDecoder` 并在就绪后换入、保留在打 raw。
 62. 已加载的原生引擎须以 `NativePinyinDecoder.shared` 在扩展进程内跨控制器实例复用，避免每次切换重新加载。换入不得丢失/错位当前 marked 组合（沿用 `restore(raw:committed:)`）。
-63. 键盘根视图 `view` 必须**近乎不透明**（当前 `secondarySystemBackground` alpha 0.9）。透明背景会让键与键**缝隙**处的触摸穿透到宿主 App、连 `hitTest` 都进不来（键上仍可用，缝隙全失效）；铺不透明子视图底板**无效**——系统只看控制器 `view` 自身的透明度。
+63. 缝隙点击需两个条件同时满足：根视图 `view` 近乎不透明（alpha 0.9，否则缝隙触摸穿透到宿主）；键用 `KeyButton()` 把 `point(inside:)` 向缝隙扩 ~8pt（否则缝隙下无键可接）。必须 `KeyButton()` 直接实例化，`UIButton(type:.system)` 不生成子类。
 
 ## 微软双拼解码不变量
 
-64. 微软双拼：**韵母不走扩展，单个声母才走扩展**。打全的音节韵母固定（`he` 只能是 喝/和，不能变 黑/很），只有末尾孤立声母才补全（`nghem` → 能喝吗，非 能很忙/能黑马）。用例与断言见 `iOS/Tests/CompositionBehaviorTests.swift`（`testShuangpinNghemKeepsHeAndReachesNengHeMa` 等）。
+64. 微软双拼：**韵母不走扩展，单个声母才走扩展**。打全的音节韵母固定（`he` 只能是 喝/和，不能变 黑/很），只有末尾孤立声母才补全（`nghem` → 能喝吗，非 能很忙/能黑马）。用例与断言见 `iOS/Tests/ShuangpinEndToEndTests.swift`（真机引擎端到端）。
+
+65. 微软双拼每个音节以撇号分隔发给引擎（`neng'he'ma`），撇号只表示**分词边界**：整句解码（`DecodeSentence`）必须**跨撇号保留 n-gram 上下文**（`Process(keep_sep_context=true)`），使同一串拼音带不带撇号打分一致（`neng'he'ma`=`nenghema`→能喝吗，`li'zhou`=`lizhou`→利州）。改选（`DecodeCorrection`）**保留**撇号处的上下文重置（`keep_sep_context=false`）——两条路径不可统一：全局去掉重置会破坏 `xing'jia'bi` 改选，去掉保留会让双拼整句排序退化。断言见 `iOS/Tests/ShuangpinEndToEndTests.swift`（双拼与全拼首选一致）与 `require/Sime/tests/correction_test.cc`（改选不变）。
 
 ## 人工验证命令
 

@@ -9,6 +9,10 @@ final class Composition {
         let syllableRange: Range<Int>
         let text: String
         let tokens: [UInt32]
+        // The literal keys that produced this segment. Retained so a tap on an
+        // already-committed first-row character can restore them into `raw`
+        // and re-open selection. Empty for restored/lock-screen segments.
+        var sourceKeys: String = ""
     }
 
     private let decoder: PinyinDecoder
@@ -18,6 +22,10 @@ final class Composition {
     private(set) var cursor = 0
     private(set) var candidates: [Candidate] = []
     private(set) var activeCharacterIndex: Int?
+    // A first tap only highlights the character (color change) and lists its
+    // replacement candidates; the literal typed keys are revealed on the
+    // second tap of the same character. This flag tracks that second stage.
+    private(set) var activeShowsKeys: Bool = false
     private var replacementCandidates: [Candidate] = []
     private var predictionCandidates: [Candidate] = []
     // Tokens derived from the host's text before the insertion point. They
@@ -84,7 +92,8 @@ final class Composition {
     /// user must see their two-key code, and full-pinyin input must retain
     /// typed separators such as an apostrophe.
     var activeEnteredKeys: String? {
-        guard let active = activeCharacterIndex,
+        guard activeShowsKeys,
+              let active = activeCharacterIndex,
               let units = candidates.first?.units else { return nil }
         let syllables = units.split(separator: "'").map(String.init)
         let rawSyllableIndex = active - prefixText.count
@@ -217,6 +226,7 @@ final class Composition {
         cursor += letter.count
         predictionCandidates = []
         activeCharacterIndex = nil
+        activeShowsKeys = false
         replacementCandidates = []
         refresh()
     }
@@ -243,11 +253,13 @@ final class Composition {
         let consumed = rawConsumption(of: candidate)
         let syllables = max(1, candidate.units.split(separator: "'")
             .filter { !$0.isEmpty }.count)
+        let sourceKeys = String(raw.prefix(min(consumed, raw.count)))
         appendPrefixSegment(
             text: candidate.text,
             keyCount: consumed,
             syllableCount: syllables,
-            tokens: candidate.tokens
+            tokens: candidate.tokens,
+            sourceKeys: sourceKeys
         )
         raw.removeFirst(min(consumed, raw.count))
         cursor = max(0, cursor - consumed)
@@ -260,7 +272,8 @@ final class Composition {
     }
 
     private func appendPrefixSegment(text: String, keyCount: Int,
-                                     syllableCount: Int, tokens: [UInt32]) {
+                                     syllableCount: Int, tokens: [UInt32],
+                                     sourceKeys: String = "") {
         guard keyCount > 0, syllableCount > 0 else { return }
         let keyStart = consumedKeyCount
         let syllableStart = consumedSyllableCount
@@ -268,7 +281,8 @@ final class Composition {
             sourceKeyRange: keyStart..<(keyStart + keyCount),
             syllableRange: syllableStart..<(syllableStart + syllableCount),
             text: text,
-            tokens: tokens
+            tokens: tokens,
+            sourceKeys: sourceKeys
         ))
         committed = prefixText
         committedTokens = prefixSegments.flatMap(\.tokens)
@@ -318,6 +332,7 @@ final class Composition {
                 $0.syllableRange.lowerBound < $1.syllableRange.lowerBound
             }
             activeCharacterIndex = nil
+            activeShowsKeys = false
             replacementCandidates = []
             refresh()
 
@@ -331,6 +346,21 @@ final class Composition {
     }
 
     func activateCharacter(_ index: Int) {
+        // Second tap on the already-highlighted character reveals its literal
+        // typed keys; the first tap only selects/colors it (below) and lists
+        // replacement candidates. Keep the candidates untouched here.
+        if index == activeCharacterIndex, !activeShowsKeys {
+            activeShowsKeys = true
+            return
+        }
+        // A tap inside the sequentially committed prefix re-opens that
+        // selection: restore its keys (and every later prefix segment's keys)
+        // into `raw`, then activate the first syllable of the reopened span.
+        if index < prefixText.count {
+            guard uncommitPrefix(containingCharacter: index) else { return }
+            activateCharacter(prefixText.count)
+            return
+        }
         let sentence = sentencePreview
         guard Array(sentence).indices.contains(index),
               let top = candidates.first else { return }
@@ -338,6 +368,7 @@ final class Composition {
         let relativeIndex = index - prefixText.count
         guard syllables.indices.contains(relativeIndex) else { return }
         activeCharacterIndex = index
+        activeShowsKeys = false
         let current = renderedText(top.text)
         let fixedPrefix = String(Array(current).prefix(relativeIndex))
         let nextAnchor = anchorSegments
@@ -359,6 +390,33 @@ final class Composition {
             // finals are locked just like normal decode candidates.
             return unitsMatchLockedFinals(candidate.units, fromSyllable: relativeIndex)
         }
+    }
+
+    /// Undo the committed prefix segment that renders character `charIndex`
+    /// (and every segment after it), pushing their literal keys back to the
+    /// front of `raw` so the user can choose again. Anchors are relative to
+    /// the raw decode that just changed, so they are cleared.
+    private func uncommitPrefix(containingCharacter charIndex: Int) -> Bool {
+        var cumulative = 0
+        var start: Int?
+        for (segmentIndex, segment) in prefixSegments.enumerated() {
+            let count = segment.text.count
+            if charIndex < cumulative + count { start = segmentIndex; break }
+            cumulative += count
+        }
+        guard let firstRemoved = start else { return false }
+        let restoredKeys = prefixSegments[firstRemoved...]
+            .map(\.sourceKeys).joined()
+        guard !restoredKeys.isEmpty else { return false }
+        prefixSegments.removeSubrange(firstRemoved...)
+        raw = restoredKeys + raw
+        cursor += restoredKeys.count
+        committed = prefixText
+        committedTokens = prefixSegments.flatMap(\.tokens)
+        anchorSegments = []
+        replacementCandidates = []
+        refresh()
+        return true
     }
 
     func commitBestOrRaw() -> String? {
@@ -422,6 +480,7 @@ final class Composition {
         cursor = 0
         candidates = []
         activeCharacterIndex = nil
+        activeShowsKeys = false
         replacementCandidates = []
         displayGroups = []
     }
