@@ -10,10 +10,6 @@ final class KeyboardViewController: UIInputViewController {
     private var sentenceContentWidth: CGFloat = 0
     private var candidateContentWidth: CGFloat = 0
     private let keyboardStack = UIStackView()
-    // Single-letter key buttons on the current layout, keyed by their
-    // lowercase character, so Shuangpin final-key highlighting can be applied
-    // without rebuilding the whole keyboard on every keystroke.
-    private var letterKeyButtons: [Character: KeyButton] = [:]
     private enum KeyboardPage { case letters, numbers, symbols }
     private var keyboardPage: KeyboardPage = .letters
     // The letter-page toggle key reflects the active scheme so the user knows
@@ -292,13 +288,6 @@ final class KeyboardViewController: UIInputViewController {
             }
             button.addTarget(self, action: #selector(keyTapped(_:)), for: .touchUpInside)
         }
-        // Register single letters (and the `;` final) so Shuangpin can tint
-        // the valid final keys after an initial. Number/symbol keys are not in
-        // `finalKeyCandidates`, so they are never registered or highlighted.
-        if title.count == 1, let ch = title.lowercased().first,
-           MicrosoftShuangpin.finalKeyCandidates.contains(ch) {
-            letterKeyButtons[ch] = button
-        }
         return button
     }
 
@@ -549,7 +538,6 @@ final class KeyboardViewController: UIInputViewController {
 
     private func rebuildKeyboard() {
         keyboardStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        letterKeyButtons.removeAll()
         switch keyboardPage {
         case .numbers:
             keyboardStack.addArrangedSubview(
@@ -667,13 +655,52 @@ final class KeyboardViewController: UIInputViewController {
 
     // Tint the letter keys that complete a valid syllable with the Shuangpin
     // initial the user just typed; clear the tint once no initial is pending.
+    // A highlighted (legal) key also claims the whole gap toward each
+    // non-highlighted neighbor, and that neighbor cedes its facing side, so a
+    // tap in the spacing lands on the legal key without shrinking anyone's
+    // actual key face.
     private func updateFinalKeyHighlights() {
         let highlights = keyboardPage == .letters
             ? composition.shuangpinFinalKeyHighlights() : []
-        for (char, button) in letterKeyButtons {
-            button.backgroundColor = highlights.contains(char)
-                ? UIColor.systemBlue.withAlphaComponent(0.28)
-                : .tertiarySystemBackground
+        // Inter-key spacing on every letter row (see makeRow), i.e. the gap a
+        // highlighted key may absorb without overlapping a neighbor's face.
+        let gap: CGFloat = 4
+        let defaultInset: CGFloat = 8
+        func char(of button: KeyButton) -> Character? {
+            guard let title = button.currentTitle?.lowercased(), title.count == 1
+            else { return nil }
+            return title.first
+        }
+        func isHighlighted(_ button: KeyButton) -> Bool {
+            guard let c = char(of: button) else { return false }
+            return highlights.contains(c)
+        }
+        for case let row as UIStackView in keyboardStack.arrangedSubviews {
+            let buttons = row.arrangedSubviews.compactMap { $0 as? KeyButton }
+            for (index, button) in buttons.enumerated() {
+                if let c = char(of: button),
+                   MicrosoftShuangpin.finalKeyCandidates.contains(c) {
+                    button.backgroundColor = highlights.contains(c)
+                        ? UIColor.systemBlue.withAlphaComponent(0.28)
+                        : .tertiarySystemBackground
+                }
+                let hi = isHighlighted(button)
+                let leftHi = index > 0 && isHighlighted(buttons[index - 1])
+                let rightHi = index < buttons.count - 1 && isHighlighted(buttons[index + 1])
+                var inset = UIEdgeInsets(top: 0, left: defaultInset,
+                                         bottom: 0, right: defaultInset)
+                if hi {
+                    // Claim exactly the gap toward a non-highlighted neighbor;
+                    // keep the default reach toward edges / other legal keys.
+                    if index > 0, !leftHi { inset.left = gap }
+                    if index < buttons.count - 1, !rightHi { inset.right = gap }
+                } else {
+                    // Cede the gap to an adjacent highlighted key.
+                    if leftHi { inset.left = 0 }
+                    if rightHi { inset.right = 0 }
+                }
+                button.hitInset = inset
+            }
         }
     }
 }
