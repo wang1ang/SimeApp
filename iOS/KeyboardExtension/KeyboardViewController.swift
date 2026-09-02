@@ -659,43 +659,67 @@ final class KeyboardViewController: UIInputViewController {
     // non-highlighted neighbor, and that neighbor cedes its facing side, so a
     // tap in the spacing lands on the legal key without shrinking anyone's
     // actual key face.
+    // The set of legal Shuangpin final keys drives two INDEPENDENT behaviors,
+    // each gated by its own flag below: (1) tinting those keys, and (2)
+    // enlarging their touch area. They share only the source set, so turning
+    // one off never affects the other.
+    private let tintShuangpinFinalKeys = true
+    private let enlargeShuangpinFinalKeys = true
+
     private func updateFinalKeyHighlights() {
-        let highlights = keyboardPage == .letters
+        // Source of truth: which final keys form a legal syllable right now.
+        let legalFinals = keyboardPage == .letters
             ? composition.shuangpinFinalKeyHighlights() : []
-        // Inter-key spacing on every letter row (see makeRow), i.e. the gap a
-        // highlighted key may absorb without overlapping a neighbor's face.
+        applyFinalKeyTint(legalFinals: tintShuangpinFinalKeys ? legalFinals : [])
+        applyFinalKeyHitAreas(legalFinals: enlargeShuangpinFinalKeys ? legalFinals : [])
+    }
+
+    private func char(ofKey button: KeyButton) -> Character? {
+        guard let title = button.currentTitle?.lowercased(), title.count == 1
+        else { return nil }
+        return title.first
+    }
+
+    // Behavior 1: tint the legal final keys blue, reset the rest.
+    private func applyFinalKeyTint(legalFinals: Set<Character>) {
+        for case let row as UIStackView in keyboardStack.arrangedSubviews {
+            for case let button as KeyButton in row.arrangedSubviews {
+                guard let c = char(ofKey: button),
+                      MicrosoftShuangpin.finalKeyCandidates.contains(c) else { continue }
+                button.backgroundColor = legalFinals.contains(c)
+                    ? UIColor.systemBlue.withAlphaComponent(0.28)
+                    : .tertiarySystemBackground
+            }
+        }
+    }
+
+    // Behavior 2: a legal final key claims the whole gap toward each
+    // non-legal neighbor (which cedes its facing side), without overlapping
+    // any neighbor's key face. With an empty set this is a no-op that restores
+    // the default gap-tapping insets (contract 63).
+    private func applyFinalKeyHitAreas(legalFinals: Set<Character>) {
+        // Inter-key spacing on every letter row (see makeRow).
         let gap: CGFloat = 4
         let defaultInset: CGFloat = 8
-        func char(of button: KeyButton) -> Character? {
-            guard let title = button.currentTitle?.lowercased(), title.count == 1
-            else { return nil }
-            return title.first
-        }
-        func isHighlighted(_ button: KeyButton) -> Bool {
-            guard let c = char(of: button) else { return false }
-            return highlights.contains(c)
+        func isLegal(_ button: KeyButton) -> Bool {
+            guard let c = char(ofKey: button) else { return false }
+            return legalFinals.contains(c)
         }
         for case let row as UIStackView in keyboardStack.arrangedSubviews {
             let buttons = row.arrangedSubviews.compactMap { $0 as? KeyButton }
             for (index, button) in buttons.enumerated() {
-                if let c = char(of: button),
-                   MicrosoftShuangpin.finalKeyCandidates.contains(c) {
-                    button.backgroundColor = highlights.contains(c)
-                        ? UIColor.systemBlue.withAlphaComponent(0.28)
-                        : .tertiarySystemBackground
-                }
-                let hi = isHighlighted(button)
-                let leftHi = index > 0 && isHighlighted(buttons[index - 1])
-                let rightHi = index < buttons.count - 1 && isHighlighted(buttons[index + 1])
+                let hi = isLegal(button)
+                let leftHi = index > 0 && isLegal(buttons[index - 1])
+                let rightHi = index < buttons.count - 1 && isLegal(buttons[index + 1])
                 var inset = UIEdgeInsets(top: 0, left: defaultInset,
                                          bottom: 0, right: defaultInset)
                 if hi {
-                    // Claim exactly the gap toward a non-highlighted neighbor;
-                    // keep the default reach toward edges / other legal keys.
+                    // Claim exactly the gap toward a non-legal neighbor; keep
+                    // the default reach toward edges / other legal keys.
                     if index > 0, !leftHi { inset.left = gap }
                     if index < buttons.count - 1, !rightHi { inset.right = gap }
                 } else {
-                    // Cede the gap to an adjacent highlighted key.
+                    // Cede the gap to an adjacent legal key.
                     if leftHi { inset.left = 0 }
                     if rightHi { inset.right = 0 }
                 }
