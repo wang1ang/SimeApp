@@ -127,9 +127,11 @@ final class CompositionCandidateSelectionTests: XCTestCase {
         let valid: Set<String> = ["xi", "xiao", "xian", "xie", "xin"]
         let decoder = RecordingPinyinDecoder()
         decoder.decodeResult = { pinyin in
+            // Mirror the engine: valid syllables yield a Han candidate, while
+            // invalid combos only echo the literal letters back.
             valid.contains(pinyin)
-                ? [Candidate(text: "x", consumed: pinyin.count, tokens: [], units: pinyin)]
-                : []
+                ? [Candidate(text: "小", consumed: pinyin.count, tokens: [], units: pinyin)]
+                : [Candidate(text: pinyin, consumed: pinyin.count, tokens: [], units: pinyin)]
         }
         let composition = Composition(decoder: decoder, inputScheme: .microsoftShuangpin)
 
@@ -147,7 +149,7 @@ final class CompositionCandidateSelectionTests: XCTestCase {
     func testFullPinyinNeverHighlightsFinalKeys() {
         let decoder = RecordingPinyinDecoder()
         decoder.decodeResult = { _ in
-            [Candidate(text: "x", consumed: 1, tokens: [])]
+            [Candidate(text: "小", consumed: 1, tokens: [])]
         }
         let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
         composition.append("x")

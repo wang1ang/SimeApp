@@ -124,8 +124,12 @@ final class Composition {
         if let cached = shuangpinFinalHighlightCache[key] { return cached }
         let highlights = MicrosoftShuangpin.finalKeyCandidates.filter { finalKey in
             let syllable = MicrosoftShuangpin.expand(String([key, finalKey]))
-            return decoder.syllableCandidates(syllable)
-                .contains { !$0.isEnglish && !$0.text.isEmpty }
+            // A valid syllable yields a Han candidate. Invalid combos only
+            // echo the literal letters back (text == the ASCII pinyin), so
+            // require at least one non-ASCII (Chinese) candidate here.
+            return decoder.syllableCandidates(syllable).contains { candidate in
+                candidate.text.contains { !$0.isASCII }
+            }
         }
         let set = Set(highlights)
         shuangpinFinalHighlightCache[key] = set
