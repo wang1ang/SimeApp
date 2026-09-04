@@ -112,11 +112,31 @@ final class NativePinyinDecoder: PinyinDecoder {
 
     func predict(_ context: [UInt32], limit: Int) -> [Candidate] {
         guard let handle, !context.isEmpty, limit > 0 else { return [] }
+        // The n-gram model's most frequent successor of nearly any token is
+        // punctuation (，。、！？...), so an unfiltered prediction bar is
+        // flooded with punctuation and useful word suggestions never reach
+        // the visible slots. Over-fetch, drop punctuation/symbol-only
+        // predictions, then keep the top `limit` real words.
+        let poolSize = Int32(min(max(limit * 6, limit), 60))
         var results = context.withUnsafeBufferPointer { buffer in
-            sime_next_tokens(handle, buffer.baseAddress, Int32(context.count), Int32(limit))
+            sime_next_tokens(handle, buffer.baseAddress, Int32(context.count), poolSize)
         }
         defer { sime_free_results(&results) }
         return unpack(results)
+            .filter { !Self.isPunctuationOnly($0.text) }
+            .prefix(limit)
+            .map { $0 }
+    }
+
+    /// A prediction whose every character is punctuation, a symbol, or
+    /// whitespace carries no lexical value in the association bar.
+    private static func isPunctuationOnly(_ text: String) -> Bool {
+        guard !text.isEmpty else { return true }
+        return text.unicodeScalars.allSatisfy { scalar in
+            CharacterSet.punctuationCharacters.contains(scalar)
+                || CharacterSet.symbols.contains(scalar)
+                || CharacterSet.whitespacesAndNewlines.contains(scalar)
+        }
     }
 
     func decode(_ pinyin: String, context: [UInt32], limit: Int) -> [Candidate] {

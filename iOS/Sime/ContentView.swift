@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ContentView: View {
     @State private var microsoftShuangpin = InputSettings.scheme == .microsoftShuangpin
+    @State private var prediction = InputSettings.predictionEnabled
 
     var body: some View {
         NavigationStack {
@@ -18,6 +19,13 @@ struct ContentView: View {
                         InputSettings.scheme = enabled ? .microsoftShuangpin : .fullPinyin
                     }
                 Text(microsoftShuangpin ? "当前：微软双拼" : "当前：全拼")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                Toggle("联想", isOn: $prediction)
+                    .onChange(of: prediction) { enabled in
+                        InputSettings.predictionEnabled = enabled
+                    }
+                Text(prediction ? "当前：上屏后显示联想候选" : "当前：关闭联想")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                 Divider()

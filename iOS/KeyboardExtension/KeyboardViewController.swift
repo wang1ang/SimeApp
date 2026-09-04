@@ -87,6 +87,7 @@ final class KeyboardViewController: UIInputViewController {
             usesNativeDecoder = NativePinyinDecoder.sharedIfLoaded != nil
             keyboardNeedsRebuild = true
         }
+        composition.predictionEnabled = InputSettings.predictionEnabled
         refreshReturnKeyAppearance()
         render()
         activateNativeDecoder()

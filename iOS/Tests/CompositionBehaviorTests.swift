@@ -507,6 +507,42 @@ final class CompositionContextTests: XCTestCase {
         XCTAssertEqual(decoder.predictionCalls.map(\.context), [[11], [11, 22]])
         XCTAssertEqual(composition.displayCandidates.map(\.text), ["吗"])
     }
+
+    func testPredictionCanBeDisabled() {
+        let decoder = RecordingPinyinDecoder()
+        decoder.decodeResult = { _ in
+            [Candidate(text: "你", consumed: 2, tokens: [11], units: "ni")]
+        }
+        decoder.predictionResult = { _ in
+            [Candidate(text: "好", consumed: 0, tokens: [22])]
+        }
+        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
+        composition.predictionEnabled = false
+
+        "ni".forEach { composition.append(String($0)) }
+        XCTAssertEqual(composition.select(0), "你")
+        // No prediction query is issued and the bar stays empty when off.
+        XCTAssertTrue(decoder.predictionCalls.isEmpty)
+        XCTAssertTrue(composition.displayCandidates.isEmpty)
+    }
+
+    func testDisablingPredictionClearsExistingCandidates() {
+        let decoder = RecordingPinyinDecoder()
+        decoder.decodeResult = { _ in
+            [Candidate(text: "你", consumed: 2, tokens: [11], units: "ni")]
+        }
+        decoder.predictionResult = { _ in
+            [Candidate(text: "好", consumed: 0, tokens: [22])]
+        }
+        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
+
+        "ni".forEach { composition.append(String($0)) }
+        XCTAssertEqual(composition.select(0), "你")
+        XCTAssertEqual(composition.displayCandidates.map(\.text), ["好"])
+
+        composition.predictionEnabled = false
+        XCTAssertTrue(composition.displayCandidates.isEmpty)
+    }
 }
 
 final class CompositionEditingTests: XCTestCase {

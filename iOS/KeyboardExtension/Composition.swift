@@ -50,6 +50,14 @@ final class Composition {
         self.inputScheme = inputScheme
     }
 
+    /// When false, the empty-preedit association bar (联想) is suppressed.
+    /// Refreshed by the keyboard from `InputSettings.predictionEnabled`.
+    var predictionEnabled: Bool = InputSettings.predictionEnabled {
+        didSet {
+            if !predictionEnabled { predictionCandidates = [] }
+        }
+    }
+
     private var prefixText: String { prefixSegments.map(\.text).joined() }
     private var consumedKeyCount: Int { prefixSegments.last?.sourceKeyRange.upperBound ?? 0 }
     private var consumedSyllableCount: Int { prefixSegments.last?.syllableRange.upperBound ?? 0 }
@@ -499,7 +507,7 @@ final class Composition {
     }
 
     private func publishPredictions(for tokens: [UInt32]) {
-        guard !tokens.isEmpty else {
+        guard predictionEnabled, !tokens.isEmpty else {
             predictionCandidates = []
             return
         }

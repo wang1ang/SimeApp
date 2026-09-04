@@ -89,6 +89,9 @@
 48. 句末标点清空联想 context 仍待实现。
 49. context 上限最终应读取 `sime_context_size`，不能永久硬编码。
 50. 宿主正文对候选排序的实际影响需用真实模型和真机文本场景验证。
+50a. 联想（`NativePinyinDecoder.predict`）必须过滤纯标点/符号 token：n-gram 里几乎任何字最高频后继都是 `，。、！？`，不过滤会占满联想栏名额、把有用词挤掉，表现为“联想全错”。实现方式为多取候选（约 limit×6，上限 60）后剔除纯标点再取前 N。由 `Tests/PredictionTests.swift` 兑现。
+50c. 联想可由 App 内“联想”开关关闭：`InputSettings.predictionEnabled`（App Group `group.com.ismantic.sime`，默认开），键盘在 `viewWillAppear` 刷新到 `Composition.predictionEnabled`。关闭时 `publishPredictions` 不查询、不显示，且立即清空已有联想候选。由 `Tests/CompositionBehaviorTests` 兑现。
+50b. 极稀有字（如“狐”）的稀疏 bigram 噪声（“狐→阿尔法”）属引擎/模型层面的已知残留，非 iOS 接线问题；如需治本应在 Sime 引擎侧改进（unigram 插值 / 计数阈值 / GRU 参与联想重排），已验证简单 unigram 插值无改善。
 
 ## GRU / ncnn
 

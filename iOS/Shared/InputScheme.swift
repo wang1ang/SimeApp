@@ -103,6 +103,13 @@ enum InputSettings {
         set { defaults.set(newValue.rawValue, forKey: "inputScheme") }
     }
 
+    /// Whether the empty-preedit association bar (联想 / `sime_next_tokens`)
+    /// is shown after committing. Defaults to on when unset.
+    static var predictionEnabled: Bool {
+        get { defaults.object(forKey: "predictionEnabled") as? Bool ?? true }
+        set { defaults.set(newValue, forKey: "predictionEnabled") }
+    }
+
     static var pendingRaw: String {
         get { defaults.string(forKey: "pendingCompositionRaw") ?? "" }
         set { newValue.isEmpty ? defaults.removeObject(forKey: "pendingCompositionRaw") : defaults.set(newValue, forKey: "pendingCompositionRaw") }
