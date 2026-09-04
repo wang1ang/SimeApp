@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<style>
+  :root {
+    --w: 1284px;
+    --h: 2778px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: var(--w); height: var(--h); }
+  body {
+    font-family: -apple-system, "PingFang SC", "Helvetica Neue", "Heiti SC", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+  }
+  .frame {
+    width: var(--w);
+    height: var(--h);
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    overflow: hidden;
+  }
+
+  /* ---- Light theme ---- */
+  .light { background: #F1F4F9; color: #10131A; }
+  .light .sub { color: #5B6472; }
+  .light .accent { color: #2F6BE0; }
+  .light .blob { background: radial-gradient(circle, rgba(88,142,240,0.28), rgba(88,142,240,0) 70%); }
+  .light .watermark { color: #9AA3B2; }
+  .light .device { box-shadow: 0 40px 120px rgba(30,50,90,0.18); }
+
+  /* ---- Dark theme ---- */
+  .dark { background: #0B0D12; color: #F5F7FA; }
+  .dark .sub { color: #9BA6B8; }
+  .dark .accent { color: #6FA0FF; }
+  .dark .blob { background: radial-gradient(circle, rgba(70,120,230,0.35), rgba(70,120,230,0) 70%); }
+  .dark .watermark { color: #4A5568; }
+  .dark .device { box-shadow: 0 40px 140px rgba(0,0,0,0.6); }
+
+  .blob {
+    position: absolute;
+    width: 900px; height: 900px;
+    border-radius: 50%;
+    top: -220px; right: -260px;
+    z-index: 0;
+  }
+
+  .copy {
+    z-index: 2;
+    text-align: center;
+    padding: 200px 90px 0;
+  }
+  .title {
+    font-size: 116px;
+    font-weight: 800;
+    letter-spacing: -1px;
+    line-height: 1.12;
+  }
+  .sub {
+    font-size: 46px;
+    font-weight: 500;
+    margin-top: 40px;
+    line-height: 1.4;
+  }
+
+  /* device that holds the cropped keyboard, floated like a card */
+  .device-wrap {
+    z-index: 1;
+    position: absolute;
+    bottom: 220px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 1040px;
+  }
+  .device {
+    width: 100%;
+    border-radius: 58px;
+    border: 14px solid var(--bezel);
+    overflow: hidden;
+    background: var(--bezel);
+  }
+  .light .device { --bezel: #FFFFFF; }
+  .dark  .device { --bezel: #1C1F27; }
+  .device .screen-pad {
+    /* a text field showing a sent bubble, so it reads as real typing */
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    justify-content: center;
+    padding: 60px 46px 70px;
+    gap: 26px;
+    min-height: 300px;
+  }
+  .light .screen-pad { background: #FFFFFF; }
+  .dark  .screen-pad { background: #000000; }
+  .bubble {
+    max-width: 78%;
+    padding: 28px 40px;
+    border-radius: 40px;
+    font-size: 40px;
+    font-weight: 500;
+    line-height: 1.35;
+  }
+  .light .bubble { background: #2F6BE0; color: #fff; }
+  .dark  .bubble { background: #2A6DF0; color: #fff; }
+  .bubble.recv { align-self: flex-start; }
+  .light .bubble.recv { background: #EBEEF3; color: #10131A; }
+  .dark  .bubble.recv { background: #23262F; color: #EAEEF5; }
+  .device img { width: 100%; display: block; }
+
+  .watermark {
+    position: absolute;
+    bottom: 44px; left: 0; right: 0;
+    text-align: center;
+    font-size: 30px;
+    font-weight: 500;
+    z-index: 3;
+    letter-spacing: 1px;
+  }
+</style>
+</head>
+<body>
+  <div class="frame {{THEME}}">
+    <div class="blob"></div>
+    <div class="copy">
+      <div class="title">{{TITLE}}</div>
+      <div class="sub">{{SUB}}</div>
+    </div>
+    <div class="device-wrap">
+      <div class="device">
+        <div class="screen-pad">{{PAD}}</div>
+        <!-- pad receives raw HTML bubbles -->
+        <img src="{{IMG}}" alt="">
+      </div>
+    </div>
+    <div class="watermark">是语输入法 · 完全离线 · 不联网</div>
+  </div>
+</body>
+</html>
