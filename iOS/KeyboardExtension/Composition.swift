@@ -275,6 +275,8 @@ final class Composition {
         let tokens = decoder.tokenize(text)
         guard hostContextTokens != tokens else { return }
         hostContextTokens = tokens
+        // Host is the authoritative baseline: replace the ledger, don't append.
+        contextTokens = tokens
         if isComposing { refresh() }
     }
 
@@ -534,9 +536,9 @@ final class Composition {
             predictionCandidates = []
             return
         }
-        var base = hostContextTokens ?? contextTokens
-        // A completion subsumes the trailing context token (e.g. 狐 → 狐狸),
-        // so drop it before extending with the completed word's tokens.
+        // Extend the running ledger so consecutive association taps accumulate.
+        var base = contextTokens
+        // A completion subsumes the trailing context token (狐 → 狐狸); drop it.
         if replacingLast, !base.isEmpty { base.removeLast() }
         contextTokens = Array((base + tokens).suffix(32))
         predictionCandidates = decoder.associate(contextTokens, limit: 9)
@@ -569,7 +571,11 @@ final class Composition {
         var pinyinUnits = ""
         if !pinyinPart.isEmpty {
             let lower = pinyinPart.lowercased()
-            let context = hostContextTokens ?? contextTokens
+            // Include fixed prefix segments so the trailing pinyin re-decodes
+            // with the locked-in words (学校 + fangjia → 放假, not 房价).
+            let context = Array(
+                ((hostContextTokens ?? contextTokens) + committedTokens)
+                    .suffix(32))
             var chinese: [Candidate] = []
             if let shuangpin {
                 let keys = Array(lower)
