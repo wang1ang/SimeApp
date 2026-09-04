@@ -686,7 +686,7 @@ final class KeyboardViewController: UIInputViewController {
     // each gated by its own flag below: (1) tinting those keys, and (2)
     // enlarging their touch area. They share only the source set, so turning
     // one off never affects the other.
-    private let tintShuangpinFinalKeys = true
+    private let tintShuangpinFinalKeys = false  // temporarily disabled (see REGRESSION 64b)
     private let enlargeShuangpinFinalKeys = true
 
     private func updateFinalKeyHighlights() {
