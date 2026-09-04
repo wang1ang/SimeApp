@@ -104,7 +104,15 @@ final class KeyboardViewController: UIInputViewController {
     override func textDidChange(_ textInput: UITextInput?) {
         super.textDidChange(textInput)
         guard !restoringMarkedText else { return }
-        syncCompositionCursor()
+        // .missing means the marked pinyin isn't in the focused field (user
+        // switched fields/apps): drop it instead of leaking it into the new field.
+        if syncCompositionCursor() == .missing {
+            composition.cancel()
+            updateMarkedText()
+            render()
+            refreshReturnKeyAppearance()
+            return
+        }
         if composition.isComposing {
             refreshHostContext()
         }
@@ -146,15 +154,26 @@ final class KeyboardViewController: UIInputViewController {
         keyboardNeedsRebuild = true
     }
 
-    private func syncCompositionCursor() {
-        guard composition.isComposing else { return }
+    /// Result of locating the marked pinyin around the host's insertion point.
+    private enum CursorSyncResult {
+        /// Found; the composition cursor was moved to it.
+        case matched
+        /// Context available but the pinyin isn't in it — focus moved elsewhere.
+        case missing
+        /// Host exposed no context, so nothing can be decided.
+        case unavailable
+    }
+
+    @discardableResult
+    private func syncCompositionCursor() -> CursorSyncResult {
+        guard composition.isComposing else { return .unavailable }
         // Hosts are allowed to return nil for the context after the insertion
         // point (notably at the end of a note).  The previous all-or-nothing
         // check then missed a tap in marked pinyin and the subsequent
         // setMarkedText replaced it at the wrong position.
         let before = textDocumentProxy.documentContextBeforeInput
         let after = textDocumentProxy.documentContextAfterInput
-        guard before != nil || after != nil else { return }
+        guard before != nil || after != nil else { return .unavailable }
 
         let raw = composition.raw
         for offset in 0...raw.count {
@@ -169,9 +188,12 @@ final class KeyboardViewController: UIInputViewController {
                 || (before != nil && after == nil && prefixMatches)
                 || (before == nil && after != nil && suffixMatches) {
                 composition.moveCursor(to: offset)
-                return
+                return .matched
             }
         }
+        // Context was available but the pinyin isn't adjacent to the insertion
+        // point — caller cancels rather than re-inject it into a foreign field.
+        return .missing
     }
 
     private func setupView() {

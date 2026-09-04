@@ -83,6 +83,10 @@ tests; add them to the document only while they still require manual coverage.
 Do not let code, tests, and the document silently diverge.
 
 ## Commit & Pull Request Guidelines
+每次 commit 之前，把改动涉及的注释精简一遍：只保留解释“为什么”的必要信息，
+删掉写成小作文的冗长叙述、显而易见的复述和过时说明。注释是给下一个读代码的
+人看的提示，不是变更日志。
+
 Use short, imperative, platform-scoped subjects such as `Android: fix T9
 selection`. PRs should describe the affected frontend, required Sime engine
 revision, verification commands, and any model/resource assumptions. Include

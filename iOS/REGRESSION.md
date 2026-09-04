@@ -59,6 +59,7 @@
 31. 中间插入、前后删除后，marked 光标、原始按键和第一行候选必须一致。
 32. 锁屏、切 App 或扩展重建后应恢复未完成组合。
 33. 宿主临时 unmark 组合时应恢复 marked text，并避免 `textDidChange` 重入循环。
+33a. `syncCompositionCursor()` 返回三态（`.matched` / `.missing` / `.unavailable`）：宿主暴露了光标前/后 context 但其中**完全找不到**当前 marked 拼音时（`.missing`，典型为用户切到了另一个输入框/App），必须**取消本地 composition**，绝不能把旧拼音无条件 `setMarkedText` 恢复到新输入框——否则既是定位错误，也造成跨输入框内容泄漏。仅在 `.matched`（找到并定位光标）或 `.unavailable`（宿主未暴露任何 context，无法判断）时才保留组合并按契约 33 恢复 marked text。此为真机契约：须在备忘录与第三方输入框之间来回切换验证旧拼音不串框。
 34. 上述行为必须在备忘录及至少一个第三方文本框中真机验证。
 
 ## 空格、删除与回车 UI

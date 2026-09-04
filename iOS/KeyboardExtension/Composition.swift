@@ -271,6 +271,13 @@ final class Composition {
         cursor = min(max(0, offset), raw.count)
     }
 
+    /// Discard the in-progress composition without committing to the host.
+    /// Used when the host context shows the marked pinyin no longer belongs to
+    /// the focused field, so it isn't re-injected into the wrong field.
+    func cancel() {
+        clearComposition()
+    }
+
     func updateHostContext(from text: String) {
         let tokens = decoder.tokenize(text)
         guard hostContextTokens != tokens else { return }
