@@ -68,10 +68,6 @@ final class KeyboardViewController: UIInputViewController {
         usesNativeDecoder = NativePinyinDecoder.sharedIfLoaded != nil
         setupView()
         displayedReturnKeyType = textDocumentProxy.returnKeyType
-        composition.restore(
-            raw: InputSettings.pendingRaw,
-            committed: InputSettings.pendingCommitted
-        )
         render()
         activateNativeDecoder()
     }
@@ -524,8 +520,6 @@ final class KeyboardViewController: UIInputViewController {
 
     private func updateMarkedText() {
         guard composition.isComposing else {
-            InputSettings.pendingRaw = ""
-            InputSettings.pendingCommitted = ""
             // Replace any lingering marked preedit with empty before unmarking:
             // unmarkText() alone finalizes the marked text into the document,
             // so deleting the last composing key would leave that key behind.
@@ -533,8 +527,6 @@ final class KeyboardViewController: UIInputViewController {
             textDocumentProxy.unmarkText()
             return
         }
-        InputSettings.pendingRaw = composition.raw
-        InputSettings.pendingCommitted = composition.committed
         let text = composition.preedit
         textDocumentProxy.setMarkedText(text,
             selectedRange: NSRange(location: composition.selectionLocation, length: 0))
