@@ -40,6 +40,12 @@ protocol PinyinDecoder {
     func tokenize(_ text: String) -> [UInt32]
     func syllableCandidates(_ pinyin: String) -> [Candidate]
     func predict(_ context: [UInt32], limit: Int) -> [Candidate]
+    /// Association (联想): next-word prediction merged with completion of
+    /// the trailing context token. Each candidate's `consumed` is the number
+    /// of leading characters of `text` already in the document (0 for
+    /// next-word), so callers insert `text` with the first `consumed`
+    /// characters dropped.
+    func associate(_ context: [UInt32], limit: Int) -> [Candidate]
 }
 
 extension PinyinDecoder {
@@ -77,6 +83,12 @@ extension PinyinDecoder {
     }
 
     func predict(_ context: [UInt32], limit: Int) -> [Candidate] { [] }
+
+    // Default: fall back to plain next-word prediction so decoders that do
+    // not implement completion still work.
+    func associate(_ context: [UInt32], limit: Int) -> [Candidate] {
+        predict(context, limit: limit)
+    }
 }
 
 /// A small offline fallback so a freshly generated extension is usable before

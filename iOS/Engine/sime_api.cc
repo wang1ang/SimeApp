@@ -122,6 +122,15 @@ SimeResults sime_next_tokens(const SimeHandle *h, const uint32_t *tokens,
   return to_c(h->sime->NextTokens(ctx, static_cast<size_t>(num)));
 }
 
+SimeResults sime_associate(const SimeHandle *h, const uint32_t *tokens,
+                           int count, int num) {
+  if (!h || !h->sime || !h->sime->Ready() || !tokens || count <= 0) {
+    SimeResults z{}; z.items=nullptr; z.count=0; return z;
+  }
+  std::vector<sime::TokenID> ctx(tokens, tokens + count);
+  return to_c(h->sime->Associate(ctx, static_cast<size_t>(num)));
+}
+
 void sime_free_results(SimeResults *r) {
   if (!r || !r->items) return;
   for (int i = 0; i < r->count; ++i) {

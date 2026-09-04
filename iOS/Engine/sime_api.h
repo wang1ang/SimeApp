@@ -66,6 +66,13 @@ SimeResults sime_decode_correction(const SimeHandle *h, const char *input,
 SimeResults sime_next_tokens(const SimeHandle *h, const uint32_t *tokens,
                              int count, int num);
 
+// Association (联想): next-word prediction merged with completion of the
+// trailing context token. Each result's `consumed` is the number of leading
+// characters of `text` already present in the document (0 for next-word),
+// so the caller inserts `text` with its first `consumed` characters dropped.
+SimeResults sime_associate(const SimeHandle *h, const uint32_t *tokens,
+                           int count, int num);
+
 // Free results returned by any of the above.
 void sime_free_results(SimeResults *r);
 

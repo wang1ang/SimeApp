@@ -345,8 +345,13 @@ final class Composition {
     func selectDisplayed(_ index: Int) -> String? {
         if !isComposing, predictionCandidates.indices.contains(index) {
             let prediction = predictionCandidates[index]
-            publishPredictions(for: prediction.tokens)
-            return prediction.text
+            // Association candidates carry the full word; `consumed` leading
+            // characters are already in the document (completion of the
+            // trailing token), so only the remainder is inserted.
+            let drop = min(prediction.consumed, prediction.text.count)
+            let insert = String(prediction.text.dropFirst(drop))
+            publishPredictions(for: prediction.tokens, replacingLast: drop > 0)
+            return insert
         }
         if let active = activeCharacterIndex,
            replacementCandidates.indices.contains(index),
@@ -506,13 +511,18 @@ final class Composition {
         return result
     }
 
-    private func publishPredictions(for tokens: [UInt32]) {
+    private func publishPredictions(for tokens: [UInt32],
+                                    replacingLast: Bool = false) {
         guard predictionEnabled, !tokens.isEmpty else {
             predictionCandidates = []
             return
         }
-        contextTokens = Array(((hostContextTokens ?? contextTokens) + tokens).suffix(32))
-        predictionCandidates = decoder.predict(contextTokens, limit: 9)
+        var base = hostContextTokens ?? contextTokens
+        // A completion subsumes the trailing context token (e.g. 狐 → 狐狸),
+        // so drop it before extending with the completed word's tokens.
+        if replacingLast, !base.isEmpty { base.removeLast() }
+        contextTokens = Array((base + tokens).suffix(32))
+        predictionCandidates = decoder.associate(contextTokens, limit: 9)
     }
 
     private func clearComposition() {
