@@ -1,8 +1,13 @@
 import SwiftUI
 
 struct ContentView: View {
-    @State private var microsoftShuangpin = InputSettings.scheme == .microsoftShuangpin
+    @State private var scheme = InputSettings.scheme
     @State private var prediction = InputSettings.predictionEnabled
+
+    // The schemes offered in the picker, in display order.
+    private let schemes: [InputScheme] = [
+        .fullPinyin, .microsoftShuangpin, .xiaoheShuangpin, .ziranmaShuangpin, .sogouShuangpin
+    ]
 
     var body: some View {
         NavigationStack {
@@ -14,11 +19,15 @@ struct ContentView: View {
                     .font(.largeTitle.bold())
                 Text("离线拼音输入法。键盘不会请求完全访问权限，也不会上传输入内容。")
                     .foregroundStyle(.secondary)
-                Toggle("微软双拼", isOn: $microsoftShuangpin)
-                    .onChange(of: microsoftShuangpin) { enabled in
-                        InputSettings.scheme = enabled ? .microsoftShuangpin : .fullPinyin
+                Picker("输入方案", selection: $scheme) {
+                    ForEach(schemes, id: \.self) { option in
+                        Text(option.displayName).tag(option)
                     }
-                Text(microsoftShuangpin ? "当前：微软双拼" : "当前：全拼")
+                }
+                .onChange(of: scheme) { newValue in
+                    InputSettings.scheme = newValue
+                }
+                Text("当前：\(scheme.displayName)")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                 Toggle("联想", isOn: $prediction)

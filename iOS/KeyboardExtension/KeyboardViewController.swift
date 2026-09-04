@@ -15,7 +15,7 @@ final class KeyboardViewController: UIInputViewController {
     // The letter-page toggle key reflects the active scheme so the user knows
     // which layout tapping it returns to.
     private var schemeLabel: String {
-        keyboardScheme == .microsoftShuangpin ? "双拼" : "拼音"
+        keyboardScheme.isShuangpin ? "双拼" : "拼音"
     }
     // Shift mirrors the system keyboard's default: a single tap uppercases
     // the next letter only (one-shot), then reverts. There is no caps lock.
@@ -373,7 +373,7 @@ final class KeyboardViewController: UIInputViewController {
             shiftState = .off
             keyboardNeedsRebuild = true
             render()
-        case ";" where keyboardScheme == .microsoftShuangpin:
+        case ";" where keyboardScheme.usesSemicolonKey:
             composition.append(title)
             updateMarkedText()
             render()
@@ -570,7 +570,7 @@ final class KeyboardViewController: UIInputViewController {
             )
         case .letters:
             let letters = shifted ? "QWERTYUIOP" : "qwertyuiop"
-            let isDouble = keyboardScheme == .microsoftShuangpin
+            let isDouble = keyboardScheme.usesSemicolonKey
             let home = isDouble
                 ? (shifted ? "ASDFGHJKL;" : "asdfghjkl;")
                 : (shifted ? "ASDFGHJKL" : "asdfghjkl")

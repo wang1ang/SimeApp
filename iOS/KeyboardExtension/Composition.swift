@@ -17,6 +17,10 @@ final class Composition {
 
     private let decoder: PinyinDecoder
     private let inputScheme: InputScheme
+    // The active Shuangpin layout, or nil for full pinyin. All two-key
+    // Shuangpin behavior is gated on this being non-nil rather than on a
+    // specific scheme, so every layout shares one code path.
+    private let shuangpin: ShuangpinLayout?
     private(set) var raw = ""
     private(set) var committed = ""
     private(set) var cursor = 0
@@ -48,6 +52,7 @@ final class Composition {
          inputScheme: InputScheme = InputSettings.scheme) {
         self.decoder = decoder
         self.inputScheme = inputScheme
+        self.shuangpin = inputScheme.shuangpin
     }
 
     /// When false, the empty-preedit association bar (联想) is suppressed.
@@ -136,15 +141,15 @@ final class Composition {
     /// each expanded two-key syllable, so the highlighted set always tracks
     /// what the engine can actually produce.
     func shuangpinFinalKeyHighlights() -> Set<Character> {
-        guard inputScheme == .microsoftShuangpin else { return [] }
+        guard let shuangpin else { return [] }
         // Syllables are exactly two keys, so a pending initial exists only when
         // an odd number of keys precede the cursor; it is the key before it.
         guard cursor >= 1, cursor <= raw.count, cursor % 2 == 1 else { return [] }
         let keyIndex = raw.index(raw.startIndex, offsetBy: cursor - 1)
         guard let key = raw[keyIndex].lowercased().first else { return [] }
         if let cached = shuangpinFinalHighlightCache[key] { return cached }
-        let highlights = MicrosoftShuangpin.finalKeyCandidates.filter { finalKey in
-            let syllable = MicrosoftShuangpin.expand(String([key, finalKey]))
+        let highlights = shuangpin.finalKeyCandidates.filter { finalKey in
+            let syllable = shuangpin.expand(String([key, finalKey]))
             // Highlight only keys whose expansion is a legal pinyin syllable.
             // The decoder confirms legality by returning a Han candidate whose
             // units are exactly this syllable. Illegal strings (e.g. wuan/wue/
@@ -164,12 +169,11 @@ final class Composition {
         var remaining = Substring(raw)
         var groups: [String] = []
         for syllable in syllables {
-            switch inputScheme {
-            case .microsoftShuangpin:
+            if shuangpin != nil {
                 guard remaining.count >= 2 else { return [] }
                 groups.append(String(remaining.prefix(2)))
                 remaining.removeFirst(2)
-            case .fullPinyin:
+            } else {
                 // Apostrophes are input keys too; associate one with the
                 // syllable that follows it so the displayed label is literal.
                 var group = ""
@@ -346,9 +350,9 @@ final class Composition {
     }
 
     private func rawConsumption(of candidate: Candidate) -> Int {
-        guard inputScheme == .microsoftShuangpin else { return candidate.consumed }
+        guard shuangpin != nil else { return candidate.consumed }
         // Sime returns pinyin units (for example xiao'guo), while each
-        // Microsoft Shuangpin syllable was entered with two keyboard keys.
+        // Shuangpin syllable was entered with two keyboard keys.
         let syllableCount = candidate.units.split(separator: "'")
             .filter { !$0.isEmpty }
             .count
@@ -443,7 +447,7 @@ final class Composition {
             fixedPrefix: fixedPrefix,
             prefixSyllables: relativeIndex,
             limit: 60,
-            expansion: inputScheme != .microsoftShuangpin
+            expansion: shuangpin == nil
         ).filter { candidate in
             let span = max(1, candidate.units.split(separator: "'")
                 .filter { !$0.isEmpty }.count)
@@ -567,7 +571,7 @@ final class Composition {
             let lower = pinyinPart.lowercased()
             let context = hostContextTokens ?? contextTokens
             var chinese: [Candidate] = []
-            if inputScheme == .microsoftShuangpin {
+            if let shuangpin {
                 let keys = Array(lower)
                 let hasLoneInitial = keys.count % 2 == 1
                 // Delimit every syllable with an apostrophe. Each Shuangpin
@@ -576,10 +580,10 @@ final class Composition {
                 // so rong'yi'pie'jiao stays 撇, not 被阿). A trailing lone key is
                 // a single initial (v/i/u -> zh/ch/sh) that still expands.
                 var syllables = stride(from: 0, to: keys.count - 1, by: 2).map {
-                    MicrosoftShuangpin.expand(String(keys[$0..<$0 + 2]))
+                    shuangpin.expand(String(keys[$0..<$0 + 2]))
                 }
                 if hasLoneInitial {
-                    syllables.append(MicrosoftShuangpin.initial(for: keys.last!))
+                    syllables.append(shuangpin.initial(for: keys.last!))
                 }
                 let input = syllables.joined(separator: "'")
                 // Expand only to complete a trailing lone initial; complete
@@ -643,7 +647,7 @@ final class Composition {
                     if remaining.isEmpty { break }
                     var group = ""
                     if remaining.first == "'" { group.append("'"); remaining.removeFirst() }
-                    let want = inputScheme == .microsoftShuangpin ? 2 : syllable.count
+                    let want = shuangpin != nil ? 2 : syllable.count
                     let take = min(want, remaining.count)
                     group += String(remaining.prefix(take))
                     remaining.removeFirst(take)
@@ -664,8 +668,9 @@ final class Composition {
         let keys = Array(raw)
         var syllables: [String] = []
         var index = 0
+        guard let shuangpin else { return syllables }
         while index + 1 < keys.count {
-            syllables.append(MicrosoftShuangpin.expand(String(keys[index...index + 1])))
+            syllables.append(shuangpin.expand(String(keys[index...index + 1])))
             index += 2
         }
         return syllables
@@ -676,7 +681,7 @@ final class Composition {
     /// locked Shuangpin final. Syllables past the completed region — the
     /// trailing incomplete key — are unconstrained.
     private func unitsMatchLockedFinals(_ units: String, fromSyllable offset: Int) -> Bool {
-        guard inputScheme == .microsoftShuangpin else { return true }
+        guard shuangpin != nil else { return true }
         let syllables = units.split(separator: "'").map(String.init)
         let locked = lockedShuangpinSyllables()
         for index in 0..<syllables.count {

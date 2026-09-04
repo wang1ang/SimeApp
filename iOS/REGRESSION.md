@@ -15,7 +15,7 @@
 1. `iOS/project.yml` 是唯一 Xcode 工程源，不提交生成的 `iOS/Sime.xcodeproj/`。
 2. 键盘完全离线运行，不申请“完全访问”，不得上传或记录用户输入正文。
 3. 系统只安装一个“是语键盘”扩展；宿主 App 名称为“是语输入法”。
-4. 全拼/微软双拼设置通过 App Group 共享；切换后不得混用旧 Composition 状态。
+4. 输入方案（全拼 / 微软双拼 / 小鹤双拼 / 自然码 / 搜狗双拼）通过 App Group 共享；切换后不得混用旧 Composition 状态。方案由 `Shared/InputScheme.swift` 定义：双拼布局是数据驱动的 `ShuangpinLayout`（每方案给出键→韵母表与零声母约定，`ia/ua`、`iang/uang`、`ong/iong`、`uo/o`、`ui/ü`、`ue/üe`、`uai/ing` 等歧义按共享汉语音系规则解析）。App 内用 Picker 切换（不是开关），系统只保留单一扩展、菜单名不拆分。
 5. 模型与 ncnn runtime 必须位于 Keyboard Extension 自身资源/链接范围内。
 6. ncnn XCFramework 是本地生成物，不提交；新环境用 `iOS/scripts/build-ncnn-xcframework.sh` 构建。
 
@@ -75,7 +75,7 @@
 ## 数字页与标点
 
 41. 数字页输入数字后保持数字页；输入标点后回到字母页。
-41b. 键盘为三页结构：字母页按 `123` 进数字页；数字页按 `#+=` 进符号页；符号页按 `123` 回数字页，按左下角切换键回字母页。符号页插入任意符号后保持在符号页（与系统键盘 #+= 一致）。左下角切换键在非字母页显示当前方案（全拼为“拼音”、微软双拼为“双拼”）。
+41b. 键盘为三页结构：字母页按 `123` 进数字页；数字页按 `#+=` 进符号页；符号页按 `123` 回数字页，按左下角切换键回字母页。符号页插入任意符号后保持在符号页（与系统键盘 #+= 一致）。左下角切换键在非字母页显示当前方案（全拼为“拼音”，任一双拼方案为“双拼”）。
 41a. 点 `123` 切到数字/符号页不得立即上屏当前组合；组合保持 marked，直到真正插入数字或符号才上屏。若未插入任何字符就点“拼音”切回，组合应原样恢复。
 42. 中文/半角标点策略需保持一致，成对引号状态不得因切页丢失。
 43. 标点提交后退格撤销仍属于待实现行为。
@@ -117,13 +117,19 @@
 62. 已加载的原生引擎须以 `NativePinyinDecoder.shared` 在扩展进程内跨控制器实例复用，避免每次切换重新加载。换入不得丢失/错位当前 marked 组合（沿用 `restore(raw:committed:)`）。
 63. 缝隙点击需两个条件同时满足：根视图 `view` 近乎不透明（alpha 0.9，否则缝隙触摸穿透到宿主）；键用 `KeyButton()` 把 `point(inside:)` 向缝隙扩 ~8pt（否则缝隙下无键可接）。必须 `KeyButton()` 直接实例化，`UIButton(type:.system)` 不生成子类。
 
-## 微软双拼解码不变量
+## 双拼解码不变量
 
-64. 微软双拼：**韵母不走扩展，单个声母才走扩展**。打全的音节韵母固定（`he` 只能是 喝/和，不能变 黑/很），只有末尾孤立声母才补全（`nghem` → 能喝吗，非 能很忙/能黑马）。用例与断言见 `iOS/Tests/ShuangpinEndToEndTests.swift`（真机引擎端到端）。
+64. 双拼（微软/小鹤/自然码/搜狗）：**韵母不走扩展，单个声母才走扩展**。打全的音节韵母固定（`he` 只能是 喝/和，不能变 黑/很），只有末尾孤立声母才补全（微软 `nghem` → 能喝吗，非 能很忙/能黑马）。逻辑对所有双拼方案共用（`Composition` 以 `shuangpin != nil` 判定，而非某个具体方案）。用例与断言见 `iOS/Tests/ShuangpinEndToEndTests.swift`（真机引擎端到端，当前以微软布局覆盖）。
 
-64b. 微软双拼下打完声母（当前音节只剩一个待配对键）时，字母页**高亮能与该声母组成合法音节的韵母键**（蓝色底）；音节打满或全拼不高亮。合法性以引擎为准：两键经 `MicrosoftShuangpin.expand` 展开后，须能作为单个音节返回汉字候选（`units` 恰好等于该拼音），否则不亮（`wuan`/`wue`/`wuai` 只回显字面或拆成 `wu'ai`）；不得用手写韵母白名单。高亮键还**吸附与相邻非高亮键之间的缝隙**（行内 4pt），双方都不侵入对方键面，也不破坏契约 63。**“上色”与“扩大命中区”相互独立**，由 `tintShuangpinFinalKeys` / `enlargeShuangpinFinalKeys` 分别控制。合法集合逻辑见 `iOS/Tests`（`testShuangpin*FinalKeys*`）；此处只留真机回归：不闪烁、不阻碍连打、缝隙偏向合法键，引擎换入/切方案后一致。
+64b. 双拼下打完声母（当前音节只剩一个待配对键）时，字母页**高亮能与该声母组成合法音节的韵母键**（蓝色底）；音节打满或全拼不高亮。合法性以引擎为准：两键经当前方案的 `ShuangpinLayout.expand` 展开后，须能作为单个音节返回汉字候选（`units` 恰好等于该拼音），否则不亮（如 `wuan`/`wue`/`wuai` 只回显字面或拆成 `wu'ai`）；不得用手写韵母白名单。高亮键还**吸附与相邻非高亮键之间的缝隙**（行内 4pt），双方都不侵入对方键面，也不破坏契约 63。**“上色”与“扩大命中区”相互独立**，由 `tintShuangpinFinalKeys` / `enlargeShuangpinFinalKeys` 分别控制。合法集合逻辑见 `iOS/Tests`（`testShuangpin*FinalKeys*`）；此处只留真机回归：不闪烁、不阻碍连打、缝隙偏向合法键，引擎换入/切方案后一致。
 
-65. 微软双拼每个音节以撇号分隔发给引擎（`neng'he'ma`），撇号只表示**分词边界**：整句解码（`DecodeSentence`）必须**跨撇号保留 n-gram 上下文**（`Process(keep_sep_context=true)`），使同一串拼音带不带撇号打分一致（`neng'he'ma`=`nenghema`→能喝吗，`li'zhou`=`lizhou`→利州）。改选（`DecodeCorrection`）**保留**撇号处的上下文重置（`keep_sep_context=false`）——两条路径不可统一：全局去掉重置会破坏 `xing'jia'bi` 改选，去掉保留会让双拼整句排序退化。断言见 `iOS/Tests/ShuangpinEndToEndTests.swift`（双拼与全拼首选一致）与 `require/Sime/tests/correction_test.cc`（改选不变）。
+64c. **只有微软/搜狗布局使用 `;` 韵母键**（`InputScheme.usesSemicolonKey`）：其字母页 home 行含 `;` 且不缩进；小鹤/自然码/全拼的 home 行为 `asdfghjkl`（缩进），`;` 只作标点。切方案后须 `keyboardNeedsRebuild` 重建键盘。
+
+64d. 各双拼方案的键→拼音映射由 `ShuangpinLayout.microsoft/xiaohe/ziranma` 表驱动，代表用例断言见 `iOS/Tests/MicrosoftShuangpinTests.swift`、`XiaoheShuangpinTests.swift`、`ZiranmaShuangpinTests.swift`。**自然码**当前实现按“与微软同键位、但 `ing` 移到 `y`（与 `uai` 共键，声母互斥不冲突）、零声母用韵母首字母（`爱=al`）”建模；**搜狗**默认布局按与微软完全一致处理。这两条布局细节尚未做真机长期回归，若与官方码表有出入，先改表与对应测试再改行为，不要让码表、测试与本条默默分叉。
+
+64e. **双拼必须覆盖全拼音节全集**：标准普通话约 410 个音节清单在 `iOS/Tests/quanpin.txt`（唱作资源），`ShuangpinCoverageTests` 枚举每方案所有两键组合的 `expand` 结果，逐条断言清单均可产出（`ü`归一为 `v`）。唯一已知例外是双拼无法区分的稀见叹词 `lo`（→luo）、`yo`（→yuo），在测试中显式排除。`quanpin.txt` 是该清单的唯一来源，不要另处重建。
+
+65. 双拼每个音节以撇号分隔发给引擎（`neng'he'ma`），撇号只表示**分词边界**：整句解码（`DecodeSentence`）必须**跨撇号保留 n-gram 上下文**（`Process(keep_sep_context=true)`），使同一串拼音带不带撇号打分一致（`neng'he'ma`=`nenghema`→能喝吗，`li'zhou`=`lizhou`→利州）。改选（`DecodeCorrection`）**保留**撇号处的上下文重置（`keep_sep_context=false`）——两条路径不可统一：全局去掉重置会破坏 `xing'jia'bi` 改选，去掉保留会让双拼整句排序退化。断言见 `iOS/Tests/ShuangpinEndToEndTests.swift`（双拼与全拼首选一致）与 `require/Sime/tests/correction_test.cc`（改选不变）。
 
 ## 人工验证命令
 
