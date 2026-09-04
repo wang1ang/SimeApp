@@ -97,7 +97,20 @@ final class Composition {
     }
     var displayCandidates: [Candidate] {
         if !replacementCandidates.isEmpty { return replacementCandidates }
-        return isComposing ? candidates : predictionCandidates
+        guard !isComposing else { return candidates }
+        // Association completions carry the full word (e.g. 狐狸) but their
+        // leading `consumed` characters are already in the document, so the
+        // bar must show only the part that will be inserted (狸) — never the
+        // base character again.
+        return predictionCandidates.map { candidate in
+            let drop = min(candidate.consumed, candidate.text.count)
+            guard drop > 0 else { return candidate }
+            return Candidate(text: String(candidate.text.dropFirst(drop)),
+                             consumed: candidate.consumed,
+                             tokens: candidate.tokens,
+                             units: candidate.units,
+                             score: candidate.score)
+        }
     }
 
     /// The literal key sequence entered for the active correction syllable.

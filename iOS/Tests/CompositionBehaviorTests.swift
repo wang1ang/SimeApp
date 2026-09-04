@@ -526,6 +526,26 @@ final class CompositionContextTests: XCTestCase {
         XCTAssertTrue(composition.displayCandidates.isEmpty)
     }
 
+    func testCompletionPredictionShowsAndInsertsOnlyTheTail() {
+        let decoder = RecordingPinyinDecoder()
+        decoder.decodeResult = { _ in
+            [Candidate(text: "狐", consumed: 2, tokens: [11], units: "hu")]
+        }
+        // Association completion: full word 狐狸 with the leading 狐 already
+        // committed (consumed == 1).
+        decoder.predictionResult = { _ in
+            [Candidate(text: "狐狸", consumed: 1, tokens: [99])]
+        }
+        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
+
+        "hu".forEach { composition.append(String($0)) }
+        XCTAssertEqual(composition.select(0), "狐")
+        // The bar shows only the inserted tail, never the base character.
+        XCTAssertEqual(composition.displayCandidates.map(\.text), ["狸"])
+        // Selecting inserts just the tail.
+        XCTAssertEqual(composition.selectDisplayed(0), "狸")
+    }
+
     func testDisablingPredictionClearsExistingCandidates() {
         let decoder = RecordingPinyinDecoder()
         decoder.decodeResult = { _ in
