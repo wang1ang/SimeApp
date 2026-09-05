@@ -420,11 +420,38 @@ final class Composition {
         return select(index)
     }
 
-    func activateCharacter(_ index: Int) {
+    /// 锁定的锚点视为 ground truth：判定一个整句候选在每个锚点位置的字
+    /// 是否与锚点文本一致；不一致的候选不再展示。
+    func matchesAnchors(_ candidate: Candidate) -> Bool {
+        guard !anchorSegments.isEmpty else { return true }
+        let chars = Array(candidate.text)
+        let syllableCount = candidate.units.split(separator: "'")
+            .filter { !$0.isEmpty }.count
+        // Only filter when characters line up 1:1 with syllables; otherwise we
+        // cannot map anchor syllable ranges to characters, so keep the candidate.
+        guard chars.count == syllableCount else { return true }
+        for anchor in anchorSegments {
+            let range = anchor.syllableRange
+            guard range.lowerBound >= 0, range.upperBound <= chars.count else { return false }
+            if String(chars[range]) != anchor.text { return false }
+        }
+        return true
+    }
+
+    /// 关闭第一行选中（气泡消失时用）：取消高亮，恢复普通候选/联想显示。
+    func deactivateCharacter() {
+        guard activeCharacterIndex != nil else { return }
+        activeCharacterIndex = nil
+        activeShowsKeys = false
+        replacementCandidates = []
+        displayGroups = []
+    }
+
+    func activateCharacter(_ index: Int, allowKeyToggle: Bool = true) {
         // Second tap on the already-highlighted character reveals its literal
         // typed keys; the first tap only selects/colors it (below) and lists
         // replacement candidates. Keep the candidates untouched here.
-        if index == activeCharacterIndex, !activeShowsKeys {
+        if allowKeyToggle, index == activeCharacterIndex, !activeShowsKeys {
             activeShowsKeys = true
             return
         }

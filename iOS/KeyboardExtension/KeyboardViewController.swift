@@ -7,6 +7,15 @@ final class KeyboardViewController: UIInputViewController {
     private let candidateScrollView = UIScrollView()
     private let candidateBar = UIView()
     private let candidateTap = UITapGestureRecognizer()
+    // Tap gesture used to pick a trailing whole-sentence candidate in row one.
+    private let sentenceCandidateTap = UITapGestureRecognizer()
+    // Popup bubble that lists a tapped first-row character's candidates.
+    private var candidateBubble: UIView?
+    // True when the active character was reached by directly tapping it (show a
+    // bubble); false when reached by auto-advancing after a selection (list the
+    // candidates inline at the end of the first row instead).
+    private var activeUsesBubble = false
+    private var bubbleOverlay: UIView?
     private var sentenceContentWidth: CGFloat = 0
     private var candidateContentWidth: CGFloat = 0
     private let keyboardStack = UIStackView()
@@ -212,6 +221,10 @@ final class KeyboardViewController: UIInputViewController {
         sentenceScrollView.showsHorizontalScrollIndicator = false
         sentenceScrollView.addSubview(sentenceBar)
         sentenceScrollView.heightAnchor.constraint(equalToConstant: 28).isActive = true
+        sentenceCandidateTap.addTarget(self, action: #selector(sentenceCandidateTapped(_:)))
+        sentenceCandidateTap.cancelsTouchesInView = false
+        sentenceCandidateTap.isEnabled = false
+        sentenceBar.addGestureRecognizer(sentenceCandidateTap)
         root.addArrangedSubview(sentenceScrollView)
         root.setCustomSpacing(1, after: sentenceScrollView)
 
@@ -222,6 +235,9 @@ final class KeyboardViewController: UIInputViewController {
         candidateScrollView.addSubview(candidateBar)
         candidateScrollView.heightAnchor.constraint(equalToConstant: 34).isActive = true
         root.addArrangedSubview(candidateScrollView)
+        // 第二行候选暂时视觉隐藏（逻辑保留，后续改为气泡/复用第一行）；
+        // stack 里 hidden 的 arranged subview 会折叠，不占高度。
+        candidateScrollView.isHidden = true
 
         keyboardStack.axis = .vertical
         keyboardStack.spacing = 5
@@ -349,6 +365,8 @@ final class KeyboardViewController: UIInputViewController {
 
     @objc private func keyTapped(_ sender: UIButton) {
         guard let title = sender.accessibilityValue ?? sender.currentTitle else { return }
+        // Any keypress ends an open candidate bubble.
+        dismissCandidateBubble()
         switch title {
         case "space":
             if spaceCursorMode {
@@ -541,6 +559,9 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func selectCandidate(at index: Int) {
+        // Any selection auto-advances to the next character (if any); show that
+        // one's candidates inline in the first row rather than in a bubble.
+        activeUsesBubble = false
         if let text = composition.selectDisplayed(index) {
             textDocumentProxy.unmarkText()
             textDocumentProxy.insertText(text)
@@ -549,13 +570,152 @@ final class KeyboardViewController: UIInputViewController {
         render()
     }
 
+    @objc private func sentenceCandidateTapped(_ gesture: UITapGestureRecognizer) {
+        guard gesture.state == .ended else { return }
+        let point = gesture.location(in: sentenceBar)
+        guard let label = sentenceBar.subviews.compactMap({ $0 as? UILabel })
+            .first(where: { $0.frame.contains(point) }) else { return }
+        selectCandidate(at: label.tag)
+    }
+
     @objc private func sentenceCharacterTapped(_ sender: UIButton) {
         guard let index = sender.accessibilityValue.flatMap(Int.init) else { return }
-        composition.activateCharacter(index)
+        // Opening the bubble (fresh, or switching characters) only lists
+        // candidates; the pinyin toggle happens on a further tap while the
+        // bubble is already open on that same character.
+        let bubbleOpenOnSame = candidateBubble != nil && composition.activeCharacterIndex == index
+        activeUsesBubble = true
+        composition.activateCharacter(index, allowKeyToggle: bubbleOpenOnSame)
+        render()
+        showCandidateBubble(anchor: sender)
+    }
+
+    // MARK: - Candidate bubble
+
+    // Tapping a first-row character pops up a bubble listing that character's
+    // replacement candidates (the content that used to fill the hidden second
+    // row). Selecting a candidate applies the correction; tapping outside the
+    // bubble dismisses it and clears the first-row selection.
+    private func showCandidateBubble(anchor: UIButton) {
+        dismissCandidateBubble(deactivate: false)
+        let candidates = composition.displayCandidates
+        guard !candidates.isEmpty else { return }
+
+        let overlay = UIView(frame: view.bounds)
+        overlay.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        overlay.backgroundColor = .clear
+        let overlayTap = UITapGestureRecognizer(target: self, action: #selector(bubbleOverlayTapped(_:)))
+        overlay.addGestureRecognizer(overlayTap)
+        view.addSubview(overlay)
+        bubbleOverlay = overlay
+
+        let bubble = UIView()
+        bubble.backgroundColor = .secondarySystemBackground
+        bubble.layer.cornerRadius = 10
+        bubble.layer.shadowColor = UIColor.black.cgColor
+        bubble.layer.shadowOpacity = 0.25
+        bubble.layer.shadowRadius = 6
+        bubble.layer.shadowOffset = CGSize(width: 0, height: 2)
+
+        let scroll = UIScrollView()
+        scroll.showsVerticalScrollIndicator = true
+        let content = UIView()
+        let contentTap = UITapGestureRecognizer(target: self, action: #selector(bubbleContentTapped(_:)))
+        contentTap.cancelsTouchesInView = false
+        content.addGestureRecognizer(contentTap)
+        scroll.addSubview(content)
+        bubble.addSubview(scroll)
+        view.addSubview(bubble)
+        candidateBubble = bubble
+
+        // Wrap candidate cells left-to-right within the available width.
+        let padding: CGFloat = 8
+        let margin: CGFloat = 6
+        let cellHeight: CGFloat = 34
+        let gap: CGFloat = 6
+        let maxRowWidth = view.bounds.width - 2 * margin - 2 * padding
+        let font = UIFont.preferredFont(forTextStyle: .body)
+        var x: CGFloat = 0
+        var y: CGFloat = 0
+        var usedRowWidth: CGFloat = 0
+        for (index, candidate) in candidates.enumerated() {
+            let textWidth = (candidate.text as NSString).size(withAttributes: [.font: font]).width
+            let width = min(max(ceil(textWidth) + 16, cellHeight), maxRowWidth)
+            if x > 0 && x + width > maxRowWidth {
+                usedRowWidth = max(usedRowWidth, x - gap)
+                x = 0
+                y += cellHeight + gap
+            }
+            let label = UILabel(frame: CGRect(x: x, y: y, width: width, height: cellHeight))
+            label.text = candidate.text
+            label.font = font
+            label.textColor = .label
+            label.textAlignment = .center
+            label.lineBreakMode = .byTruncatingTail
+            label.tag = index
+            content.addSubview(label)
+            x += width + gap
+        }
+        usedRowWidth = max(usedRowWidth, x - gap)
+        let contentWidth = max(usedRowWidth, 0)
+        let contentHeight = y + cellHeight
+        content.frame = CGRect(x: 0, y: 0, width: contentWidth, height: contentHeight)
+
+        let bubbleWidth = contentWidth + 2 * padding
+        let maxBubbleHeight = min(view.bounds.height - 12, cellHeight * 4 + gap * 3 + 2 * padding)
+        let bubbleHeight = min(contentHeight + 2 * padding, maxBubbleHeight)
+        scroll.frame = CGRect(x: padding, y: padding,
+                              width: bubbleWidth - 2 * padding,
+                              height: bubbleHeight - 2 * padding)
+        scroll.contentSize = content.frame.size
+
+        let anchorRect = sentenceBar.convert(anchor.frame, to: view)
+        var bubbleX = anchorRect.midX - bubbleWidth / 2
+        bubbleX = min(max(bubbleX, margin), view.bounds.width - margin - bubbleWidth)
+        let bubbleY = min(anchorRect.maxY + 2, view.bounds.height - margin - bubbleHeight)
+        bubble.frame = CGRect(x: bubbleX, y: bubbleY, width: bubbleWidth, height: bubbleHeight)
+    }
+
+    private func dismissCandidateBubble(deactivate: Bool = true) {
+        candidateBubble?.removeFromSuperview()
+        candidateBubble = nil
+        bubbleOverlay?.removeFromSuperview()
+        bubbleOverlay = nil
+        if deactivate {
+            composition.deactivateCharacter()
+        }
+    }
+
+    @objc private func bubbleOverlayTapped(_ gesture: UITapGestureRecognizer) {
+        // A tap that lands on another first-row character switches the bubble
+        // to that character instead of just dismissing.
+        let point = gesture.location(in: sentenceBar)
+        if let button = sentenceBar.subviews.compactMap({ $0 as? UIButton })
+            .first(where: { $0.frame.contains(point) }) {
+            if button.accessibilityValue.flatMap(Int.init) != nil {
+                sentenceCharacterTapped(button)
+            } else {
+                // The only non-character first-row button is the confirm key.
+                confirmSentence()
+            }
+            return
+        }
+        dismissCandidateBubble()
         render()
     }
 
+    @objc private func bubbleContentTapped(_ gesture: UITapGestureRecognizer) {
+        guard gesture.state == .ended, let content = gesture.view else { return }
+        let point = gesture.location(in: content)
+        guard let label = content.subviews.compactMap({ $0 as? UILabel })
+            .first(where: { $0.frame.contains(point) }) else { return }
+        let index = label.tag
+        dismissCandidateBubble(deactivate: false)
+        selectCandidate(at: index)
+    }
+
     @objc private func confirmSentence() {
+        dismissCandidateBubble(deactivate: false)
         commitComposition()
     }
 
@@ -607,6 +767,7 @@ final class KeyboardViewController: UIInputViewController {
         }
         updateFinalKeyHighlights()
         sentenceBar.subviews.forEach { $0.removeFromSuperview() }
+        sentenceCandidateTap.isEnabled = composition.isComposing || !composition.displayCandidates.isEmpty
         var sentenceX: CGFloat = 8
         if composition.isComposing {
             let font = UIFont.preferredFont(forTextStyle: .body)
@@ -633,7 +794,58 @@ final class KeyboardViewController: UIInputViewController {
             confirm.frame = CGRect(x: sentenceX, y: 0, width: 24, height: 28)
             confirm.addTarget(self, action: #selector(confirmSentence), for: .touchUpInside)
             sentenceBar.addSubview(confirm)
-            sentenceX += 27
+            // Extra breathing room between the confirm key and the trailing
+            // candidate list.
+            sentenceX += 38
+        }
+        // Trailing candidates after the per-character top choice and confirm
+        // key. With no active character these are the whole-sentence
+        // alternatives (skip index 0, already shown per-character). While a
+        // character is being edited inline (reached via auto-advance, not a
+        // fresh tap) these are that character's replacement candidates. When
+        // the character is shown in a bubble instead, list nothing inline.
+        if composition.isComposing, !(composition.activeCharacterIndex != nil && activeUsesBubble) {
+            let font = UIFont.preferredFont(forTextStyle: .body)
+            let candidates = composition.displayCandidates
+            let startIndex = composition.activeCharacterIndex == nil ? 1 : 0
+            for index in candidates.indices where index >= startIndex {
+                let candidate = candidates[index]
+                // Locked anchors are ground truth: drop whole-sentence
+                // alternatives that disagree with an anchor position.
+                if composition.activeCharacterIndex == nil,
+                   !composition.matchesAnchors(candidate) { continue }
+                let label = UILabel()
+                label.text = candidate.text
+                label.font = font
+                label.textColor = .label
+                label.textAlignment = .center
+                label.lineBreakMode = .byTruncatingTail
+                let textWidth = (candidate.text as NSString).size(withAttributes: [.font: font]).width
+                let width = max(ceil(textWidth) + 4, 24)
+                label.frame = CGRect(x: sentenceX, y: 0, width: width, height: 28)
+                label.tag = index
+                sentenceBar.addSubview(label)
+                sentenceX += width + 6
+            }
+        }
+        // Not composing: reuse the first row for association (prediction)
+        // candidates so they no longer need the removed second row.
+        if !composition.isComposing {
+            let font = UIFont.preferredFont(forTextStyle: .body)
+            for (index, candidate) in composition.displayCandidates.enumerated() {
+                let label = UILabel()
+                label.text = candidate.text
+                label.font = font
+                label.textColor = .label
+                label.textAlignment = .center
+                label.lineBreakMode = .byTruncatingTail
+                let textWidth = (candidate.text as NSString).size(withAttributes: [.font: font]).width
+                let width = max(ceil(textWidth) + 4, 24)
+                label.frame = CGRect(x: sentenceX, y: 0, width: width, height: 28)
+                label.tag = index
+                sentenceBar.addSubview(label)
+                sentenceX += width + 6
+            }
         }
         sentenceContentWidth = sentenceX
         candidateBar.subviews.forEach { $0.removeFromSuperview() }
