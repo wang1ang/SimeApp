@@ -4,9 +4,6 @@ final class KeyboardViewController: UIInputViewController {
     private var composition = KeyboardViewController.makeComposition()
     private let sentenceScrollView = UIScrollView()
     private let sentenceBar = UIView()
-    private let candidateScrollView = UIScrollView()
-    private let candidateBar = UIView()
-    private let candidateTap = UITapGestureRecognizer()
     // Tap gesture used to pick a trailing whole-sentence candidate in row one.
     private let sentenceCandidateTap = UITapGestureRecognizer()
     // Popup bubble that lists a tapped first-row character's candidates.
@@ -17,7 +14,6 @@ final class KeyboardViewController: UIInputViewController {
     private var activeUsesBubble = false
     private var bubbleOverlay: UIView?
     private var sentenceContentWidth: CGFloat = 0
-    private var candidateContentWidth: CGFloat = 0
     private let keyboardStack = UIStackView()
     private enum KeyboardPage { case letters, numbers, symbols }
     private var keyboardPage: KeyboardPage = .letters
@@ -228,17 +224,6 @@ final class KeyboardViewController: UIInputViewController {
         root.addArrangedSubview(sentenceScrollView)
         root.setCustomSpacing(1, after: sentenceScrollView)
 
-        candidateScrollView.showsHorizontalScrollIndicator = false
-        candidateTap.addTarget(self, action: #selector(candidateBarTapped(_:)))
-        candidateTap.cancelsTouchesInView = false
-        candidateBar.addGestureRecognizer(candidateTap)
-        candidateScrollView.addSubview(candidateBar)
-        candidateScrollView.heightAnchor.constraint(equalToConstant: 34).isActive = true
-        root.addArrangedSubview(candidateScrollView)
-        // 第二行候选暂时视觉隐藏（逻辑保留，后续改为气泡/复用第一行）；
-        // stack 里 hidden 的 arranged subview 会折叠，不占高度。
-        candidateScrollView.isHidden = true
-
         keyboardStack.axis = .vertical
         keyboardStack.spacing = 5
         root.addArrangedSubview(keyboardStack)
@@ -250,9 +235,6 @@ final class KeyboardViewController: UIInputViewController {
         sentenceBar.frame.size.width = max(sentenceScrollView.bounds.width, sentenceContentWidth)
         sentenceBar.frame.size.height = sentenceScrollView.bounds.height
         sentenceScrollView.contentSize = sentenceBar.bounds.size
-        candidateBar.frame.size.width = max(candidateScrollView.bounds.width, candidateContentWidth)
-        candidateBar.frame.size.height = candidateScrollView.bounds.height
-        candidateScrollView.contentSize = candidateBar.bounds.size
     }
 
     private func makeRow(_ keys: [String], indented: Bool = false) -> UIStackView {
@@ -550,14 +532,6 @@ final class KeyboardViewController: UIInputViewController {
             selectedRange: NSRange(location: composition.selectionLocation, length: 0))
     }
 
-    @objc private func candidateBarTapped(_ gesture: UITapGestureRecognizer) {
-        guard gesture.state == .ended else { return }
-        let point = gesture.location(in: candidateBar)
-        guard let label = candidateBar.subviews.compactMap({ $0 as? UILabel })
-            .first(where: { $0.frame.contains(point) }) else { return }
-        selectCandidate(at: label.tag)
-    }
-
     private func selectCandidate(at index: Int) {
         // Any selection auto-advances to the next character (if any); show that
         // one's candidates inline in the first row rather than in a bubble.
@@ -848,43 +822,7 @@ final class KeyboardViewController: UIInputViewController {
             }
         }
         sentenceContentWidth = sentenceX
-        candidateBar.subviews.forEach { $0.removeFromSuperview() }
-        let displayedCandidates = composition.displayCandidates
-        if displayedCandidates.isEmpty {
-            let hint = UILabel()
-            hint.text = composition.isComposing ? composition.preedit : ""
-            hint.textColor = .secondaryLabel
-            hint.textAlignment = .left
-            hint.frame = CGRect(x: 8, y: 0, width: 120, height: 34)
-            candidateBar.addSubview(hint)
-            candidateContentWidth = candidateScrollView.bounds.width
-        } else {
-            var candidateX: CGFloat = 8
-            let font = UIFont.preferredFont(forTextStyle: .body)
-            for (index, candidate) in displayedCandidates.enumerated() {
-                let label = UILabel()
-                label.text = candidate.text
-                label.font = font
-                label.textColor = .label
-                label.textAlignment = .center
-                label.lineBreakMode = .byTruncatingTail
-                let textWidth = (candidate.text as NSString).size(withAttributes: [.font: font]).width
-                let width = max(ceil(textWidth) + 4, 22)
-                label.frame = CGRect(x: candidateX, y: 0, width: width, height: 34)
-                label.tag = index
-                candidateBar.addSubview(label)
-                candidateX += width + 6
-            }
-            candidateContentWidth = candidateX
-        }
-        // Do not wait for a later layout pass before making the horizontal
-        // range available; otherwise a freshly rendered candidate row cannot
-        // be dragged on some keyboard-hosting views.
-        candidateBar.frame.size.width = max(candidateScrollView.bounds.width, candidateContentWidth)
-        candidateBar.frame.size.height = candidateScrollView.bounds.height
-        candidateScrollView.contentSize = candidateBar.bounds.size
         sentenceScrollView.setContentOffset(.zero, animated: false)
-        candidateScrollView.setContentOffset(.zero, animated: false)
         view.setNeedsLayout()
     }
 
