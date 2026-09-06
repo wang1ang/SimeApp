@@ -414,14 +414,15 @@ final class Composition {
             let next = selectedRange.upperBound
             if next < syllables.count {
                 activateCharacter(prefixText.count + next)
+            } else {
+                cursor = raw.count
             }
             return nil
         }
         return select(index)
     }
 
-    /// 锁定的锚点视为 ground truth：判定一个整句候选在每个锚点位置的字
-    /// 是否与锚点文本一致；不一致的候选不再展示。
+    /// 锚点视为 ground truth：整句候选在锚点位置与锚点文本不符则过滤掉。
     func matchesAnchors(_ candidate: Candidate) -> Bool {
         guard !anchorSegments.isEmpty else { return true }
         let chars = Array(candidate.text)
@@ -438,7 +439,7 @@ final class Composition {
         return true
     }
 
-    /// 关闭第一行选中（气泡消失时用）：取消高亮，恢复普通候选/联想显示。
+    /// 关闭第一行选中（气泡消失时用）：取消高亮，恢复普通候选/联想。
     func deactivateCharacter() {
         guard activeCharacterIndex != nil else { return }
         activeCharacterIndex = nil
@@ -448,11 +449,17 @@ final class Composition {
     }
 
     func activateCharacter(_ index: Int, allowKeyToggle: Bool = true) {
-        // Second tap on the already-highlighted character reveals its literal
-        // typed keys; the first tap only selects/colors it (below) and lists
-        // replacement candidates. Keep the candidates untouched here.
+        // Second tap on the highlighted char reveals its typed keys; the first
+        // only selects it and lists candidates.
         if allowKeyToggle, index == activeCharacterIndex, !activeShowsKeys {
             activeShowsKeys = true
+            // Enter pinyin editing: cursor to this syllable's raw key end.
+            if let units = candidates.first?.units {
+                let rel = index - prefixText.count
+                if rel >= 0 {
+                    cursor = min(rawLength(forSyllables: rel + 1, units: units), raw.count)
+                }
+            }
             return
         }
         // A tap inside the sequentially committed prefix re-opens that
@@ -471,6 +478,9 @@ final class Composition {
         guard syllables.indices.contains(relativeIndex) else { return }
         activeCharacterIndex = index
         activeShowsKeys = false
+        // Candidate mode keeps the edit cursor at the end (only the toggle
+        // above moves it into a syllable).
+        cursor = raw.count
         let current = renderedText(top.text)
         let fixedPrefix = String(Array(current).prefix(relativeIndex))
         let nextAnchor = anchorSegments

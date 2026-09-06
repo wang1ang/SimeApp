@@ -4,14 +4,15 @@ final class KeyboardViewController: UIInputViewController {
     private var composition = KeyboardViewController.makeComposition()
     private let sentenceScrollView = UIScrollView()
     private let sentenceBar = UIView()
-    // Tap gesture used to pick a trailing whole-sentence candidate in row one.
+    // Tap gesture to pick a trailing whole-sentence candidate in row one.
     private let sentenceCandidateTap = UITapGestureRecognizer()
-    // Popup bubble that lists a tapped first-row character's candidates.
+    // Popup bubble listing a tapped first-row character's candidates.
     private var candidateBubble: UIView?
-    // True when the active character was reached by directly tapping it (show a
-    // bubble); false when reached by auto-advancing after a selection (list the
-    // candidates inline at the end of the first row instead).
+    // true = active char reached by direct tap (show bubble); false = reached by
+    // auto-advance after a selection (list candidates inline in row one).
     private var activeUsesBubble = false
+    // Selected tone filter (1-4, 5 = neutral); nil = no filter.
+    private var selectedTone: Int?
     private var bubbleOverlay: UIView?
     private var sentenceContentWidth: CGFloat = 0
     private let keyboardStack = UIStackView()
@@ -354,9 +355,12 @@ final class KeyboardViewController: UIInputViewController {
             if spaceCursorMode {
                 spaceCursorMode = false
             } else {
+                // Space/return commit the whole sentence: reset any edit cursor.
+                composition.moveCursor(to: composition.raw.count)
                 space()
             }
         case "return":
+            composition.moveCursor(to: composition.raw.count)
             if let text = composition.commitPreeditLiterally() {
                 // Return is the literal-English escape hatch: unlike space or
                 // the candidate-bar confirmation, it must not decode pinyin.
@@ -510,6 +514,7 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func commitComposition() {
+        composition.moveCursor(to: composition.raw.count)
         if let text = composition.commitBestOrRaw() {
             textDocumentProxy.unmarkText()
             textDocumentProxy.insertText(text)
@@ -533,9 +538,10 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func selectCandidate(at index: Int) {
-        // Any selection auto-advances to the next character (if any); show that
-        // one's candidates inline in the first row rather than in a bubble.
+        // Selection auto-advances to the next char (inline, not a bubble); the
+        // tone filter is per-character, so drop it.
         activeUsesBubble = false
+        selectedTone = nil
         if let text = composition.selectDisplayed(index) {
             textDocumentProxy.unmarkText()
             textDocumentProxy.insertText(text)
@@ -552,30 +558,93 @@ final class KeyboardViewController: UIInputViewController {
         selectCandidate(at: label.tag)
     }
 
+    // Active char's candidates paired with their original `displayCandidates`
+    // index (so selection still maps), filtered by the selected tone.
+    private func activeDisplayCandidates() -> [(index: Int, candidate: Candidate)] {
+        let all = composition.displayCandidates
+        guard let tone = selectedTone else {
+            return all.enumerated().map { ($0.offset, $0.element) }
+        }
+        return all.enumerated().compactMap { offset, candidate in
+            guard let first = candidate.text.first, isHan(first),
+                  mandarinTone(of: String(first)) == tone else { return nil }
+            return (offset, candidate)
+        }
+    }
+
+    @objc private func toneFilterTapped(_ sender: UIButton) {
+        guard let id = sender.accessibilityIdentifier, id.hasPrefix("tone"),
+              let tone = Int(id.dropFirst(4)) else { return }
+        selectedTone = (selectedTone == tone) ? nil : tone
+        render()
+        // Refresh an open bubble with the newly filtered list.
+        if candidateBubble != nil, let active = composition.activeCharacterIndex,
+           let button = sentenceBar.subviews.compactMap({ $0 as? UIButton })
+            .first(where: { $0.accessibilityValue.flatMap(Int.init) == active }) {
+            showCandidateBubble(anchor: button)
+        }
+    }
+
+    private func isHan(_ c: Character) -> Bool {
+        c.unicodeScalars.contains {
+            (0x4E00...0x9FFF).contains($0.value) || (0x3400...0x4DBF).contains($0.value)
+        }
+    }
+
+    // Mandarin tone of a Han character via Apple's transliteration: 1-4 marked,
+    // 5 neutral. Context-free, so polyphonic chars use their default reading.
+    private func mandarinTone(of text: String) -> Int {
+        guard let cf = CFStringCreateMutable(nil, 0) else { return 0 }
+        CFStringAppend(cf, text as CFString)
+        CFStringTransform(cf, nil, kCFStringTransformMandarinLatin, false)
+        let pinyin = (cf as String).decomposedStringWithCanonicalMapping
+        for scalar in pinyin.unicodeScalars {
+            switch scalar.value {
+            case 0x0304: return 1
+            case 0x0301: return 2
+            case 0x030C: return 3
+            case 0x0300: return 4
+            default: continue
+            }
+        }
+        return 5
+    }
+
     @objc private func sentenceCharacterTapped(_ sender: UIButton) {
         guard let index = sender.accessibilityValue.flatMap(Int.init) else { return }
-        // Opening the bubble (fresh, or switching characters) only lists
-        // candidates; the pinyin toggle happens on a further tap while the
-        // bubble is already open on that same character.
+        // Fresh open (or switching chars) only lists candidates; the pinyin
+        // toggle happens on a further tap while the bubble is open on this char.
         let bubbleOpenOnSame = candidateBubble != nil && composition.activeCharacterIndex == index
+        if !bubbleOpenOnSame { selectedTone = nil }
         activeUsesBubble = true
         composition.activateCharacter(index, allowKeyToggle: bubbleOpenOnSame)
+        // Reflect the moved cursor in the host's marked-text caret.
+        updateMarkedText()
         render()
-        showCandidateBubble(anchor: sender)
+        // Pinyin editing closes the bubble; otherwise show/refresh it.
+        if composition.activeShowsKeys {
+            dismissCandidateBubble(deactivate: false)
+        } else {
+            showCandidateBubble(anchor: sender)
+        }
     }
 
     // MARK: - Candidate bubble
 
-    // Tapping a first-row character pops up a bubble listing that character's
-    // replacement candidates (the content that used to fill the hidden second
-    // row). Selecting a candidate applies the correction; tapping outside the
-    // bubble dismisses it and clears the first-row selection.
+    // Tapping a first-row character pops up a bubble of its candidates.
+    // Selecting one applies the correction; tapping outside dismisses it.
     private func showCandidateBubble(anchor: UIButton) {
         dismissCandidateBubble(deactivate: false)
-        let candidates = composition.displayCandidates
-        guard !candidates.isEmpty else { return }
+        let items = activeDisplayCandidates()
+        guard !items.isEmpty else { return }
 
-        let overlay = UIView(frame: view.bounds)
+        // Overlay dismisses the bubble on an outside tap, but must not cover
+        // the first row (else it eats that row's pan and long sentences can't
+        // scroll while a bubble is open).
+        let rowBottom = sentenceScrollView.convert(sentenceScrollView.bounds, to: view).maxY
+        let overlay = UIView(frame: CGRect(x: 0, y: rowBottom,
+                                           width: view.bounds.width,
+                                           height: max(0, view.bounds.height - rowBottom)))
         overlay.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         overlay.backgroundColor = .clear
         let overlayTap = UITapGestureRecognizer(target: self, action: #selector(bubbleOverlayTapped(_:)))
@@ -612,7 +681,8 @@ final class KeyboardViewController: UIInputViewController {
         var x: CGFloat = 0
         var y: CGFloat = 0
         var usedRowWidth: CGFloat = 0
-        for (index, candidate) in candidates.enumerated() {
+        for item in items {
+            let candidate = item.candidate
             let textWidth = (candidate.text as NSString).size(withAttributes: [.font: font]).width
             let width = min(max(ceil(textWidth) + 16, cellHeight), maxRowWidth)
             if x > 0 && x + width > maxRowWidth {
@@ -626,7 +696,7 @@ final class KeyboardViewController: UIInputViewController {
             label.textColor = .label
             label.textAlignment = .center
             label.lineBreakMode = .byTruncatingTail
-            label.tag = index
+            label.tag = item.index
             content.addSubview(label)
             x += width + gap
         }
@@ -661,19 +731,8 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     @objc private func bubbleOverlayTapped(_ gesture: UITapGestureRecognizer) {
-        // A tap that lands on another first-row character switches the bubble
-        // to that character instead of just dismissing.
-        let point = gesture.location(in: sentenceBar)
-        if let button = sentenceBar.subviews.compactMap({ $0 as? UIButton })
-            .first(where: { $0.frame.contains(point) }) {
-            if button.accessibilityValue.flatMap(Int.init) != nil {
-                sentenceCharacterTapped(button)
-            } else {
-                // The only non-character first-row button is the confirm key.
-                confirmSentence()
-            }
-            return
-        }
+        // Overlay covers only below the first row, so any tap here is outside
+        // the bubble; first-row taps reach the buttons/gesture directly.
         dismissCandidateBubble()
         render()
     }
@@ -740,9 +799,12 @@ final class KeyboardViewController: UIInputViewController {
             keyboardNeedsRebuild = false
         }
         updateFinalKeyHighlights()
+        // Leaving char-editing mode clears any tone filter.
+        if composition.activeCharacterIndex == nil { selectedTone = nil }
         sentenceBar.subviews.forEach { $0.removeFromSuperview() }
         sentenceCandidateTap.isEnabled = composition.isComposing || !composition.displayCandidates.isEmpty
         var sentenceX: CGFloat = 8
+        var confirmMaxX: CGFloat = 0
         if composition.isComposing {
             let font = UIFont.preferredFont(forTextStyle: .body)
             for (index, char) in Array(composition.sentencePreview).enumerated() {
@@ -768,26 +830,62 @@ final class KeyboardViewController: UIInputViewController {
             confirm.frame = CGRect(x: sentenceX, y: 0, width: 24, height: 28)
             confirm.addTarget(self, action: #selector(confirmSentence), for: .touchUpInside)
             sentenceBar.addSubview(confirm)
-            // Extra breathing room between the confirm key and the trailing
-            // candidate list.
-            sentenceX += 38
+            confirmMaxX = sentenceX + 24
+            sentenceX += 38  // gap before trailing candidates
         }
-        // Trailing candidates after the per-character top choice and confirm
-        // key. With no active character these are the whole-sentence
-        // alternatives (skip index 0, already shown per-character). While a
-        // character is being edited inline (reached via auto-advance, not a
-        // fresh tap) these are that character's replacement candidates. When
-        // the character is shown in a bubble instead, list nothing inline.
-        if composition.isComposing, !(composition.activeCharacterIndex != nil && activeUsesBubble) {
+        // Tone filters, only while the candidate bubble is expanded (not inline
+        // after auto-advance, not in pinyin-edit mode).
+        if composition.isComposing, composition.activeCharacterIndex != nil,
+           activeUsesBubble, !composition.activeShowsKeys {
+            let font = UIFont.preferredFont(forTextStyle: .body)
+            // Tone marks are modifier letters that sit high; sink them all by
+            // the same baseline offset to read as vertically centered.
+            let sink = -round(font.capHeight * 0.55)
+            for (i, mark) in ["ˉ", "ˊ", "ˇ", "ˋ", "˙"].enumerated() {
+                let tone = i + 1
+                let button = UIButton(type: .system)
+                let on = selectedTone == tone
+                button.setAttributedTitle(NSAttributedString(string: mark, attributes: [
+                    .font: font,
+                    .foregroundColor: on ? UIColor.white : UIColor.systemBlue,
+                    .baselineOffset: sink
+                ]), for: .normal)
+                button.backgroundColor = on ? .systemBlue : .clear
+                button.layer.cornerRadius = 6
+                button.frame = CGRect(x: sentenceX, y: 0, width: 26, height: 28)
+                button.accessibilityIdentifier = "tone\(tone)"
+                button.addTarget(self, action: #selector(toneFilterTapped(_:)), for: .touchUpInside)
+                sentenceBar.addSubview(button)
+                sentenceX += 26 + 4
+            }
+            sentenceX += 6
+        }
+        // Trailing candidates after the top choice + confirm key. Active &
+        // inline: that char's replacement candidates (tone-filtered). No active
+        // char: whole-sentence alternatives (skip index 0, drop anchor
+        // conflicts). Bubble mode lists nothing inline.
+        if composition.isComposing, composition.activeCharacterIndex != nil, !activeUsesBubble {
+            let font = UIFont.preferredFont(forTextStyle: .body)
+            for item in activeDisplayCandidates() {
+                let label = UILabel()
+                label.text = item.candidate.text
+                label.font = font
+                label.textColor = .label
+                label.textAlignment = .center
+                label.lineBreakMode = .byTruncatingTail
+                let textWidth = (item.candidate.text as NSString).size(withAttributes: [.font: font]).width
+                let width = max(ceil(textWidth) + 4, 24)
+                label.frame = CGRect(x: sentenceX, y: 0, width: width, height: 28)
+                label.tag = item.index
+                sentenceBar.addSubview(label)
+                sentenceX += width + 6
+            }
+        } else if composition.isComposing, composition.activeCharacterIndex == nil {
             let font = UIFont.preferredFont(forTextStyle: .body)
             let candidates = composition.displayCandidates
-            let startIndex = composition.activeCharacterIndex == nil ? 1 : 0
-            for index in candidates.indices where index >= startIndex {
+            for index in candidates.indices.dropFirst() {
                 let candidate = candidates[index]
-                // Locked anchors are ground truth: drop whole-sentence
-                // alternatives that disagree with an anchor position.
-                if composition.activeCharacterIndex == nil,
-                   !composition.matchesAnchors(candidate) { continue }
+                if !composition.matchesAnchors(candidate) { continue }
                 let label = UILabel()
                 label.text = candidate.text
                 label.font = font
@@ -803,7 +901,7 @@ final class KeyboardViewController: UIInputViewController {
             }
         }
         // Not composing: reuse the first row for association (prediction)
-        // candidates so they no longer need the removed second row.
+        // Not composing: reuse row one for prediction candidates.
         if !composition.isComposing {
             let font = UIFont.preferredFont(forTextStyle: .body)
             for (index, candidate) in composition.displayCandidates.enumerated() {
@@ -822,7 +920,19 @@ final class KeyboardViewController: UIInputViewController {
             }
         }
         sentenceContentWidth = sentenceX
-        sentenceScrollView.setContentOffset(.zero, animated: false)
+        // Size now so the offset below isn't clamped by a stale contentSize.
+        sentenceBar.frame.size.width = max(sentenceScrollView.bounds.width, sentenceContentWidth)
+        sentenceBar.frame.size.height = sentenceScrollView.bounds.height
+        sentenceScrollView.contentSize = sentenceBar.bounds.size
+        // While typing, scroll so the confirm symbol stays visible as the
+        // sentence grows. During char editing keep the row put; idle rests left.
+        if composition.isComposing, composition.activeCharacterIndex == nil, confirmMaxX > 0 {
+            let viewport = sentenceScrollView.bounds.width
+            let target = max(0, confirmMaxX - viewport)
+            sentenceScrollView.setContentOffset(CGPoint(x: target, y: 0), animated: false)
+        } else if !composition.isComposing {
+            sentenceScrollView.setContentOffset(.zero, animated: false)
+        }
         view.setNeedsLayout()
     }
 
