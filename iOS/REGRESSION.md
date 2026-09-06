@@ -61,13 +61,15 @@
 
 ## Marked text 与宿主光标
 
-29. 点击宿主中的 marked 拼音应定位组合光标，不能让整段拼音消失。
+> 状态：**未实现 / 已移除**。“点击宿主里的 marked 拼音定位光标 / 宿主 unmark 后恢复 marked”这套机制（`syncCompositionCursor` + `textDidChange` 里的恢复逻辑）在多个宿主上从未可靠工作：点那段下划线拼音会整段消失、再点会把键盘弄崩（伴 JetsamEvent/SystemMemoryReset）。相关代码已删除——`textDidChange` 仅保留 `refreshHostContext`（联想上下文）与回车键外观刷新，不再按宿主 context 重定位或在 unmark 后恢复/取消。29–34 保留为“目标但未实现”，将来重做需先解决崩溃/内存问题。
+
+29. （未实现）点击宿主中的 marked 拼音应定位组合光标，不能让整段拼音消失。
 30. 宿主只暴露光标前或光标后一侧 context 时，也应尽可能完成定位。
 31. 中间插入、前后删除后，marked 光标、原始按键和第一行候选必须一致。
 32. 未完成组合仅保存在内存（不再写入 UserDefaults 持久化）：锁屏、或在进程存活期间切 App 后回到**同一输入框**应仍恢复（`viewWillAppear`/`render` 重绘内存组合）。但扩展进程被系统回收（真正重建）后组合**不再恢复**——故意以此换取“绝不把旧拼音残留到磁盘/新输入框”的确定性（与旧契约“扩展重建后恢复”的取舍）。
-33. 宿主临时 unmark 组合时应恢复 marked text，并避免 `textDidChange` 重入循环。
-33a. `syncCompositionCursor()` 返回三态（`.matched` / `.missing` / `.unavailable`）：宿主暴露了光标前/后 context 但其中**完全找不到**当前 marked 拼音时（`.missing`，典型为用户切到了另一个输入框/App），必须**取消本地 composition**，绝不能把旧拼音无条件 `setMarkedText` 恢复到新输入框——否则既是定位错误，也造成跨输入框内容泄漏。仅在 `.matched`（找到并定位光标）或 `.unavailable`（宿主未暴露任何 context，无法判断）时才保留组合并按契约 33 恢复 marked text。此为真机契约：须在备忘录与第三方输入框之间来回切换验证旧拼音不串框。
-34. 上述行为必须在备忘录及至少一个第三方文本框中真机验证。
+33. （未实现）宿主临时 unmark 组合时应恢复 marked text，并避免 `textDidChange` 重入循环。
+33a. （未实现）随 `syncCompositionCursor` 一并移除了“宿主 context 找不到 marked 拼音时取消本地 composition”的防串框逻辑。将来若重做定位功能，必须重新处理跨输入框不串框的问题。
+34. （未实现）上述定位/恢复行为一旦重做，必须在备忘录及至少一个第三方文本框中真机验证。
 
 ## 空格、删除与回车 UI
 

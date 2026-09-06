@@ -36,7 +36,6 @@ final class KeyboardViewController: UIInputViewController {
     // decoders once per controller lifetime.
     private var usesNativeDecoder = false
     private var displayedReturnKeyType: UIReturnKeyType?
-    private var restoringMarkedText = false
     private var spaceCursorMode = false
     private var spaceLastTranslation: CGFloat = 0
     private var deleteInitialTimer: Timer?
@@ -105,33 +104,10 @@ final class KeyboardViewController: UIInputViewController {
 
     override func textDidChange(_ textInput: UITextInput?) {
         super.textDidChange(textInput)
-        guard !restoringMarkedText else { return }
-        // .missing means the marked pinyin isn't in the focused field (user
-        // switched fields/apps): drop it instead of leaking it into the new field.
-        if syncCompositionCursor() == .missing {
-            composition.cancel()
-            updateMarkedText()
-            render()
-            refreshReturnKeyAppearance()
-            return
-        }
         if composition.isComposing {
             refreshHostContext()
         }
         refreshReturnKeyAppearance()
-
-        // Some hosts temporarily unmark the entire composition when the user
-        // places the insertion point inside it. Restore it at the detected
-        // position instead of letting the raw pinyin disappear.
-        guard composition.isComposing else { return }
-        DispatchQueue.main.async { [weak self] in
-            guard let self, self.composition.isComposing else { return }
-            self.restoringMarkedText = true
-            self.updateMarkedText()
-            DispatchQueue.main.async { [weak self] in
-                self?.restoringMarkedText = false
-            }
-        }
     }
 
     private func refreshHostContext() {
@@ -154,48 +130,6 @@ final class KeyboardViewController: UIInputViewController {
         guard displayedReturnKeyType != type else { return }
         displayedReturnKeyType = type
         keyboardNeedsRebuild = true
-    }
-
-    /// Result of locating the marked pinyin around the host's insertion point.
-    private enum CursorSyncResult {
-        /// Found; the composition cursor was moved to it.
-        case matched
-        /// Context available but the pinyin isn't in it — focus moved elsewhere.
-        case missing
-        /// Host exposed no context, so nothing can be decided.
-        case unavailable
-    }
-
-    @discardableResult
-    private func syncCompositionCursor() -> CursorSyncResult {
-        guard composition.isComposing else { return .unavailable }
-        // Hosts are allowed to return nil for the context after the insertion
-        // point (notably at the end of a note).  The previous all-or-nothing
-        // check then missed a tap in marked pinyin and the subsequent
-        // setMarkedText replaced it at the wrong position.
-        let before = textDocumentProxy.documentContextBeforeInput
-        let after = textDocumentProxy.documentContextAfterInput
-        guard before != nil || after != nil else { return .unavailable }
-
-        let raw = composition.raw
-        for offset in 0...raw.count {
-            let prefix = composition.committed + String(raw.prefix(offset))
-            let suffix = String(raw.dropFirst(offset))
-            let prefixMatches = before?.hasSuffix(prefix) ?? false
-            let suffixMatches = after?.hasPrefix(suffix) ?? false
-
-            // Prefer both sides when available, but either immediate document
-            // context is sufficient when the host only exposes one side.
-            if (before != nil && after != nil && prefixMatches && suffixMatches)
-                || (before != nil && after == nil && prefixMatches)
-                || (before == nil && after != nil && suffixMatches) {
-                composition.moveCursor(to: offset)
-                return .matched
-            }
-        }
-        // Context was available but the pinyin isn't adjacent to the insertion
-        // point — caller cancels rather than re-inject it into a foreign field.
-        return .missing
     }
 
     private func setupView() {
