@@ -36,6 +36,8 @@ final class KeyboardViewController: UIInputViewController {
     // decoders once per controller lifetime.
     private var usesNativeDecoder = false
     private var displayedReturnKeyType: UIReturnKeyType?
+    // Whether the return key currently shows the composing “确定” label.
+    private var displayedReturnComposing = false
     private var spaceCursorMode = false
     private var spaceLastTranslation: CGFloat = 0
     private var deleteInitialTimer: Timer?
@@ -127,8 +129,10 @@ final class KeyboardViewController: UIInputViewController {
 
     private func refreshReturnKeyAppearance() {
         let type = textDocumentProxy.returnKeyType
-        guard displayedReturnKeyType != type else { return }
+        let composing = composition.isComposing
+        guard displayedReturnKeyType != type || displayedReturnComposing != composing else { return }
         displayedReturnKeyType = type
+        displayedReturnComposing = composing
         keyboardNeedsRebuild = true
     }
 
@@ -267,15 +271,18 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func returnKeyTitle() -> String {
+        // While composing, the action key confirms the pending input.
+        if composition.isComposing { return "确定" }
         switch textDocumentProxy.returnKeyType {
         case .send: return "发送"
-        case .search: return "搜索"
+        case .search, .google, .yahoo: return "搜索"
         case .done: return "完成"
         case .go: return "前往"
         case .next: return "下一项"
         case .join: return "加入"
         case .continue: return "继续"
         case .route: return "路线"
+        case .emergencyCall: return "紧急呼叫"
         default: return "换行"
         }
     }
@@ -288,14 +295,15 @@ final class KeyboardViewController: UIInputViewController {
         case "space":
             if spaceCursorMode {
                 spaceCursorMode = false
+            } else if exitPinyinEditing() {
+                // Editing a syllable: space returns to the sentence preview.
             } else {
-                // Space/return commit the whole sentence: reset any edit cursor.
-                composition.moveCursor(to: composition.raw.count)
                 space()
             }
         case "return":
-            composition.moveCursor(to: composition.raw.count)
-            if let text = composition.commitPreeditLiterally() {
+            if exitPinyinEditing() {
+                // Editing a syllable: return returns to the sentence preview.
+            } else if let text = composition.commitPreeditLiterally() {
                 // Return is the literal-English escape hatch: unlike space or
                 // the candidate-bar confirmation, it must not decode pinyin.
                 textDocumentProxy.unmarkText()
@@ -455,6 +463,20 @@ final class KeyboardViewController: UIInputViewController {
         }
         updateMarkedText()
         render()
+    }
+
+    /// While editing a syllable's pinyin (the edit cursor sits before the end
+    /// of the composition), space/return just return to the whole-sentence
+    /// preview instead of committing. Plain selection (cursor at the end) is
+    /// left untouched. Returns whether it handled the key.
+    private func exitPinyinEditing() -> Bool {
+        guard composition.isComposing,
+              composition.cursor < composition.raw.count else { return false }
+        composition.deactivateCharacter()
+        composition.moveCursor(to: composition.raw.count)
+        updateMarkedText()
+        render()
+        return true
     }
 
     private func updateMarkedText() {
@@ -728,6 +750,9 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func render() {
+        // Pick up return-key label changes (host type or composing state)
+        // before the rebuild check below so the bottom row reflects them.
+        refreshReturnKeyAppearance()
         if keyboardNeedsRebuild {
             rebuildKeyboard()
             keyboardNeedsRebuild = false
