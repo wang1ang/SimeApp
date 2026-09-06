@@ -251,6 +251,33 @@ final class Composition {
         anchorSegments.removeAll { $0.sourceKeyRange.upperBound > keyOffset }
     }
 
+    /// Keep the head/tail syllables of `anchor` that fall outside `released`
+    /// as standalone anchors, so re-choosing part of a multi-syllable anchor
+    /// doesn't unlock its untouched characters. Falls back to dropping the
+    /// anchor when its text/token count doesn't align one-per-syllable.
+    private func splitAnchor(_ anchor: CompositionSegment,
+                             releasing released: Range<Int>,
+                             units: String) -> [CompositionSegment] {
+        let lo = anchor.syllableRange.lowerBound
+        let hi = anchor.syllableRange.upperBound
+        let chars = Array(anchor.text)
+        guard chars.count == hi - lo, anchor.tokens.count == hi - lo else { return [] }
+        func piece(_ from: Int, _ to: Int) -> CompositionSegment {
+            let keyStart = rawLength(forSyllables: from, units: units)
+            let keyEnd = rawLength(forSyllables: to, units: units)
+            return CompositionSegment(
+                sourceKeyRange: keyStart..<keyEnd,
+                syllableRange: from..<to,
+                text: String(chars[(from - lo)..<(to - lo)]),
+                tokens: Array(anchor.tokens[(from - lo)..<(to - lo)])
+            )
+        }
+        var pieces: [CompositionSegment] = []
+        if released.lowerBound > lo { pieces.append(piece(lo, released.lowerBound)) }
+        if released.upperBound < hi { pieces.append(piece(released.upperBound, hi)) }
+        return pieces
+    }
+
     func restore(raw: String, committed: String) {
         guard !raw.isEmpty || !committed.isEmpty else { return }
         self.raw = raw
@@ -396,7 +423,13 @@ final class Composition {
                                    units: top.units)
             guard keyEnd > keyStart else { return nil }
             let selectedRange = relativeActive..<(relativeActive + span)
-            anchorSegments.removeAll { $0.syllableRange.overlaps(selectedRange) }
+            // Don't discard an overlapping anchor wholesale: split it so its
+            // syllables outside the new selection stay locked. Only the
+            // syllables the user is now re-choosing are released.
+            anchorSegments = anchorSegments.flatMap { anchor -> [CompositionSegment] in
+                guard anchor.syllableRange.overlaps(selectedRange) else { return [anchor] }
+                return splitAnchor(anchor, releasing: selectedRange, units: top.units)
+            }
             anchorSegments.append(CompositionSegment(
                 sourceKeyRange: keyStart..<keyEnd,
                 syllableRange: selectedRange,

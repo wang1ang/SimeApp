@@ -632,6 +632,37 @@ final class CompositionEditingTests: XCTestCase {
         XCTAssertFalse(composition.isComposing)
     }
 
+    func testCorrectionInsideMultiSyllableAnchorKeepsUntouchedSyllables() {
+        let decoder = RecordingPinyinDecoder()
+        decoder.decodeResult = { pinyin in
+            pinyin == "shiyushurufa"
+                ? [Candidate(text: "始于输入法", consumed: pinyin.count,
+                             tokens: [1, 2, 3, 4, 5], units: "shi'yu'shu'ru'fa")]
+                : []
+        }
+        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
+        "shiyushurufa".forEach { composition.append(String($0)) }
+
+        // Tap the first character and pick a whole-sentence candidate: this
+        // anchors all five syllables as one segment.
+        decoder.correctionResult = [
+            Candidate(text: "是与输入法", consumed: 12,
+                      tokens: [6, 7, 8, 9, 10], units: "shi'yu'shu'ru'fa")
+        ]
+        composition.activateCharacter(0)
+        XCTAssertNil(composition.selectDisplayed(0))
+
+        // Re-choose only the second character. The multi-syllable anchor must
+        // be split, not dropped: 是 and 输入法 stay locked.
+        decoder.correctionResult = [
+            Candidate(text: "语", consumed: 4, tokens: [11], units: "yu")
+        ]
+        composition.activateCharacter(1)
+        XCTAssertNil(composition.selectDisplayed(0))
+
+        XCTAssertEqual(composition.commitPreeditLiterally(), "是语输入法")
+    }
+
     func testShuangpinDisablesEngineExpansionForCorrectionOnly() {
         let decoder = RecordingPinyinDecoder()
         decoder.decodeResult = { _ in
