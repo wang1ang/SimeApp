@@ -645,15 +645,17 @@ final class CompositionEditingTests: XCTestCase {
 
         // Tap the first character and pick a whole-sentence candidate: this
         // anchors all five syllables as one segment.
+        // Whole-sentence candidate with word-level tokens (not one per
+        // syllable): anchors all five syllables as one segment.
         decoder.correctionResult = [
             Candidate(text: "是与输入法", consumed: 12,
-                      tokens: [6, 7, 8, 9, 10], units: "shi'yu'shu'ru'fa")
+                      tokens: [6, 7], units: "shi'yu'shu'ru'fa")
         ]
         composition.activateCharacter(0)
         XCTAssertNil(composition.selectDisplayed(0))
 
-        // Re-choose only the second character. The multi-syllable anchor must
-        // be split, not dropped: 是 and 输入法 stay locked.
+        // Re-choosing one interior character must split the anchor, not drop
+        // it: 是 and 输入法 stay locked even with unaligned tokens.
         decoder.correctionResult = [
             Candidate(text: "语", consumed: 4, tokens: [11], units: "yu")
         ]
