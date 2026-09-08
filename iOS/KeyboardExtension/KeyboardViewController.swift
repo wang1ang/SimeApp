@@ -42,6 +42,8 @@ final class KeyboardViewController: UIInputViewController {
     private var spaceLastTranslation: CGFloat = 0
     private var deleteInitialTimer: Timer?
     private var deleteRepeatTimer: Timer?
+    // Ignore repeat callbacks whose touch-up was lost during detachment.
+    private var deleteRepeatGeneration = 0
 
     private static func makeComposition(inputScheme: InputScheme = InputSettings.scheme) -> Composition {
         // Start with whichever decoder is available without blocking: the
@@ -102,6 +104,13 @@ final class KeyboardViewController: UIInputViewController {
         // shows to the user as the keyboard flashing/reloading). Memory-only
         // hint: decode results are unchanged and caches rebuild on demand.
         NativePinyinDecoder.sharedIfLoaded?.resetCaches()
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        // A keyboard switch, lock, or host transition may cancel a delete
+        // touch without delivering UIControl's touch-up events.
+        endDeleteRepeat()
+        super.viewWillDisappear(animated)
     }
 
     override func textDidChange(_ textInput: UITextInput?) {
@@ -401,11 +410,14 @@ final class KeyboardViewController: UIInputViewController {
 
     @objc private func beginDeleteRepeat() {
         endDeleteRepeat()
+        deleteRepeatGeneration &+= 1
+        let generation = deleteRepeatGeneration
         delete()
         deleteInitialTimer = Timer.scheduledTimer(withTimeInterval: 0.35, repeats: false) { [weak self] _ in
-            guard let self else { return }
+            guard let self, self.deleteRepeatGeneration == generation else { return }
             self.deleteRepeatTimer = Timer.scheduledTimer(withTimeInterval: 0.08, repeats: true) { [weak self] _ in
-                self?.delete()
+                guard let self, self.deleteRepeatGeneration == generation else { return }
+                self.delete()
             }
             if let deleteRepeatTimer = self.deleteRepeatTimer {
                 RunLoop.main.add(deleteRepeatTimer, forMode: .common)
@@ -417,6 +429,7 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     @objc private func endDeleteRepeat() {
+        deleteRepeatGeneration &+= 1
         deleteInitialTimer?.invalidate()
         deleteInitialTimer = nil
         deleteRepeatTimer?.invalidate()
