@@ -439,7 +439,8 @@ final class KeyboardViewController: UIInputViewController {
     private func insertPunctuation(_ punctuation: String) {
         commitComposition()
         textDocumentProxy.insertText(punctuation == ";" ? "；" : punctuation)
-        if keyboardPage != .letters {
+        let keepsNumberPage = keyboardPage == .numbers && punctuation == "."
+        if keyboardPage != .letters && !keepsNumberPage {
             keyboardPage = .letters
             shiftState = .off
             keyboardNeedsRebuild = true
