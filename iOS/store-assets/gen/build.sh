@@ -33,7 +33,7 @@ gen_one "01-offline" "dark" \
 gen_one "02-shuangpin" "light" \
   "完美支持双拼输入" \
   "微软双拼开箱即用，<span class='accent'>全拼一键切换</span>" \
-  "<div class='bubble recv'>你用的什么输入法？</div><div class='bubble'>是语，双拼输入法</div>" \
+  "<div class='bubble recv'>你用的什么输入法？</div><div class='bubble'>乐言，双拼输入法</div>" \
   "../keyboards/kbd-shuangpin-light.png"
 
 gen_one "03-sentence" "dark" \
