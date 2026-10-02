@@ -14,7 +14,7 @@
 
 1. `iOS/project.yml` 是唯一 Xcode 工程源，不提交生成的 `iOS/Sime.xcodeproj/`。
 2. 键盘完全离线运行，不申请“完全访问”，不得上传或记录用户输入正文。
-3. 系统只安装一个“是语键盘”扩展；宿主 App 名称为“是语输入法”。
+3. 系统只安装一个“乐言键盘”扩展；宿主 App 名称为“乐言输入法”。
 4. 输入方案（全拼 / 微软双拼 / 小鹤双拼 / 自然码 / 搜狗双拼）通过 App Group 共享；切换后不得混用旧 Composition 状态。方案由 `Shared/InputScheme.swift` 定义：双拼布局是数据驱动的 `ShuangpinLayout`（每方案给出键→韵母表与零声母约定，`ia/ua`、`iang/uang`、`ong/iong`、`uo/o`、`ui/ü`、`ue/üe`、`uai/ing` 等歧义按共享汉语音系规则解析）。App 内用 Picker 切换（不是开关），系统只保留单一扩展、菜单名不拆分。
 5. 模型与 ncnn runtime 必须位于 Keyboard Extension 自身资源/链接范围内。
 6. ncnn XCFramework 是本地生成物，不提交；新环境用 `iOS/scripts/build-ncnn-xcframework.sh` 构建。
@@ -113,7 +113,7 @@
 
 ## 闪退与内存真机回归
 
-55. 选择“是语键盘”时不能出现巨大空白按键后闪退。
+55. 选择“乐言键盘”时不能出现巨大空白按键后闪退。
 56. 首次普通解码、打开第一行改选、连续联想均不能触发扩展 Jetsam。
 57. 点击第一行不能临时创建大型分词索引。
 58. 使用 `iOS/Tests/DeviceMemoryBaseline.md` 的固定 workload 做 Release 真机存活测试。
@@ -124,7 +124,7 @@
 
 ## 键盘激活响应
 
-61. 切换到“是语键盘”时布局不得闪烁、按键不得在数百毫秒内失效。原生引擎（GRU embedding、ncnn 模型、score 表）加载昂贵，**不得在主线程/控制器属性初始化时同步构建**：`KeyboardViewController` 必须先用轻量 `BuiltinPinyinDecoder` 立即呈现可用键盘，再在后台队列加载 `NativePinyinDecoder` 并在就绪后换入、保留在打 raw。
+61. 切换到“乐言键盘”时布局不得闪烁、按键不得在数百毫秒内失效。原生引擎（GRU embedding、ncnn 模型、score 表）加载昂贵，**不得在主线程/控制器属性初始化时同步构建**：`KeyboardViewController` 必须先用轻量 `BuiltinPinyinDecoder` 立即呈现可用键盘，再在后台队列加载 `NativePinyinDecoder` 并在就绪后换入、保留在打 raw。
 62. 已加载的原生引擎须以 `NativePinyinDecoder.shared` 在扩展进程内跨控制器实例复用，避免每次切换重新加载。换入不得丢失/错位当前 marked 组合（沿用 `restore(raw:committed:)`）。
 63. 缝隙点击需两个条件同时满足：根视图 `view` 近乎不透明（alpha 0.9，否则缝隙触摸穿透到宿主）；键用 `KeyButton()` 把 `point(inside:)` 向缝隙扩 ~8pt（否则缝隙下无键可接）。必须 `KeyButton()` 直接实例化，`UIButton(type:.system)` 不生成子类。
 

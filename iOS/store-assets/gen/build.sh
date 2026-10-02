@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 生成是语输入法 App Store 截图 (1290x2796)。
+# 生成乐言输入法 App Store 截图 (1290x2796)。
 # 用法: bash gen/build.sh   (在 iOS/store-assets 目录下运行)
 set -euo pipefail
 cd "$(dirname "$0")/.."
