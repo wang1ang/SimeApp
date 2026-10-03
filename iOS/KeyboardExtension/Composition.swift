@@ -181,7 +181,14 @@ final class Composition {
                     group.append("'")
                     remaining.removeFirst()
                 }
-                guard remaining.count >= syllable.count else { return [] }
+                if remaining.count < syllable.count {
+                    guard syllable == syllables.last, !remaining.isEmpty else {
+                        return []
+                    }
+                    groups.append(group + remaining)
+                    remaining.removeAll()
+                    continue
+                }
                 group += String(remaining.prefix(syllable.count))
                 remaining.removeFirst(syllable.count)
                 groups.append(group)
