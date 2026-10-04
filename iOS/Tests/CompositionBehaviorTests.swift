@@ -621,6 +621,26 @@ final class CompositionEditingTests: XCTestCase {
         XCTAssertTrue(composition.displayCandidates.isEmpty)
     }
 
+    func testSelectingFinalCorrectionCharacterCommitsImmediately() {
+        let decoder = RecordingPinyinDecoder()
+        decoder.decodeResult = { pinyin in
+            pinyin == "nihao"
+                ? [Candidate(text: "你好", consumed: pinyin.count,
+                             tokens: [1, 2], units: "ni'hao")]
+                : []
+        }
+        decoder.correctionResult = [
+            Candidate(text: "号", consumed: 0, tokens: [3], units: "hao")
+        ]
+        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
+
+        "nihao".forEach { composition.append(String($0)) }
+        composition.activateCharacter(1)
+
+        XCTAssertEqual(composition.selectDisplayed(0), "你号")
+        XCTAssertFalse(composition.isComposing)
+    }
+
     func testReturnAfterSecondRowCorrectionDecodesRemainingSyllables() {
         let decoder = RecordingPinyinDecoder()
         decoder.decodeResult = { pinyin in

@@ -440,9 +440,16 @@ final class Composition {
             let next = selectedRange.upperBound
             if next < syllables.count {
                 activateCharacter(prefixText.count + next)
-            } else {
-                cursor = raw.count
+                return nil
             }
+            // Commit immediately when the final character is corrected.
+            if relativeActive == syllables.count - 1 {
+                let result = prefixText + renderedText(top.text)
+                predictionCandidates = []
+                clearComposition()
+                return result
+            }
+            cursor = raw.count
             return nil
         }
         return select(index)
