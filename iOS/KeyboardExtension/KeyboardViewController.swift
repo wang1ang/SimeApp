@@ -315,9 +315,7 @@ final class KeyboardViewController: UIInputViewController {
             } else if let text = composition.commitPreeditLiterally() {
                 // Return is the literal-English escape hatch: unlike space or
                 // the candidate-bar confirmation, it must not decode pinyin.
-                textDocumentProxy.unmarkText()
-                textDocumentProxy.insertText(text)
-                updateMarkedText()
+                commit(text)
                 render()
             } else {
                 textDocumentProxy.insertText("\n")
@@ -460,22 +458,24 @@ final class KeyboardViewController: UIInputViewController {
 
     private func space() {
         if let text = composition.commitBestOrRaw() {
-            textDocumentProxy.unmarkText()
-            textDocumentProxy.insertText(text)
+            commit(text)
         } else {
             textDocumentProxy.insertText(" ")
         }
-        updateMarkedText()
         render()
+    }
+
+    private func commit(_ text: String) {
+        textDocumentProxy.setMarkedText(text,
+            selectedRange: NSRange(location: text.utf16.count, length: 0))
+        textDocumentProxy.unmarkText()
     }
 
     private func commitComposition() {
         composition.moveCursor(to: composition.raw.count)
         if let text = composition.commitBestOrRaw() {
-            textDocumentProxy.unmarkText()
-            textDocumentProxy.insertText(text)
+            commit(text)
         }
-        updateMarkedText()
         render()
     }
 
@@ -513,10 +513,8 @@ final class KeyboardViewController: UIInputViewController {
         activeUsesBubble = false
         selectedTone = nil
         if let text = composition.selectDisplayed(index) {
-            textDocumentProxy.unmarkText()
-            textDocumentProxy.insertText(text)
+            commit(text)
         }
-        updateMarkedText()
         render()
     }
 
