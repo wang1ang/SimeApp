@@ -527,12 +527,13 @@ final class Composition {
             .filter { $0 > relativeIndex }
             .min() ?? syllables.count
         let maximumSpan = max(1, nextAnchor - relativeIndex)
+        let correctionExpansion = shuangpin == nil || raw.count % 2 == 1
         replacementCandidates = decoder.correctionCandidates(
             top.units,
             fixedPrefix: fixedPrefix,
             prefixSyllables: relativeIndex,
             limit: 60,
-            expansion: shuangpin == nil
+            expansion: correctionExpansion
         ).filter { candidate in
             let span = max(1, candidate.units.split(separator: "'")
                 .filter { !$0.isEmpty }.count)
