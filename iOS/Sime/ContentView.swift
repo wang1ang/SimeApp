@@ -42,7 +42,7 @@ struct ContentView: View {
                     Divider()
                     Text("启用方法")
                         .font(.headline)
-                    Text("1. 打开“设置” > “通用” > “键盘” > “键盘”\n2. 选择“添加新键盘”\n3. 在第三方键盘中选择“乐言键盘”\n4. 在任意输入框长按地球键切换")
+                    Text("1. 打开“设置” > “通用” > “键盘” > “键盘”\n2. 选择“添加新键盘”\n3. 在第三方键盘中选择“乐言输入法”\n4. 在任意输入框长按地球键切换")
                         .fixedSize(horizontal: false, vertical: true)
                     Divider()
                     Text("输入测试")
@@ -55,7 +55,7 @@ struct ContentView: View {
                             .clipShape(RoundedRectangle(cornerRadius: 10))
                             .accessibilityLabel("输入测试文本框")
                         if testText.isEmpty {
-                            Text("在这里输入文字，测试乐言键盘")
+                            Text("在这里输入文字，测试乐言输入法")
                                 .foregroundStyle(.secondary)
                                 .padding(.horizontal, 13)
                                 .padding(.vertical, 16)

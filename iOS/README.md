@@ -3,7 +3,7 @@
 这是“乐言输入法”的 iOS App 与键盘扩展。包含离线 Sime 拼音引擎、两行候选栏、逐字改选、上屏后联想、全拼与微软双拼；默认不申请“完全访问”，不上传输入内容。
 
 - 宿主 App 名称：**乐言输入法**
-- 系统键盘名称：**乐言键盘**
+- 系统键盘名称：**乐言输入法**
 
 ## 生成与运行
 
@@ -15,7 +15,7 @@ xcodegen generate
 open Sime.xcodeproj
 ```
 
-在 Xcode 的 Signing & Capabilities 中为 `Sime` 和 `SimeKeyboard` 选择同一 Development Team，再运行 `Sime` target 到真机。随后按宿主 App 指引在系统设置中启用“乐言键盘”。键盘扩展不能在模拟器中完整验证，需使用真机。
+在 Xcode 的 Signing & Capabilities 中为 `Sime` 和 `SimeKeyboard` 选择同一 Development Team，再运行 `Sime` target 到真机。随后按宿主 App 指引在系统设置中启用“乐言输入法”。键盘扩展不能在模拟器中完整验证，需使用真机。
 
 ## 输入方案
 
