@@ -141,6 +141,25 @@ final class CompositionCandidateSelectionTests: XCTestCase {
         XCTAssertEqual(composition.cursor, 3)
     }
 
+    func testActiveCorrectionRetainsTrailingShuangpinInitialForPinyinEditing() {
+        let decoder = RecordingPinyinDecoder()
+        decoder.decodeResult = { _ in
+            [Candidate(text: "你好", consumed: 3, tokens: [1, 2],
+                       units: "ni'hao")]
+        }
+        decoder.correctionResult = [
+            Candidate(text: "号", consumed: 0, tokens: [3], units: "hao")
+        ]
+        let composition = Composition(decoder: decoder, inputScheme: .microsoftShuangpin)
+
+        "uiy".forEach { composition.append(String($0)) }
+        composition.activateCharacter(1)
+        composition.activateCharacter(1)
+
+        XCTAssertEqual(composition.activeEnteredKeys, "y")
+        XCTAssertEqual(composition.cursor, 3)
+    }
+
     func testShuangpinHighlightsValidFinalKeysAfterInitial() {
         let valid: Set<String> = ["xi", "xiao", "xian", "xie", "xin"]
         let decoder = RecordingPinyinDecoder()

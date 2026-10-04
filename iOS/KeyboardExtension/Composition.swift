@@ -170,9 +170,15 @@ final class Composition {
         var groups: [String] = []
         for syllable in syllables {
             if shuangpin != nil {
-                guard remaining.count >= 2 else { return [] }
-                groups.append(String(remaining.prefix(2)))
-                remaining.removeFirst(2)
+                if remaining.count >= 2 {
+                    groups.append(String(remaining.prefix(2)))
+                    remaining.removeFirst(2)
+                } else {
+                    // Keep a trailing lone initial editable.
+                    guard syllable == syllables.last, !remaining.isEmpty else { return [] }
+                    groups.append(String(remaining))
+                    remaining.removeAll()
+                }
             } else {
                 // Apostrophes are input keys too; associate one with the
                 // syllable that follows it so the displayed label is literal.
