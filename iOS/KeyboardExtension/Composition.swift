@@ -448,8 +448,8 @@ final class Composition {
                 activateCharacter(prefixText.count + next)
                 return nil
             }
-            // Commit immediately when the final character is corrected.
-            if relativeActive == syllables.count - 1 {
+            // A replacement can span multiple final syllables.
+            if selectedRange.upperBound >= syllables.count {
                 let result = prefixText + renderedText(top.text)
                 predictionCandidates = []
                 clearComposition()

@@ -8,6 +8,7 @@ private final class RecordingPinyinDecoder: PinyinDecoder {
     var predictionCalls: [(context: [UInt32], limit: Int)] = []
     var decodeResult: (String) -> [Candidate] = { _ in [] }
     var correctionResult: [Candidate] = []
+    var correctionResultsByPrefix: [Int: [Candidate]] = [:]
     var tokenizedText: [String: [UInt32]] = [:]
     var predictionResult: ([UInt32]) -> [Candidate] = { _ in [] }
 
@@ -37,7 +38,7 @@ private final class RecordingPinyinDecoder: PinyinDecoder {
                               prefixSyllables: Int, limit: Int,
                               expansion: Bool) -> [Candidate] {
         correctionExpansions.append(expansion)
-        return Array(correctionResult.prefix(limit))
+        return Array((correctionResultsByPrefix[prefixSyllables] ?? correctionResult).prefix(limit))
     }
 
     func tokenize(_ text: String) -> [UInt32] {
@@ -638,6 +639,29 @@ final class CompositionEditingTests: XCTestCase {
         XCTAssertEqual(composition.commitPreeditLiterally(), "你hao")
         XCTAssertFalse(composition.isComposing)
         XCTAssertTrue(composition.displayCandidates.isEmpty)
+    }
+
+    func testSelectingFinalMultiSyllableCorrectionCommitsImmediately() {
+        let decoder = RecordingPinyinDecoder()
+        decoder.decodeResult = { pinyin in
+            pinyin == "jiyixia"
+                ? [Candidate(text: "及以下", consumed: pinyin.count,
+                             tokens: [1, 2, 3], units: "ji'yi'xia")]
+                : []
+        }
+        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
+
+        "jiyixia".forEach { composition.append(String($0)) }
+        decoder.correctionResultsByPrefix = [
+            0: [Candidate(text: "记", consumed: 0, tokens: [4], units: "ji")],
+            1: [Candidate(text: "一下", consumed: 0, tokens: [5, 6], units: "yi'xia")]
+        ]
+        composition.activateCharacter(0)
+        XCTAssertNil(composition.selectDisplayed(0))
+        XCTAssertEqual(composition.activeCharacterIndex, 1)
+
+        XCTAssertEqual(composition.selectDisplayed(0), "记一下")
+        XCTAssertFalse(composition.isComposing)
     }
 
     func testSelectingFinalCorrectionCharacterCommitsImmediately() {
