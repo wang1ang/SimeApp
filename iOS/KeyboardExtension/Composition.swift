@@ -130,6 +130,17 @@ final class Composition {
     }
 
     var displayCandidates: [Candidate] {
+        if !replacementCandidates.isEmpty {
+            let drop = max(0, (activeCharacterIndex ?? prefixText.count) - prefixText.count)
+            return replacementCandidates.map { candidate in
+                guard drop > 0, candidate.text.count > drop else { return candidate }
+                return Candidate(text: String(candidate.text.dropFirst(drop)),
+                                 consumed: candidate.consumed,
+                                 tokens: candidate.tokens,
+                                 units: candidate.units,
+                                 score: candidate.score)
+            }
+        }
         guard !isComposing else { return candidates }
         // Association completions carry the full word (e.g. 狐狸) but their
         // leading `consumed` characters are already in the document, so the
