@@ -353,10 +353,16 @@ final class KeyboardViewController: UIInputViewController {
         default:
             switch keyboardPage {
             case .numbers:
-                // Commit any pending composition before the digit so the
-                // marked pinyin isn't dropped; deferred from the 123 tap.
-                commitComposition()
-                textDocumentProxy.insertText(title.lowercased())
+                // Commit the marked text and digit as one transaction. Sending
+                // setMarkedText/unmarkText followed immediately by insertText
+                // can make UIKit place the digit before the committed letter.
+                composition.moveCursor(to: composition.raw.count)
+                let digit = title.lowercased()
+                if let text = composition.commitBestOrRaw() {
+                    commit(text + digit)
+                } else {
+                    textDocumentProxy.insertText(digit)
+                }
             case .symbols:
                 // Symbols insert literally and stay on the symbol page, like
                 // the system keyboard's #+= layout.
