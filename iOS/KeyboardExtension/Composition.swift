@@ -121,8 +121,17 @@ final class Composition {
     private func pinyinSyllableIndex(forDisplayIndex index: Int) -> Int {
         let relative = index - prefixText.count
         let preview = String(sentencePreview.dropFirst(prefixText.count))
-        let englishPrefix = preview.prefix(while: { $0.isASCII && $0.isLetter }).count
-        return max(0, relative - englishPrefix)
+        let englishChars = preview.prefix(while: { $0.isASCII && $0.isLetter }).count
+        guard englishChars > 0 else { return relative }
+        let syllables = candidates.first?.units.split(separator: "'") ?? []
+        var rawCount = 0
+        var englishSyllables = 0
+        for syllable in syllables {
+            guard rawCount < englishChars else { break }
+            rawCount += syllable.count
+            englishSyllables += 1
+        }
+        return max(0, relative - englishChars + englishSyllables)
     }
 
     /// The literal key sequence entered for the active correction syllable.

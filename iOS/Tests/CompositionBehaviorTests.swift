@@ -413,13 +413,10 @@ final class CompositionCandidateSelectionTests: XCTestCase {
     func testMixedEnglishPrefixMapsChineseTapToItsSyllable() {
         let decoder = RecordingPinyinDecoder()
         decoder.decodeResult = { _ in
-            [Candidate(text: "fix一下", consumed: 8, tokens: [], units: "yi'xia")]
+            [Candidate(text: "fix一下", consumed: 8, tokens: [], units: "f'i'x'yi'xia")]
         }
-        decoder.correctionResultsByPrefix[0] = [
-            Candidate(text: "一", consumed: 2, tokens: [], units: "yi")
-        ]
         decoder.correctionResultsByPrefix[3] = [
-            Candidate(text: "下", consumed: 3, tokens: [], units: "xia")
+            Candidate(text: "一", consumed: 2, tokens: [], units: "yi")
         ]
         let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
         "fixyixia".forEach { composition.append(String($0)) }
