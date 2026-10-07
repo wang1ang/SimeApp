@@ -319,9 +319,10 @@ final class KeyboardViewController: UIInputViewController {
                     // is committed through setMarkedText + unmarkText. Clear the
                     // marked range first, then insert the text literally.
                     if literalEnglish {
-                        // Clear the marked range first. Defer insertion one main
-                        // run-loop turn so hosts finish unmarking before text
-                        // is inserted (Notes and Zhihu handle this differently).
+                        // Hosts disagree on whether insertText replaces an
+                        // active marked range: Notes may retain its underline,
+                        // while Zhihu may duplicate the text. Clearing first
+                        // and deferring insertion lets both finish unmarking.
                         textDocumentProxy.setMarkedText("", selectedRange: NSRange(location: 0, length: 0))
                         textDocumentProxy.unmarkText()
                         DispatchQueue.main.async { [weak self] in
