@@ -258,10 +258,26 @@ final class KeyboardViewController: UIInputViewController {
                 gesture.minimumPressDuration = 0.25
                 gesture.cancelsTouchesInView = false
                 button.addGestureRecognizer(gesture)
+                addSchemeHint(to: button)
             }
             button.addTarget(self, action: #selector(keyTapped(_:)), for: .touchUpInside)
         }
         return button
+    }
+
+    // Small grey tag in the space key's bottom-right corner showing the active
+    // scheme, so the user can tell pinyin from shuangpin at a glance.
+    private func addSchemeHint(to button: UIButton) {
+        let hint = UILabel()
+        hint.text = schemeLabel
+        hint.font = .systemFont(ofSize: 10)
+        hint.textColor = .tertiaryLabel
+        hint.translatesAutoresizingMaskIntoConstraints = false
+        button.addSubview(hint)
+        NSLayoutConstraint.activate([
+            hint.trailingAnchor.constraint(equalTo: button.trailingAnchor, constant: -6),
+            hint.bottomAnchor.constraint(equalTo: button.bottomAnchor, constant: -4),
+        ])
     }
 
     private func inputModeButton() -> UIButton {
