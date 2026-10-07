@@ -716,23 +716,45 @@ final class Composition {
         candidates = result
         displayGroups = computeDisplayGroups(pinyinPart: pinyinPart,
                                              englishTail: englishTail,
-                                             pinyinUnits: pinyinUnits)
+                                             pinyinUnits: pinyinUnits,
+                                             topText: result.first?.text ?? "")
     }
 
     /// Segment `raw` to line up 1:1 with the top candidate's characters: the
     /// pinyin prefix splits into syllables (two keys for Shuangpin, the pinyin
-    /// length for full pinyin), while the literal English tail splits one key
-    /// per character. Display only — never changes commit consumption.
+    /// pinyin length for full pinyin), while a literal English tail stays
+    /// together as one display group. Display only — never changes commit
+    /// consumption.
     private func computeDisplayGroups(pinyinPart: String, englishTail: String,
-                                      pinyinUnits: String) -> [String] {
+                                      pinyinUnits: String,
+                                      topText: String) -> [String] {
         var parts: [String] = []
-        if !pinyinPart.isEmpty {
-            let syllables = pinyinUnits.split(separator: "'").map(String.init)
+        var pinyinPrefix = pinyinPart
+        var units = pinyinUnits
+        // Sime may identify a lowercase English word inside an otherwise
+        // full-pinyin candidate (for example `fixyixia` -> `fix一下`). In
+        // that case the decoder can expose the letters as separate pseudo-
+        // syllables; collapse the corresponding raw prefix into one word.
+        let word = topText.prefix(while: { $0.isASCII && $0.isLetter })
+        if word.count > 1, pinyinPart.count >= word.count {
+            let end = pinyinPart.index(pinyinPart.startIndex,
+                                       offsetBy: word.count)
+            parts.append(String(pinyinPart[..<end]))
+            pinyinPrefix = String(pinyinPart[end...])
+            var remaining = units.split(separator: "'").map(String.init)
+            var consumed = 0
+            while !remaining.isEmpty && consumed < word.count {
+                consumed += remaining.removeFirst().count
+            }
+            units = remaining.joined(separator: "'")
+        }
+        if !pinyinPrefix.isEmpty {
+            let syllables = units.split(separator: "'").map(String.init)
             if syllables.isEmpty {
                 // No Chinese decode: keep the pinyin as one ungrouped chunk.
-                parts.append(pinyinPart)
+                parts.append(pinyinPrefix)
             } else {
-                var remaining = Substring(pinyinPart)
+                var remaining = Substring(pinyinPrefix)
                 for syllable in syllables {
                     if remaining.isEmpty { break }
                     var group = ""
@@ -746,8 +768,10 @@ final class Composition {
                 if !remaining.isEmpty { parts.append(String(remaining)) }
             }
         }
-        // The literal English tail aligns one first-row character per key.
-        parts.append(contentsOf: englishTail.map(String.init))
+        // Keep a literal English tail together as one word. It is a single
+        // candidate/commit unit, so splitting it by key makes the marked
+        // preedit look unlike the first-row candidate (e.g. "你好 App").
+        if !englishTail.isEmpty { parts.append(englishTail) }
         return parts
     }
 

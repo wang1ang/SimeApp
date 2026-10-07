@@ -778,9 +778,23 @@ final class KeyboardViewController: UIInputViewController {
         var confirmMaxX: CGFloat = 0
         if composition.isComposing {
             let font = UIFont.preferredFont(forTextStyle: .body)
-            for (index, char) in Array(composition.sentencePreview).enumerated() {
-                let isActive = index == composition.activeCharacterIndex
-                let title = isActive ? (composition.activeEnteredKeys ?? String(char)) : String(char)
+            let previewChars = Array(composition.sentencePreview)
+            var index = 0
+            while index < previewChars.count {
+                let start = index
+                let isEnglish = previewChars[index].isASCII && previewChars[index].isLetter
+                if isEnglish {
+                    while index < previewChars.count,
+                          previewChars[index].isASCII,
+                          previewChars[index].isLetter {
+                        index += 1
+                    }
+                } else {
+                    index += 1
+                }
+                let text = String(previewChars[start..<index])
+                let isActive = start == composition.activeCharacterIndex
+                let title = isActive ? (composition.activeEnteredKeys ?? text) : text
                 let button = UIButton(type: .system)
                 button.setTitle(title, for: .normal)
                 button.titleLabel?.font = font
@@ -788,7 +802,7 @@ final class KeyboardViewController: UIInputViewController {
                 let textWidth = (title as NSString).size(withAttributes: [.font: font]).width
                 let width = max(24, ceil(textWidth) + 4)
                 button.frame = CGRect(x: sentenceX, y: 0, width: width, height: 28)
-                button.accessibilityValue = String(index)
+                button.accessibilityValue = String(start)
                 button.addTarget(self, action: #selector(sentenceCharacterTapped(_:)), for: .touchUpInside)
                 sentenceBar.addSubview(button)
                 sentenceX += width + 3

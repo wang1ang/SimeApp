@@ -395,15 +395,18 @@ final class CompositionCandidateSelectionTests: XCTestCase {
         // Lowercase pinyin then a capitalised English tail: decode the pinyin
         // prefix and keep the tail literal, combined into one candidate.
         "nihao".forEach { composition.append(String($0)) }
-        ["A", "A"].forEach { composition.append($0) }
+        ["A", "p", "p"].forEach { composition.append($0) }
 
         // The tail must not pollute the pinyin decode.
         XCTAssertEqual(decoder.decodeCalls.last?.pinyin, "nihao")
-        XCTAssertEqual(composition.candidates.first?.text, "你好AA")
-        // Inline preedit groups the pinyin prefix by syllable and aligns one
-        // group per literal English-tail character.
-        XCTAssertEqual(composition.preedit, "ni hao A A")
-        XCTAssertEqual(composition.select(0), "你好AA")
+        XCTAssertEqual(composition.candidates.first?.text, "你好App")
+
+        // Inline preedit groups the pinyin prefix by syllable and keeps the
+        // literal English tail together as one word.
+        XCTAssertEqual(composition.preedit, "ni hao App")
+
+        XCTAssertEqual(composition.select(0), "你好App")
+
         XCTAssertFalse(composition.isComposing)
     }
 
