@@ -143,19 +143,26 @@ final class Composition {
         }
     }
 
+    private func englishPrefixSyllableCount() -> Int {
+        let preview = String(sentencePreview.dropFirst(prefixText.count))
+        let count = preview.prefix(while: { $0.isASCII && $0.isLetter }).count
+        guard count > 0 else { return 0 }
+        var consumed = 0
+        var syllables = 0
+        for unit in candidates.first?.units.split(separator: "'") ?? [] {
+            guard consumed < count else { break }
+            consumed += unit.count
+            syllables += 1
+        }
+        return syllables
+    }
+
     private func pinyinSyllableIndex(forDisplayIndex index: Int) -> Int {
         let relative = index - prefixText.count
         let preview = String(sentencePreview.dropFirst(prefixText.count))
         let englishChars = preview.prefix(while: { $0.isASCII && $0.isLetter }).count
         guard englishChars > 0 else { return relative }
-        let syllables = candidates.first?.units.split(separator: "'") ?? []
-        var rawCount = 0
-        var englishSyllables = 0
-        for syllable in syllables {
-            guard rawCount < englishChars else { break }
-            rawCount += syllable.count
-            englishSyllables += 1
-        }
+        let englishSyllables = englishPrefixSyllableCount()
         return max(0, relative - englishChars + englishSyllables)
     }
 
@@ -535,7 +542,7 @@ final class Composition {
             activeShowsKeys = true
             // Enter pinyin editing: cursor to this syllable's raw key end.
             if let units = candidates.first?.units {
-                let rel = index - prefixText.count
+                let rel = pinyinSyllableIndex(forDisplayIndex: index)
                 if rel >= 0 {
                     cursor = min(rawLength(forSyllables: rel + 1, units: units), raw.count)
                 }
