@@ -814,7 +814,7 @@ final class KeyboardViewController: UIInputViewController {
                 button.accessibilityValue = String(index)
                 button.addTarget(self, action: #selector(sentenceCharacterTapped(_:)), for: .touchUpInside)
                 sentenceBar.addSubview(button)
-                sentenceX += width + 3
+                sentenceX += width + 1
             }
         }
         if composition.isComposing {
