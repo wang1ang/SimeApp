@@ -147,6 +147,32 @@ final class Composition {
     /// ASCII runs consume however many units Sime used for that word, while
     /// each Han character consumes one unit. This keeps the mapping generic
     /// for English at the beginning, middle, or end of a sentence.
+    private func unitCharacterRanges(text: String, units: String) -> [Range<Int>] {
+        let chars = Array(text)
+        let syllables = units.split(separator: "'").map(String.init)
+        var ranges = Array(repeating: 0..<0, count: syllables.count)
+        var display = 0
+        var unit = 0
+        while display < chars.count && unit < syllables.count {
+            let start = display
+            if chars[display].isASCII && chars[display].isLetter {
+                while display < chars.count && chars[display].isASCII && chars[display].isLetter { display += 1 }
+                let wordLength = display - start
+                var consumed = 0
+                while unit < syllables.count && consumed < wordLength {
+                    consumed += syllables[unit].count
+                    ranges[unit] = start..<display
+                    unit += 1
+                }
+            } else {
+                display += 1
+                ranges[unit] = start..<display
+                unit += 1
+            }
+        }
+        return ranges
+    }
+
     private func unitIndex(forDisplayIndex index: Int) -> Int {
         let relative = index - prefixText.count
         guard relative >= 0, let candidate = candidates.first else { return relative }
@@ -271,24 +297,20 @@ final class Composition {
 
     private func renderedText(_ decoded: String) -> String {
         let base = Array(decoded)
-        let anchors = anchorSegments.sorted {
-            $0.syllableRange.lowerBound < $1.syllableRange.lowerBound
-        }
+        let units = candidates.first?.units ?? ""
+        let ranges = unitCharacterRanges(text: decoded, units: units)
         var output = ""
-        var syllable = 0
-        var anchorIndex = 0
-        while syllable < base.count {
-            if anchorIndex < anchors.count,
-               anchors[anchorIndex].syllableRange.lowerBound == syllable {
-                let anchor = anchors[anchorIndex]
-                output += anchor.text
-                syllable = anchor.syllableRange.upperBound
-                anchorIndex += 1
-            } else {
-                output.append(base[syllable])
-                syllable += 1
-            }
+        var position = 0
+        let anchors = anchorSegments.sorted { $0.syllableRange.lowerBound < $1.syllableRange.lowerBound }
+        for anchor in anchors {
+            guard ranges.indices.contains(anchor.syllableRange.lowerBound) else { continue }
+            let range = ranges[anchor.syllableRange.lowerBound]
+            guard range.lowerBound >= position else { continue }
+            output += String(base[position..<range.lowerBound])
+            output += anchor.text
+            position = min(base.count, range.upperBound)
         }
+        output += String(base[position...])
         return output
     }
 

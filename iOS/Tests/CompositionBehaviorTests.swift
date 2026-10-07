@@ -430,6 +430,21 @@ final class CompositionCandidateSelectionTests: XCTestCase {
         XCTAssertEqual(composition.selectionLocation, 6)
     }
 
+    func testMixedEnglishFinalCorrectionCommitsCorrectSentence() {
+        let decoder = RecordingPinyinDecoder()
+        decoder.decodeResult = { _ in
+            [Candidate(text: "fix一下", consumed: 8, tokens: [], units: "fix'yi'xia")]
+        }
+        decoder.correctionResultsByPrefix[2] = [
+            Candidate(text: "塔", consumed: 0, tokens: [], units: "ta")
+        ]
+        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
+        "fixyixia".forEach { composition.append(String($0)) }
+        composition.activateCharacter(4)
+        XCTAssertEqual(composition.selectDisplayed(0), "fix一塔")
+        XCTAssertFalse(composition.isComposing)
+    }
+
     func testSelectingAllSegmentsUsesEveryFixedTokenForPrediction() {
         let decoder = RecordingPinyinDecoder()
         decoder.decodeResult = { pinyin in
