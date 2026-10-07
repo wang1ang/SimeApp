@@ -21,7 +21,6 @@ final class FullPinyinEndToEndTests: XCTestCase {
         return composition.candidates.map(\.text)
     }
 
-    // 全拼 -> 首选, for cases whose top matches the Shuangpin top.
     func testFullPinyinTopCandidatesMatchingShuangpin() throws {
         let cases: [(pinyin: String, top: String)] = [
             ("kuangquansh", "矿泉水"),

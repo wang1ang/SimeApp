@@ -562,7 +562,8 @@ final class Composition {
         // above moves it into a syllable).
         cursor = raw.count
         let current = renderedText(top.text)
-        let fixedPrefix = String(Array(current).prefix(relativeIndex))
+        let displayRelativeIndex = index - prefixText.count
+        let fixedPrefix = String(Array(current).prefix(max(0, displayRelativeIndex)))
         let nextAnchor = anchorSegments
             .map(\.syllableRange.lowerBound)
             .filter { $0 > relativeIndex }
