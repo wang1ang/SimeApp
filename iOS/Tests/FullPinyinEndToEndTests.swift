@@ -21,6 +21,24 @@ final class FullPinyinEndToEndTests: XCTestCase {
         return composition.candidates.map(\.text)
     }
 
+    func testMixedEnglishWordWithChineseSuffix() throws {
+        let bundle = Bundle(for: Self.self)
+        guard let decoder = NativePinyinDecoder(bundle: bundle) else { throw XCTSkip() }
+        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
+        "itemta".forEach { composition.append(String($0)) }
+        XCTAssertEqual(composition.candidates.first?.text, "item他")
+        XCTAssertEqual(composition.candidates.first?.units, "item'ta")
+    }
+
+    func testMixedChineseEnglishChineseWord() throws {
+        let bundle = Bundle(for: Self.self)
+        guard let decoder = NativePinyinDecoder(bundle: bundle) else { throw XCTSkip() }
+        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
+        "jiapaperlaiyuan".forEach { composition.append(String($0)) }
+        XCTAssertEqual(composition.candidates.first?.text, "加paper来源")
+        XCTAssertEqual(composition.candidates.first?.units, "jia'paper'lai'yuan")
+    }
+
     func testFullPinyinTopCandidatesMatchingShuangpin() throws {
         let cases: [(pinyin: String, top: String)] = [
             ("kuangquansh", "矿泉水"),
