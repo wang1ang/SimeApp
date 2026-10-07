@@ -25,10 +25,18 @@ final class MicrosoftShuangpinTests: XCTestCase {
     }
 
     func testVFinalUsesSimePinyinNotation() {
-        XCTAssertEqual(MicrosoftShuangpin.expand("nv"), "nv")
-        XCTAssertEqual(MicrosoftShuangpin.expand("lt"), "lve")
+        // ü lives on the y key (shared with uai); ue/üe stays on t.
+        XCTAssertEqual(MicrosoftShuangpin.expand("ny"), "nv")   // 女
+        XCTAssertEqual(MicrosoftShuangpin.expand("ly"), "lv")   // 律
+        XCTAssertEqual(MicrosoftShuangpin.expand("lt"), "lve")  // 略
         XCTAssertEqual(MicrosoftShuangpin.expand("lr"), "luan")
         XCTAssertEqual(MicrosoftShuangpin.expand("lp"), "lun")
+    }
+
+    func testUiAndUaiShareKeys() {
+        XCTAssertEqual(MicrosoftShuangpin.expand("gv"), "gui")   // 贵: ui on v
+        XCTAssertEqual(MicrosoftShuangpin.expand("gy"), "guai")  // 乖: uai on y
+        XCTAssertEqual(MicrosoftShuangpin.expand("zv"), "zui")   // 最
     }
 
     func testSpecialInitialsSemicolonAndIncompletePair() {

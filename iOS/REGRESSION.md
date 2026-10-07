@@ -136,7 +136,7 @@
 
 64c. **只有微软/搜狗布局使用 `;` 韵母键**（`InputScheme.usesSemicolonKey`）：其字母页 home 行含 `;` 且不缩进；小鹤/自然码/全拼的 home 行为 `asdfghjkl`（缩进），`;` 只作标点。切方案后须 `keyboardNeedsRebuild` 重建键盘。
 
-64d. 各双拼方案的键→拼音映射由 `ShuangpinLayout.microsoft/xiaohe/ziranma` 表驱动，代表用例断言见 `iOS/Tests/MicrosoftShuangpinTests.swift`、`XiaoheShuangpinTests.swift`、`ZiranmaShuangpinTests.swift`。**自然码**当前实现按“与微软同键位、但 `ing` 移到 `y`（与 `uai` 共键，声母互斥不冲突）、零声母用韵母首字母（`爱=al`）”建模；**搜狗**默认布局按与微软完全一致处理。这两条布局细节尚未做真机长期回归，若与官方码表有出入，先改表与对应测试再改行为，不要让码表、测试与本条默默分叉。
+64d. 各双拼方案的键→拼音映射由 `ShuangpinLayout.microsoft/xiaohe/ziranma` 表驱动，代表用例断言见 `iOS/Tests/MicrosoftShuangpinTests.swift`、`XiaoheShuangpinTests.swift`、`ZiranmaShuangpinTests.swift`。**微软/搜狗**共用同一张表（按官方搜狗码表）：`ui` 在 `v` 键，`uai` 与 `ü`（写作 `v`）共用 `y` 键（声母互斥：`n/l`→ü，`g/k/h/zh/ch/sh`→uai），`ue/üe` 在 `t` 键，`ing` 在 `;`。即 `贵=gv`、`乖=gy`、`女=ny`、`略=lt`。**自然码**按“与微软同键位、但 `ing` 移到 `y`（与 `uai` 共键，声母互斥不冲突）、零声母用韵母首字母（`爱=al`）”建模。全键位覆盖由 `ShuangpinCoverageTests` 对每个方案断言；布局细节尚未做真机长期回归，若与官方码表有出入，先改表与对应测试再改行为，不要让码表、测试与本条默默分叉。
 
 64e. **双拼必须覆盖全拼音节全集**：标准普通话约 410 个音节清单在 `iOS/Tests/quanpin.txt`（唱作资源），`ShuangpinCoverageTests` 枚举每方案所有两键组合的 `expand` 结果，逐条断言清单均可产出（`ü`归一为 `v`）。唯一已知例外是双拼无法区分的稀见叹词 `lo`（→luo）、`yo`（→yuo），在测试中显式排除。`quanpin.txt` 是该清单的唯一来源，不要另处重建。
 

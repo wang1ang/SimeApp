@@ -56,6 +56,7 @@ struct ShuangpinLayout {
         case uiV        // ui / ü (n/l take ü, written v in Sime)
         case ueVe       // ue / üe (n/l take üe, written ve)
         case uaiIng     // uai / ing (g/k/h/zh/ch/sh take uai)
+        case uaiV       // uai / ü on one key (Microsoft y): n/l take ü (v), rest uai
     }
 
     /// How a zero-initial (无声母) vowel syllable is entered.
@@ -98,6 +99,7 @@ struct ShuangpinLayout {
         case .uiV: return Self.nlSet.contains(initial) ? "v" : "ui"
         case .ueVe: return Self.nlSet.contains(initial) ? "ve" : "ue"
         case .uaiIng: return Self.uaiSet.contains(initial) ? "uai" : "ing"
+        case .uaiV: return Self.nlSet.contains(initial) ? "v" : "uai"
         }
     }
 
@@ -139,18 +141,18 @@ struct ShuangpinLayout {
 extension ShuangpinLayout {
     private static let commonInitials: [Character: String] = ["v": "zh", "i": "ch", "u": "sh"]
 
-    /// Microsoft Shuangpin (also Sogou's default): ing on `;`, zero-initial via
-    /// the `o` marker.
+    /// Microsoft Shuangpin (also Sogou's default): ing on `;`, ui on `v`,
+    /// uai/ü share `y` (n/l → ü), zero-initial via the `o` marker.
     static let microsoft = ShuangpinLayout(
         initials: commonInitials,
         finals: [
             "a": .fixed("a"), "e": .fixed("e"), "i": .fixed("i"), "u": .fixed("u"),
-            "v": .uiV, "o": .uoO,
+            "v": .fixed("ui"), "o": .uoO,
             "l": .fixed("ai"), "z": .fixed("ei"), "k": .fixed("ao"), "b": .fixed("ou"),
             "q": .fixed("iu"), "j": .fixed("an"), "f": .fixed("en"), "h": .fixed("ang"),
             "g": .fixed("eng"), "s": .ongIong, "w": .iaUa, "x": .fixed("ie"),
             "c": .fixed("iao"), "m": .fixed("ian"), "n": .fixed("in"),
-            "d": .iangUang, ";": .fixed("ing"), "y": .fixed("uai"),
+            "d": .iangUang, ";": .fixed("ing"), "y": .uaiV,
             "r": .fixed("uan"), "p": .fixed("un"), "t": .ueVe
         ],
         zero: .marker("o")
