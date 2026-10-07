@@ -312,13 +312,23 @@ final class KeyboardViewController: UIInputViewController {
         case "return":
             if exitPinyinEditing() {
                 // Editing a syllable: return returns to the sentence preview.
-            } else if let text = composition.commitPreeditLiterally() {
-                // Return is the literal-English escape hatch: unlike space or
-                // the candidate-bar confirmation, it must not decode pinyin.
-                commit(text)
-                render()
             } else {
-                textDocumentProxy.insertText("\n")
+                let literalEnglish = composition.candidates.first?.isEnglish == true
+                if let text = composition.commitPreeditLiterally() {
+                    // Notes can retain an underline when a literal English word
+                    // is committed through setMarkedText + unmarkText. Clear the
+                    // marked range first, then insert the text literally.
+                    if literalEnglish {
+                        textDocumentProxy.setMarkedText("", selectedRange: NSRange(location: 0, length: 0))
+                        textDocumentProxy.unmarkText()
+                        textDocumentProxy.insertText(text)
+                    } else {
+                        commit(text)
+                    }
+                    render()
+                } else {
+                    textDocumentProxy.insertText("\n")
+                }
             }
         case "⇧":
             shiftState = (shiftState == .off) ? .oneShot : .off
