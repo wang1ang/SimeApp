@@ -319,8 +319,8 @@ final class KeyboardViewController: UIInputViewController {
                     // is committed through setMarkedText + unmarkText. Clear the
                     // marked range first, then insert the text literally.
                     if literalEnglish {
-                        textDocumentProxy.setMarkedText("", selectedRange: NSRange(location: 0, length: 0))
-                        textDocumentProxy.unmarkText()
+                        // Insert directly so Notes replaces the marked range
+                        // and removes its underline in one operation.
                         textDocumentProxy.insertText(text)
                     } else {
                         commit(text)
