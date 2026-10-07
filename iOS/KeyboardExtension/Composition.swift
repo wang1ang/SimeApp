@@ -100,6 +100,31 @@ final class Composition {
     var sentencePreview: String {
         prefixText + renderedText(candidates.first?.text ?? "")
     }
+
+    struct SentenceSegment {
+        let text: String
+        let displayIndex: Int
+    }
+
+    var sentenceSegments: [SentenceSegment] {
+        let chars = Array(sentencePreview)
+        guard !chars.isEmpty else { return [] }
+        var result: [SentenceSegment] = []
+        var index = 0
+        while index < chars.count {
+            let start = index
+            if chars[index].isASCII && chars[index].isLetter {
+                while index < chars.count && chars[index].isASCII && chars[index].isLetter {
+                    index += 1
+                }
+            } else {
+                index += 1
+            }
+            result.append(SentenceSegment(text: String(chars[start..<index]), displayIndex: start))
+        }
+        return result
+    }
+
     var displayCandidates: [Candidate] {
         if !replacementCandidates.isEmpty { return replacementCandidates }
         guard !isComposing else { return candidates }

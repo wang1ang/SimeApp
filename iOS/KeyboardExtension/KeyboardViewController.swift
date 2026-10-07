@@ -579,15 +579,7 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     @objc private func sentenceCharacterTapped(_ sender: UIButton) {
-        guard let rawIndex = sender.accessibilityValue.flatMap(Int.init) else { return }
-        // Resolve the tapped character against the rendered sentence. This
-        // keeps the correction index aligned when an English run is rendered
-        // as one visual button but still occupies multiple source characters.
-        let title = sender.title(for: .normal) ?? ""
-        let preview = Array(composition.sentencePreview)
-        let index = title.count == 1
-            ? (title.first.flatMap { preview.firstIndex(of: $0) } ?? rawIndex)
-            : rawIndex
+        guard let index = sender.accessibilityValue.flatMap(Int.init) else { return }
         // Fresh open (or switching chars) only lists candidates; the pinyin
         // toggle happens on a further tap while the bubble is open on this char.
         let bubbleOpenOnSame = candidateBubble != nil && composition.activeCharacterIndex == index
@@ -786,23 +778,10 @@ final class KeyboardViewController: UIInputViewController {
         var confirmMaxX: CGFloat = 0
         if composition.isComposing {
             let font = UIFont.preferredFont(forTextStyle: .body)
-            let previewChars = Array(composition.sentencePreview)
-            var index = 0
-            while index < previewChars.count {
-                let start = index
-                let isEnglish = previewChars[index].isASCII && previewChars[index].isLetter
-                if isEnglish {
-                    while index < previewChars.count,
-                          previewChars[index].isASCII,
-                          previewChars[index].isLetter {
-                        index += 1
-                    }
-                } else {
-                    index += 1
-                }
-                let text = String(previewChars[start..<index])
-                let isActive = start == composition.activeCharacterIndex
-                let title = isActive ? (composition.activeEnteredKeys ?? text) : text
+            for segment in composition.sentenceSegments {
+                let index = segment.displayIndex
+                let isActive = index == composition.activeCharacterIndex
+                let title = isActive ? (composition.activeEnteredKeys ?? segment.text) : segment.text
                 let button = UIButton(type: .system)
                 button.setTitle(title, for: .normal)
                 button.titleLabel?.font = font
@@ -810,7 +789,7 @@ final class KeyboardViewController: UIInputViewController {
                 let textWidth = (title as NSString).size(withAttributes: [.font: font]).width
                 let width = max(24, ceil(textWidth) + 4)
                 button.frame = CGRect(x: sentenceX, y: 0, width: width, height: 28)
-                button.accessibilityValue = String(start)
+                button.accessibilityValue = String(index)
                 button.addTarget(self, action: #selector(sentenceCharacterTapped(_:)), for: .touchUpInside)
                 sentenceBar.addSubview(button)
                 sentenceX += width + 3
