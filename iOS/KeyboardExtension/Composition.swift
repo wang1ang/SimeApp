@@ -316,24 +316,27 @@ final class Composition {
     }
 
     private func literalTextWithAnchors() -> String {
-        guard let units = candidates.first?.units, !anchorSegments.isEmpty else {
-            return raw
-        }
+        guard let units = candidates.first?.units, !anchorSegments.isEmpty else { return raw }
         let syllables = units.split(separator: "'").map(String.init)
         let groups = enteredKeyGroups(for: syllables)
         guard groups.count == syllables.count else { return raw }
         let anchors = Dictionary(uniqueKeysWithValues: anchorSegments.map {
             ($0.syllableRange.lowerBound, $0)
         })
+        return applyAnchors(to: groups, anchors: anchors)
+    }
+
+    private func applyAnchors(to groups: [String],
+                              anchors: [Int: CompositionSegment]) -> String {
         var output = ""
-        var syllable = 0
-        while syllable < groups.count {
-            if let anchor = anchors[syllable] {
+        var index = 0
+        while index < groups.count {
+            if let anchor = anchors[index] {
                 output += anchor.text
-                syllable = anchor.syllableRange.upperBound
+                index = anchor.syllableRange.upperBound
             } else {
-                output += groups[syllable]
-                syllable += 1
+                output += groups[index]
+                index += 1
             }
         }
         return output
