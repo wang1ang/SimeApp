@@ -313,7 +313,7 @@ final class KeyboardViewController: UIInputViewController {
             if exitPinyinEditing() {
                 // Editing a syllable: return returns to the sentence preview.
             } else {
-                let literalEnglish = composition.candidates.first?.isEnglish == true
+                let literalEnglish = composition.hasLiteralEnglishCandidate
                 if let text = composition.commitPreeditLiterally() {
                     // Notes can retain an underline when a literal English word
                     // is committed through setMarkedText + unmarkText. Clear the

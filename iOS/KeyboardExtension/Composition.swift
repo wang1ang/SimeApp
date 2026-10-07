@@ -125,8 +125,11 @@ final class Composition {
         return result
     }
 
+    var hasLiteralEnglishCandidate: Bool {
+        candidates.contains { $0.isEnglish }
+    }
+
     var displayCandidates: [Candidate] {
-        if !replacementCandidates.isEmpty { return replacementCandidates }
         guard !isComposing else { return candidates }
         // Association completions carry the full word (e.g. 狐狸) but their
         // leading `consumed` characters are already in the document, so the
