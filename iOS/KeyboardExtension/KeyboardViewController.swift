@@ -1013,9 +1013,51 @@ final class KeyButton: UIButton {
     // consulted anyway.)
     var hitInset = UIEdgeInsets(top: 0, left: 8, bottom: 0, right: 8)
 
-    // Custom-type buttons don't dim on press; restore light feedback.
+    // Background to restore when the press ends; captured on first highlight so
+    // callers can keep setting backgroundColor normally (e.g. armed Shift).
+    private var restingBackground: UIColor?
+    // Invalidates a pending release restore when a new press arrives first.
+    private var pressToken = 0
+
+    // Custom-type buttons don't react on press; recolor and shrink the key for
+    // feedback, and let it linger past release so a quick tap stays visible.
     override var isHighlighted: Bool {
-        didSet { alpha = isHighlighted ? 0.4 : 1 }
+        didSet {
+            guard isHighlighted != oldValue else { return }
+            pressToken += 1
+            if isHighlighted {
+                // Hard-cut into the pressed state, even if a release animation
+                // from a previous tap is still running.
+                layer.removeAllAnimations()
+                restingBackground = backgroundColor
+                backgroundColor = Self.pressedBackground
+                transform = Self.pressedTransform(for: bounds.size)
+            } else {
+                let token = pressToken
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { [weak self] in
+                    guard let self, self.pressToken == token else { return }
+                    UIView.animate(withDuration: 0.12) {
+                        self.backgroundColor = self.restingBackground
+                        self.transform = .identity
+                    }
+                }
+            }
+        }
+    }
+
+    // Darker than the key in light mode, lighter in dark mode, but gentle.
+    private static let pressedBackground = UIColor { traits in
+        traits.userInterfaceStyle == .dark ? .systemGray3 : .systemGray4
+    }
+
+    // Shrink by a fixed inset per edge (not a fixed ratio) so large keys like
+    // space don't collapse. Convert the point inset into a scale per axis.
+    private static let pressInset: CGFloat = 2
+    private static func pressedTransform(for size: CGSize) -> CGAffineTransform {
+        guard size.width > 0, size.height > 0 else { return .identity }
+        let sx = max(0, (size.width - 2 * pressInset) / size.width)
+        let sy = max(0, (size.height - 2 * pressInset) / size.height)
+        return CGAffineTransform(scaleX: sx, y: sy)
     }
 
     override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
