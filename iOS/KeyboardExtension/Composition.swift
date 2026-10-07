@@ -118,6 +118,13 @@ final class Composition {
         }
     }
 
+    private func pinyinSyllableIndex(forDisplayIndex index: Int) -> Int {
+        let relative = index - prefixText.count
+        let preview = String(sentencePreview.dropFirst(prefixText.count))
+        let englishPrefix = preview.prefix(while: { $0.isASCII && $0.isLetter }).count
+        return max(0, relative - englishPrefix)
+    }
+
     /// The literal key sequence entered for the active correction syllable.
     /// Do not use Sime's normalized pinyin units here: a Microsoft Shuangpin
     /// user must see their two-key code, and full-pinyin input must retain
@@ -127,7 +134,7 @@ final class Composition {
               let active = activeCharacterIndex,
               let units = candidates.first?.units else { return nil }
         let syllables = units.split(separator: "'").map(String.init)
-        let rawSyllableIndex = active - prefixText.count
+        let rawSyllableIndex = pinyinSyllableIndex(forDisplayIndex: active)
         guard syllables.indices.contains(rawSyllableIndex) else { return nil }
         let groups = enteredKeyGroups(for: syllables)
         guard groups.indices.contains(rawSyllableIndex) else { return nil }
@@ -398,7 +405,7 @@ final class Composition {
             let replacement = replacementCandidates[index]
             let span = max(1, replacement.units.split(separator: "'")
                 .filter { !$0.isEmpty }.count)
-            let relativeActive = active - prefixText.count
+            let relativeActive = pinyinSyllableIndex(forDisplayIndex: active)
             let syllables = top.units.split(separator: "'").map(String.init)
             guard relativeActive >= 0,
                   relativeActive + span <= syllables.count else { return nil }
@@ -513,7 +520,7 @@ final class Composition {
         guard Array(sentence).indices.contains(index),
               let top = candidates.first else { return }
         let syllables = top.units.split(separator: "'").map(String.init)
-        let relativeIndex = index - prefixText.count
+        let relativeIndex = pinyinSyllableIndex(forDisplayIndex: index)
         guard syllables.indices.contains(relativeIndex) else { return }
         activeCharacterIndex = index
         activeShowsKeys = false

@@ -410,6 +410,26 @@ final class CompositionCandidateSelectionTests: XCTestCase {
         XCTAssertFalse(composition.isComposing)
     }
 
+    func testMixedEnglishPrefixMapsChineseTapToItsSyllable() {
+        let decoder = RecordingPinyinDecoder()
+        decoder.decodeResult = { _ in
+            [Candidate(text: "fix一下", consumed: 8, tokens: [], units: "yi'xia")]
+        }
+        decoder.correctionResultsByPrefix[0] = [
+            Candidate(text: "一", consumed: 2, tokens: [], units: "yi")
+        ]
+        decoder.correctionResultsByPrefix[3] = [
+            Candidate(text: "下", consumed: 3, tokens: [], units: "xia")
+        ]
+        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
+        "fixyixia".forEach { composition.append(String($0)) }
+
+        composition.activateCharacter(3)
+
+        XCTAssertEqual(composition.activeCharacterIndex, 3)
+        XCTAssertEqual(composition.displayCandidates.first?.text, "一")
+    }
+
     func testSelectingAllSegmentsUsesEveryFixedTokenForPrediction() {
         let decoder = RecordingPinyinDecoder()
         decoder.decodeResult = { pinyin in
