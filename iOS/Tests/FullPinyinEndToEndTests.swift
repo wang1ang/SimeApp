@@ -39,6 +39,21 @@ final class FullPinyinEndToEndTests: XCTestCase {
         XCTAssertEqual(composition.candidates.first?.units, "jia'paper'lai'yuan")
     }
 
+    func testMixedEnglishFinalCorrectionCommitsCorrectSentence() throws {
+        let bundle = Bundle(for: Self.self)
+        guard let decoder = NativePinyinDecoder(bundle: bundle) else {
+            throw XCTSkip("sime.dict/sime.cnt not bundled into the test target")
+        }
+        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
+        "itemta".forEach { composition.append(String($0)) }
+        composition.activateCharacter(4)
+        guard let index = composition.displayCandidates.firstIndex(where: { $0.text == "塔" }) else {
+            throw XCTSkip("native correction candidates do not include 塔")
+        }
+        XCTAssertEqual(composition.selectDisplayed(index), "item塔")
+        XCTAssertFalse(composition.isComposing)
+    }
+
     func testFullPinyinTopCandidatesMatchingShuangpin() throws {
         let cases: [(pinyin: String, top: String)] = [
             ("kuangquansh", "矿泉水"),
