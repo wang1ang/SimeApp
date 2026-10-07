@@ -579,7 +579,15 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     @objc private func sentenceCharacterTapped(_ sender: UIButton) {
-        guard let index = sender.accessibilityValue.flatMap(Int.init) else { return }
+        guard let rawIndex = sender.accessibilityValue.flatMap(Int.init) else { return }
+        // Resolve the tapped character against the rendered sentence. This
+        // keeps the correction index aligned when an English run is rendered
+        // as one visual button but still occupies multiple source characters.
+        let title = sender.title(for: .normal) ?? ""
+        let preview = Array(composition.sentencePreview)
+        let index = title.count == 1
+            ? (title.first.flatMap { preview.firstIndex(of: $0) } ?? rawIndex)
+            : rawIndex
         // Fresh open (or switching chars) only lists candidates; the pinyin
         // toggle happens on a further tap while the bubble is open on this char.
         let bubbleOpenOnSame = candidateBubble != nil && composition.activeCharacterIndex == index
