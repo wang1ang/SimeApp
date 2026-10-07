@@ -177,6 +177,7 @@ final class Composition {
         let relative = index - prefixText.count
         guard relative >= 0, let candidate = candidates.first else { return relative }
         let text = Array(renderedText(candidate.text))
+        guard text.contains(where: { $0.isASCII && $0.isLetter }) else { return relative }
         let units = candidate.units.split(separator: "'").map(String.init)
         var display = 0
         var unit = 0
