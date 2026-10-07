@@ -106,23 +106,47 @@ final class Composition {
         let displayIndex: Int
     }
 
-    var sentenceSegments: [SentenceSegment] {
-        let chars = Array(sentencePreview)
-        guard !chars.isEmpty else { return [] }
-        var result: [SentenceSegment] = []
-        var index = 0
-        while index < chars.count {
-            let start = index
-            if chars[index].isASCII && chars[index].isLetter {
-                while index < chars.count && chars[index].isASCII && chars[index].isLetter {
-                    index += 1
+    private struct SentenceMapping {
+        let segments: [SentenceSegment]
+        let unitRanges: [Range<Int>]
+
+        init(text: String, units: String) {
+            let chars = Array(text)
+            let syllables = units.split(separator: "'").map(String.init)
+            var segments: [SentenceSegment] = []
+            var ranges = Array(repeating: 0..<0, count: syllables.count)
+            var display = 0
+            var unit = 0
+            while display < chars.count {
+                let start = display
+                let english = chars[display].isASCII && chars[display].isLetter
+                if english {
+                    while display < chars.count && chars[display].isASCII && chars[display].isLetter { display += 1 }
+                    var consumed = 0
+                    while unit < syllables.count && consumed < display - start {
+                        consumed += syllables[unit].count
+                        ranges[unit] = start..<display
+                        unit += 1
+                    }
+                } else {
+                    display += 1
+                    if unit < ranges.count { ranges[unit] = start..<display }
+                    unit += 1
                 }
-            } else {
-                index += 1
+                segments.append(SentenceSegment(text: String(chars[start..<display]), displayIndex: start))
             }
-            result.append(SentenceSegment(text: String(chars[start..<index]), displayIndex: start))
+            self.segments = segments
+            self.unitRanges = ranges
         }
-        return result
+    }
+
+
+    var sentenceSegments: [SentenceSegment] {
+        sentenceMapping.segments
+    }
+
+    private var sentenceMapping: SentenceMapping {
+        SentenceMapping(text: sentencePreview, units: candidates.first?.units ?? "")
     }
 
     var hasLiteralEnglishCandidate: Bool {
@@ -162,59 +186,17 @@ final class Composition {
     /// each Han character consumes one unit. This keeps the mapping generic
     /// for English at the beginning, middle, or end of a sentence.
     private func unitCharacterRanges(text: String, units: String) -> [Range<Int>] {
-        let chars = Array(text)
-        let syllables = units.split(separator: "'").map(String.init)
-        var ranges = Array(repeating: 0..<0, count: syllables.count)
-        var display = 0
-        var unit = 0
-        while display < chars.count && unit < syllables.count {
-            let start = display
-            if chars[display].isASCII && chars[display].isLetter {
-                while display < chars.count && chars[display].isASCII && chars[display].isLetter { display += 1 }
-                let wordLength = display - start
-                var consumed = 0
-                while unit < syllables.count && consumed < wordLength {
-                    consumed += syllables[unit].count
-                    ranges[unit] = start..<display
-                    unit += 1
-                }
-            } else {
-                display += 1
-                ranges[unit] = start..<display
-                unit += 1
-            }
-        }
-        return ranges
+        SentenceMapping(text: text, units: units).unitRanges
     }
 
     private func unitIndex(forDisplayIndex index: Int) -> Int {
         let relative = index - prefixText.count
         guard relative >= 0, let candidate = candidates.first else { return relative }
-        let text = Array(renderedText(candidate.text))
-        guard text.contains(where: { $0.isASCII && $0.isLetter }) else { return relative }
-        let units = candidate.units.split(separator: "'").map(String.init)
-        var display = 0
-        var unit = 0
-        while display < text.count, unit < units.count {
-            let start = display
-            let unitStart = unit
-            if text[display].isASCII && text[display].isLetter {
-                while display < text.count && text[display].isASCII && text[display].isLetter {
-                    display += 1
-                }
-                let wordLength = display - start
-                var consumed = 0
-                while unit < units.count && consumed < wordLength {
-                    consumed += units[unit].count
-                    unit += 1
-                }
-            } else {
-                display += 1
-                unit += 1
-            }
-            if relative < display { return unitStart }
+        let mapping = sentenceMapping
+        guard mapping.segments.contains(where: { $0.displayIndex == relative }) else {
+            return relative
         }
-        return unit
+        return mapping.unitRanges.firstIndex { $0.lowerBound <= relative && relative < $0.upperBound } ?? relative
     }
 
     /// The literal key sequence entered for the active correction syllable.
