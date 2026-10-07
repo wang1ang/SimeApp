@@ -143,27 +143,37 @@ final class Composition {
         }
     }
 
-    private func englishPrefixSyllableCount() -> Int {
-        let preview = String(sentencePreview.dropFirst(prefixText.count))
-        let count = preview.prefix(while: { $0.isASCII && $0.isLetter }).count
-        guard count > 0 else { return 0 }
-        var consumed = 0
-        var syllables = 0
-        for unit in candidates.first?.units.split(separator: "'") ?? [] {
-            guard consumed < count else { break }
-            consumed += unit.count
-            syllables += 1
-        }
-        return syllables
-    }
-
-    private func pinyinSyllableIndex(forDisplayIndex index: Int) -> Int {
+    /// Maps a displayed sentence segment to the first decoder unit it owns.
+    /// ASCII runs consume however many units Sime used for that word, while
+    /// each Han character consumes one unit. This keeps the mapping generic
+    /// for English at the beginning, middle, or end of a sentence.
+    private func unitIndex(forDisplayIndex index: Int) -> Int {
         let relative = index - prefixText.count
-        let preview = String(sentencePreview.dropFirst(prefixText.count))
-        let englishChars = preview.prefix(while: { $0.isASCII && $0.isLetter }).count
-        guard englishChars > 0 else { return relative }
-        let englishSyllables = englishPrefixSyllableCount()
-        return max(0, relative - englishChars + englishSyllables)
+        guard relative >= 0, let candidate = candidates.first else { return relative }
+        let text = Array(renderedText(candidate.text))
+        let units = candidate.units.split(separator: "'").map(String.init)
+        var display = 0
+        var unit = 0
+        while display < text.count, unit < units.count {
+            let start = display
+            let unitStart = unit
+            if text[display].isASCII && text[display].isLetter {
+                while display < text.count && text[display].isASCII && text[display].isLetter {
+                    display += 1
+                }
+                let wordLength = display - start
+                var consumed = 0
+                while unit < units.count && consumed < wordLength {
+                    consumed += units[unit].count
+                    unit += 1
+                }
+            } else {
+                display += 1
+                unit += 1
+            }
+            if relative < display { return unitStart }
+        }
+        return unit
     }
 
     /// The literal key sequence entered for the active correction syllable.
@@ -175,7 +185,7 @@ final class Composition {
               let active = activeCharacterIndex,
               let units = candidates.first?.units else { return nil }
         let syllables = units.split(separator: "'").map(String.init)
-        let rawSyllableIndex = pinyinSyllableIndex(forDisplayIndex: active)
+        let rawSyllableIndex = unitIndex(forDisplayIndex: active)
         guard syllables.indices.contains(rawSyllableIndex) else { return nil }
         let groups = enteredKeyGroups(for: syllables)
         guard groups.indices.contains(rawSyllableIndex) else { return nil }
@@ -446,7 +456,7 @@ final class Composition {
             let replacement = replacementCandidates[index]
             let span = max(1, replacement.units.split(separator: "'")
                 .filter { !$0.isEmpty }.count)
-            let relativeActive = pinyinSyllableIndex(forDisplayIndex: active)
+            let relativeActive = unitIndex(forDisplayIndex: active)
             let syllables = top.units.split(separator: "'").map(String.init)
             guard relativeActive >= 0,
                   relativeActive + span <= syllables.count else { return nil }
@@ -542,7 +552,7 @@ final class Composition {
             activeShowsKeys = true
             // Enter pinyin editing: cursor to this syllable's raw key end.
             if let units = candidates.first?.units {
-                let rel = pinyinSyllableIndex(forDisplayIndex: index)
+                let rel = unitIndex(forDisplayIndex: index)
                 if rel >= 0 {
                     cursor = min(rawLength(forSyllables: rel + 1, units: units), raw.count)
                 }
@@ -561,7 +571,7 @@ final class Composition {
         guard Array(sentence).indices.contains(index),
               let top = candidates.first else { return }
         let syllables = top.units.split(separator: "'").map(String.init)
-        let relativeIndex = pinyinSyllableIndex(forDisplayIndex: index)
+        let relativeIndex = unitIndex(forDisplayIndex: index)
         guard syllables.indices.contains(relativeIndex) else { return }
         activeCharacterIndex = index
         activeShowsKeys = false
