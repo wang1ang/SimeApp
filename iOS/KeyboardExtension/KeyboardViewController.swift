@@ -1051,31 +1051,21 @@ final class KeyButton: UIButton {
     // Background to restore when the press ends; captured on first highlight so
     // callers can keep setting backgroundColor normally (e.g. armed Shift).
     private var restingBackground: UIColor?
-    // Invalidates a pending release restore when a new press arrives first.
-    private var pressToken = 0
 
-    // Custom-type buttons don't react on press; recolor and shrink the key for
-    // feedback, and let it linger past release so a quick tap stays visible.
+    // Custom-type buttons provide immediate press feedback without animations,
+    // keeping hit testing stable during rapid typing.
     override var isHighlighted: Bool {
         didSet {
             guard isHighlighted != oldValue else { return }
-            pressToken += 1
             if isHighlighted {
-                // Hard-cut into the pressed state, even if a release animation
-                // from a previous tap is still running.
-                layer.removeAllAnimations()
+                // Apply feedback immediately; animated transforms can move the
+                // hit area while the next key is being touched.
                 restingBackground = backgroundColor
                 backgroundColor = Self.pressedBackground
                 transform = Self.pressedTransform(for: bounds.size)
             } else {
-                let token = pressToken
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { [weak self] in
-                    guard let self, self.pressToken == token else { return }
-                    UIView.animate(withDuration: 0.12) {
-                        self.backgroundColor = self.restingBackground
-                        self.transform = .identity
-                    }
-                }
+                backgroundColor = restingBackground
+                transform = .identity
             }
         }
     }
@@ -1085,8 +1075,6 @@ final class KeyButton: UIButton {
         traits.userInterfaceStyle == .dark ? .systemGray3 : .systemGray4
     }
 
-    // Shrink by a fixed inset per edge (not a fixed ratio) so large keys like
-    // space don't collapse. Convert the point inset into a scale per axis.
     private static let pressInset: CGFloat = 2
     private static func pressedTransform(for size: CGSize) -> CGAffineTransform {
         guard size.width > 0, size.height > 0 else { return .identity }
