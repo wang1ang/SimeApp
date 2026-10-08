@@ -154,17 +154,7 @@ final class Composition {
     }
 
     var displayCandidates: [Candidate] {
-        if !replacementCandidates.isEmpty {
-            let drop = max(0, (activeCharacterIndex ?? prefixText.count) - prefixText.count)
-            return replacementCandidates.map { candidate in
-                guard drop > 0, candidate.text.count > drop else { return candidate }
-                return Candidate(text: String(candidate.text.dropFirst(drop)),
-                                 consumed: candidate.consumed,
-                                 tokens: candidate.tokens,
-                                 units: candidate.units,
-                                 score: candidate.score)
-            }
-        }
+        if !replacementCandidates.isEmpty { return replacementCandidates }
         guard !isComposing else { return candidates }
         // Association completions carry the full word (e.g. 狐狸) but their
         // leading `consumed` characters are already in the document, so the
@@ -191,7 +181,7 @@ final class Composition {
 
     private func unitIndex(forDisplayIndex index: Int) -> Int {
         let relative = index - prefixText.count
-        guard relative >= 0, let candidate = candidates.first else { return relative }
+        guard relative >= 0, !candidates.isEmpty else { return relative }
         let mapping = sentenceMapping
         guard mapping.segments.contains(where: { $0.displayIndex == relative }) else {
             return relative

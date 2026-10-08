@@ -145,15 +145,15 @@ final class CompositionCandidateSelectionTests: XCTestCase {
     func testActiveCorrectionRetainsTrailingShuangpinInitialForPinyinEditing() {
         let decoder = RecordingPinyinDecoder()
         decoder.decodeResult = { _ in
-            [Candidate(text: "你好", consumed: 3, tokens: [1, 2],
-                       units: "ni'hao")]
+            [Candidate(text: "你要", consumed: 3, tokens: [1, 2],
+                       units: "ni'yao")]
         }
         decoder.correctionResult = [
-            Candidate(text: "号", consumed: 0, tokens: [3], units: "hao")
+            Candidate(text: "要", consumed: 0, tokens: [3], units: "yao")
         ]
         let composition = Composition(decoder: decoder, inputScheme: .microsoftShuangpin)
 
-        "uiy".forEach { composition.append(String($0)) }
+        "niy".forEach { composition.append(String($0)) }
         composition.activateCharacter(1)
         composition.activateCharacter(1)
 
@@ -737,7 +737,7 @@ final class CompositionEditingTests: XCTestCase {
         XCTAssertFalse(composition.isComposing)
     }
 
-    func testReturnAfterSecondRowCorrectionDecodesRemainingSyllables() {
+    func testSelectingFinalCorrectionSpanCommitsDecodedSentence() {
         let decoder = RecordingPinyinDecoder()
         decoder.decodeResult = { pinyin in
             pinyin == "wan'quan'li'xian"
@@ -758,31 +758,25 @@ final class CompositionEditingTests: XCTestCase {
 
         "wjqrlixm".forEach { composition.append(String($0)) }
         composition.activateCharacter(2)
-        XCTAssertNil(composition.selectDisplayed(0))
-
-        // Return must not fall back to the literal keys of the un-anchored
-        // "完全" prefix; it commits the decoded sentence with the anchor.
-        XCTAssertEqual(composition.commitPreeditLiterally(), "完全离线")
+        XCTAssertEqual(composition.selectDisplayed(0), "完全离线")
         XCTAssertFalse(composition.isComposing)
     }
 
     func testCorrectionInsideMultiSyllableAnchorKeepsUntouchedSyllables() {
         let decoder = RecordingPinyinDecoder()
         decoder.decodeResult = { pinyin in
-            pinyin == "shiyushurufa"
-                ? [Candidate(text: "始于输入法", consumed: pinyin.count,
-                             tokens: [1, 2, 3, 4, 5], units: "shi'yu'shu'ru'fa")]
+            pinyin == "shiyushurufama"
+                ? [Candidate(text: "始于输入法吗", consumed: pinyin.count,
+                             tokens: [1, 2, 3, 4, 5, 6],
+                             units: "shi'yu'shu'ru'fa'ma")]
                 : []
         }
         let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
-        "shiyushurufa".forEach { composition.append(String($0)) }
+        "shiyushurufama".forEach { composition.append(String($0)) }
 
-        // Tap the first character and pick a whole-sentence candidate: this
-        // anchors all five syllables as one segment.
-        // Whole-sentence candidate with word-level tokens (not one per
-        // syllable): anchors all five syllables as one segment.
+        // Select a five-syllable correction and leave the trailing 吗 editable.
         decoder.correctionResult = [
-            Candidate(text: "是与输入法", consumed: 12,
+            Candidate(text: "是与输入法", consumed: 14,
                       tokens: [6, 7], units: "shi'yu'shu'ru'fa")
         ]
         composition.activateCharacter(0)
@@ -796,7 +790,7 @@ final class CompositionEditingTests: XCTestCase {
         composition.activateCharacter(1)
         XCTAssertNil(composition.selectDisplayed(0))
 
-        XCTAssertEqual(composition.commitPreeditLiterally(), "是语输入法")
+        XCTAssertEqual(composition.commitPreeditLiterally(), "是语输入法吗")
     }
 
     func testShuangpinDisablesEngineExpansionForCorrectionOnly() {

@@ -41,7 +41,7 @@ private struct CorrectionCandidateDecoder: PinyinDecoder {
 }
 
 final class CompositionCorrectionTests: XCTestCase {
-    func testTappingJiaInXingJiaBiShowsConstrainedCandidates() {
+    func testCorrectionCandidatesKeepTheTappedCharacterVisible() {
         let composition = Composition(
             decoder: CorrectionCandidateDecoder(), inputScheme: .fullPinyin
         )
@@ -49,6 +49,7 @@ final class CompositionCorrectionTests: XCTestCase {
         XCTAssertEqual(composition.sentencePreview, "性价比")
 
         composition.activateCharacter(1)
+        XCTAssertEqual(composition.displayCandidates.first?.text, "价比")
         XCTAssertEqual(
             composition.displayCandidates.map(\.text),
             ["价比", "假币", "家比", "强", "将", "家", "假"]
@@ -68,17 +69,14 @@ final class CompositionCorrectionTests: XCTestCase {
         XCTAssertTrue(composition.sentencePreview.hasPrefix("性假"))
     }
 
-    func testWordSelectionAnchorsItsEntireSourceRange() {
+    func testSelectingFinalWordCorrectionCommitsWholeSentence() {
         let composition = Composition(
             decoder: CorrectionCandidateDecoder(), inputScheme: .fullPinyin
         )
         "xingjiabi".forEach { composition.append(String($0)) }
         composition.activateCharacter(1)
-        XCTAssertNil(composition.selectDisplayed(1)) // 假币 consumes jia + bi
-        XCTAssertEqual(composition.sentencePreview, "性假币")
-
-        composition.append("x")
-        XCTAssertTrue(composition.sentencePreview.hasPrefix("性假币"))
+        XCTAssertEqual(composition.selectDisplayed(1), "性假币")
+        XCTAssertFalse(composition.isComposing)
     }
 
     func testEarlierCharacterCanBeEditedWithoutChangingLaterAnchor() {
