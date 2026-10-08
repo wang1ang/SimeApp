@@ -13,11 +13,18 @@ typedef struct SimeHandle SimeHandle;
 
 typedef struct {
   char *text;        // UTF-8 display text (malloc'd)
-  char *units;       // segmented pinyin e.g. "ni'hao" (malloc'd)
+  char *units;       // segmented pinyin e.g. "ni'hao" (malloc'd); empty on the shuangpin path
   uint32_t *tokens;  // token IDs for LM context (malloc'd)
   int token_count;
   float score;
-  int consumed;  // bytes of pinyin input consumed
+  int consumed;    // raw keys/bytes of input consumed
+  // Shuangpin UI spans (both malloc'd arrays of length segment_count; empty
+  // on the full-pinyin path). Han characters are separate spans when the
+  // decoder can align their pinyin pieces; English words stay together.
+  // segment_keys[i] is the raw-key span; segment_chars[i] is its display width.
+  int *segment_keys;
+  int *segment_chars;
+  int segment_count;
 } SimeResult;
 
 typedef struct {
@@ -31,7 +38,12 @@ typedef struct {
 } SimeTokens;
 
 // Lifecycle
-SimeHandle *sime_create(const char *dict_path, const char *cnt_path);
+// sp_index_path (nullable): when non-null, binds the engine to the shuangpin
+// path — input is raw shuangpin keystrokes, segmented by the prebuilt index.
+// Pass NULL for the full-pinyin path. A non-null path that fails to load makes
+// sime_ready() false so the caller can fall back.
+SimeHandle *sime_create(const char *dict_path, const char *cnt_path,
+                        const char *sp_index_path);
 void sime_destroy(SimeHandle *h);
 bool sime_ready(const SimeHandle *h);
 int sime_context_size(const SimeHandle *h);
@@ -56,7 +68,11 @@ SimeResults sime_decode_sentence_with_context(
 // decode_str: single-word / multi-word candidates (all starting at input[0])
 SimeResults sime_decode_str(const SimeHandle *h, const char *input, int num);
 // One ordered correction list: fixed_prefix remains unchanged and returned
-// texts replace only the suffix at prefix_syllables. See above for expansion.
+// texts replace only the suffix anchored at prefix_syllables. See above for
+// expansion. On the full-pinyin path prefix_syllables counts apostrophe-
+// delimited units; on the shuangpin-index path it is the raw-key column of the
+// anchor (summed from the chosen path's real per-segment key spans), with no
+// two-key-per-syllable assumption.
 SimeResults sime_decode_correction(const SimeHandle *h, const char *input,
                                    const char *fixed_prefix,
                                    int prefix_syllables, int num,

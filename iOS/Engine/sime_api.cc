@@ -5,6 +5,7 @@
 
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <memory>
 #include <vector>
 
@@ -47,11 +48,17 @@ struct SimeHandle {
   std::unique_ptr<sime::Sime> sime;
 };
 
-SimeHandle *sime_create(const char *dict_path, const char *cnt_path) {
+SimeHandle *sime_create(const char *dict_path, const char *cnt_path,
+                        const char *sp_index_path) {
   return guard([&]() -> SimeHandle * {
     if (!dict_path || !cnt_path) return nullptr;
     auto h = std::make_unique<SimeHandle>();
-    h->sime = std::make_unique<sime::Sime>(dict_path, cnt_path);
+    // A null sp_index_path selects the full-pinyin path; a non-null one binds
+    // the shuangpin index (and fails loudly via Ready() if it won't load).
+    h->sime = std::make_unique<sime::Sime>(
+        dict_path, cnt_path,
+        sp_index_path ? std::filesystem::path(sp_index_path)
+                      : std::filesystem::path{});
     return h.release();
   }, static_cast<SimeHandle *>(nullptr));
 }
@@ -113,16 +120,38 @@ static SimeResults to_c(const std::vector<sime::DecodeResult> &results) {
         tokens_ok = false;
       }
     }
+    // segment_keys and segment_chars share one length and either both allocate
+    // or neither does (empty on the full-pinyin path).
+    int *seg_keys = nullptr;
+    int *seg_chars = nullptr;
+    bool segments_ok = true;
+    const size_t seg_n = src.segment_keys.size();
+    if (seg_n > 0) {
+      seg_keys = static_cast<int *>(malloc(seg_n * sizeof(int)));
+      seg_chars = static_cast<int *>(malloc(seg_n * sizeof(int)));
+      if (seg_keys && seg_chars) {
+        for (size_t s = 0; s < seg_n; ++s) {
+          seg_keys[s] = static_cast<int>(src.segment_keys[s]);
+          seg_chars[s] = static_cast<int>(src.segment_chars[s]);
+        }
+      } else {
+        segments_ok = false;
+      }
+    }
     // Any failed allocation makes the whole call fail atomically: free this
     // row's partials and every previously built row, then return empty.
-    if (!text || !units || !tokens_ok) {
+    if (!text || !units || !tokens_ok || !segments_ok) {
       free(text);
       free(units);
       free(tokens);
+      free(seg_keys);
+      free(seg_chars);
       for (size_t j = 0; j < i; ++j) {
         free(items[j].text);
         free(items[j].units);
         free(items[j].tokens);
+        free(items[j].segment_keys);
+        free(items[j].segment_chars);
       }
       free(items);
       return empty_results();
@@ -133,6 +162,9 @@ static SimeResults to_c(const std::vector<sime::DecodeResult> &results) {
     items[i].tokens = tokens;
     items[i].score = static_cast<float>(src.score);
     items[i].consumed = static_cast<int>(src.cnt);
+    items[i].segment_keys = seg_keys;
+    items[i].segment_chars = seg_chars;
+    items[i].segment_count = static_cast<int>(seg_n);
   }
   SimeResults r{};
   r.items = items;
@@ -216,6 +248,8 @@ void sime_free_results(SimeResults *r) {
     free(r->items[i].text);
     free(r->items[i].units);
     free(r->items[i].tokens);
+    free(r->items[i].segment_keys);
+    free(r->items[i].segment_chars);
   }
   free(r->items);
   r->items = nullptr;

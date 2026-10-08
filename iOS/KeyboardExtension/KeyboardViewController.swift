@@ -52,20 +52,37 @@ final class KeyboardViewController: UIInputViewController {
         // Start with whichever decoder is available without blocking: the
         // shared native engine if it already loaded in this process,
         // otherwise the lightweight builtin so the keyboard stays responsive
-        // while the native engine loads in the background.
-        Composition(
-            decoder: NativePinyinDecoder.sharedIfLoaded ?? BuiltinPinyinDecoder(),
-            inputScheme: inputScheme
-        )
+        // while the native engine loads in the background. The shuangpin-index
+        // schemes prefer the index-bound engine.
+        let wantsIndex = inputScheme.usesShuangpinIndex
+        let native = NativePinyinDecoder.sharedIfLoaded(index: wantsIndex)
+            ?? NativePinyinDecoder.sharedIfLoaded(index: false)
+        let decoder: PinyinDecoder = native ?? BuiltinPinyinDecoder()
+        return Composition(decoder: decoder, inputScheme: inputScheme)
     }
 
     /// Load the native engine off the main thread and swap it into the current
-    /// composition when ready, preserving any in-progress raw pinyin. Cheap
-    /// no-op once the native decoder is already active.
+    /// composition when ready, preserving any in-progress raw pinyin. Loads the
+    /// index-bound engine for shuangpin-index schemes; the full-pinyin engine
+    /// otherwise. Cheap no-op once the matching decoder is already active.
     private func activateNativeDecoder() {
-        guard !usesNativeDecoder else { return }
-        NativePinyinDecoder.loadShared { [weak self] decoder in
-            guard let self, let decoder, !self.usesNativeDecoder else { return }
+        let wantsIndex = keyboardScheme.usesShuangpinIndex
+        // Already on a native decoder with the binding this scheme needs.
+        if usesNativeDecoder,
+           composition.decoderHasShuangpinIndex == wantsIndex {
+            return
+        }
+        NativePinyinDecoder.loadShared(index: wantsIndex) { [weak self] decoder in
+            guard let self else { return }
+            // The scheme may have changed while loading; only swap if this
+            // binding still matches and we have not already adopted it.
+            guard self.keyboardScheme.usesShuangpinIndex == wantsIndex else { return }
+            guard let decoder = decoder
+                ?? NativePinyinDecoder.sharedIfLoaded(index: false) else { return }
+            if self.usesNativeDecoder,
+               self.composition.decoderHasShuangpinIndex == decoder.hasShuangpinIndex {
+                return
+            }
             self.usesNativeDecoder = true
             let raw = self.composition.raw
             let committed = self.composition.committed
@@ -77,7 +94,7 @@ final class KeyboardViewController: UIInputViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        usesNativeDecoder = NativePinyinDecoder.sharedIfLoaded != nil
+        usesNativeDecoder = composition.decoderIsNative
         setupView()
         displayedReturnKeyType = textDocumentProxy.returnKeyType
         render()
@@ -92,7 +109,7 @@ final class KeyboardViewController: UIInputViewController {
         if keyboardScheme != scheme {
             keyboardScheme = scheme
             composition = Self.makeComposition(inputScheme: scheme)
-            usesNativeDecoder = NativePinyinDecoder.sharedIfLoaded != nil
+            usesNativeDecoder = composition.decoderIsNative
             keyboardNeedsRebuild = true
         }
         composition.predictionEnabled = InputSettings.predictionEnabled
@@ -106,7 +123,7 @@ final class KeyboardViewController: UIInputViewController {
         // Shrink the engine's caches instead of risking a jetsam kill (which
         // shows to the user as the keyboard flashing/reloading). Memory-only
         // hint: decode results are unchanged and caches rebuild on demand.
-        NativePinyinDecoder.sharedIfLoaded?.resetCaches()
+        NativePinyinDecoder.resetAllCaches()
     }
 
     override func viewWillDisappear(_ animated: Bool) {

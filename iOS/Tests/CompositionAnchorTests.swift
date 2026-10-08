@@ -6,6 +6,14 @@ private struct CorrectionCandidateDecoder: PinyinDecoder {
         if pinyin.hasPrefix("bi") {
             return [Candidate(text: "比", consumed: pinyin.count, tokens: [], units: "bi")]
         }
+        if pinyin.hasSuffix("bimax") {
+            return [Candidate(text: "性价比吗x", consumed: pinyin.count, tokens: [],
+                              units: "xing'jia'bi'ma'x")]
+        }
+        if pinyin.hasSuffix("bima") {
+            return [Candidate(text: "性价比吗", consumed: pinyin.count, tokens: [],
+                              units: "xing'jia'bi'ma")]
+        }
         return [Candidate(text: "性价比", consumed: pinyin.count, tokens: [], units: "xing'jia'bi")]
     }
 
@@ -72,13 +80,13 @@ final class CompositionCorrectionTests: XCTestCase {
         let composition = Composition(
             decoder: CorrectionCandidateDecoder(), inputScheme: .fullPinyin
         )
-        "xingjiabi".forEach { composition.append(String($0)) }
+        "xingjiabima".forEach { composition.append(String($0)) }
         composition.activateCharacter(1)
-        XCTAssertNil(composition.selectDisplayed(1)) // 假币 consumes jia + bi
-        XCTAssertEqual(composition.sentencePreview, "性假币")
+        XCTAssertNil(composition.selectDisplayed(1)) // 假币 spans jia + bi, leaving 吗 editable
+        XCTAssertEqual(composition.sentencePreview, "性假币吗")
 
         composition.append("x")
-        XCTAssertTrue(composition.sentencePreview.hasPrefix("性假币"))
+        XCTAssertTrue(composition.sentencePreview.hasPrefix("性假币吗"))
     }
 
     func testEarlierCharacterCanBeEditedWithoutChangingLaterAnchor() {

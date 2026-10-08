@@ -10,9 +10,11 @@ final class ShuangpinEndToEndTests: XCTestCase {
         try composition(for: keys).candidates.map(\.text)
     }
 
-    private func composition(for keys: String) throws -> Composition {
+    private func composition(for keys: String,
+                             useIndex: Bool = false) throws -> Composition {
         let bundle = Bundle(for: Self.self)
-        guard let decoder = NativePinyinDecoder(bundle: bundle) else {
+        guard let decoder = NativePinyinDecoder(bundle: bundle,
+                                                useShuangpinIndex: useIndex) else {
             throw XCTSkip("sime.dict/sime.cnt not bundled into the test target")
         }
         let composition = Composition(decoder: decoder,
@@ -21,10 +23,31 @@ final class ShuangpinEndToEndTests: XCTestCase {
         return composition
     }
 
-    // A lone trailing initial completes exactly one syllable, using the
-    // preceding syllables as context. kdqru = kuang(kd)+quan(qr)+sh(u), and
-    // must not spill into an extra syllable (矿泉水厂) nor split sh into s+h
-    // (矿全社会).
+    func testEnglishPrefixWithShuangpinChineseSuffix() throws {
+        let c = try composition(for: "fixyixw", useIndex: true) // fix + yi + xia
+        guard let index = c.candidates.firstIndex(where: { $0.text == "fix一下" }) else {
+            return XCTFail("fixyixw should offer fix一下; got: \(c.candidates.map { $0.text })")
+        }
+        XCTAssertEqual(c.select(index), "fix一下")
+        XCTAssertFalse(c.isComposing)
+    }
+
+    func testIndexCorrectionAtSingleCharacterShowsMultiCharacterWords() throws {
+        let c = try composition(for: "x;jwbi", useIndex: true)
+        c.activateCharacter(1)
+        XCTAssertTrue(c.displayCandidates.contains { $0.text == "假币" },
+                      "tapping 价 should offer 假币; got: \(c.displayCandidates.map { $0.text })")
+    }
+
+    func testExpandedTrailingInitialStillSplitsDecoderCharacterSpans() throws {
+        let c = try composition(for: "kdqru", useIndex: true)
+        XCTAssertEqual(c.candidates.first?.text, "矿泉水")
+        XCTAssertEqual(c.sentenceSegments.map(\.text), ["矿", "泉", "水"])
+        XCTAssertEqual(c.preedit, "kd qr u")
+    }
+
+    // A lone trailing initial completes one syllable; it must not spill into an
+    // extra word or split sh into s+h.
     func testKdqruReachesKuangQuanShui() throws {
         let c = try candidates(for: "kdqru")
         XCTAssertTrue(c.contains("矿泉水"), "kdqru should complete to 矿泉水")
@@ -108,6 +131,16 @@ final class ShuangpinEndToEndTests: XCTestCase {
         XCTAssertEqual(composition.preedit, "xc go")
         XCTAssertTrue(composition.candidates.map(\.text).contains("效果"),
                       "xcgo should decode 效果")
+    }
+
+    func testIndexWordsStillExposeOneTappableSegmentPerChineseCharacter() throws {
+        let c = try composition(for: "womfdevsgo", useIndex: true)
+        XCTAssertEqual(c.candidates.first?.text, "我们的中国")
+        XCTAssertEqual(c.sentenceSegments.map(\.text), ["我", "们", "的", "中", "国"])
+        XCTAssertEqual(c.preedit, "wo mf de vs go")
+        c.activateCharacter(1)
+        c.activateCharacter(1)
+        XCTAssertEqual(c.activeEnteredKeys, "mf")
     }
 
     // An odd trailing key stays in the composition until its pair completes.

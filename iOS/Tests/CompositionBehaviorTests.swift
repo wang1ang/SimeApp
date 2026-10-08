@@ -153,11 +153,11 @@ final class CompositionCandidateSelectionTests: XCTestCase {
         ]
         let composition = Composition(decoder: decoder, inputScheme: .microsoftShuangpin)
 
-        "uiy".forEach { composition.append(String($0)) }
+        "nih".forEach { composition.append(String($0)) }
         composition.activateCharacter(1)
         composition.activateCharacter(1)
 
-        XCTAssertEqual(composition.activeEnteredKeys, "y")
+        XCTAssertEqual(composition.activeEnteredKeys, "h")
         XCTAssertEqual(composition.cursor, 3)
     }
 
@@ -740,12 +740,12 @@ final class CompositionEditingTests: XCTestCase {
     func testReturnAfterSecondRowCorrectionDecodesRemainingSyllables() {
         let decoder = RecordingPinyinDecoder()
         decoder.decodeResult = { pinyin in
-            pinyin == "wan'quan'li'xian"
+            pinyin == "wan'quan'li'xian'ma"
                 ? [Candidate(
-                    text: "完全离线",
+                    text: "完全离线吗",
                     consumed: pinyin.count,
-                    tokens: [1, 2, 3, 4],
-                    units: "wan'quan'li'xian"
+                    tokens: [1, 2, 3, 4, 5],
+                    units: "wan'quan'li'xian'ma"
                 )]
                 : []
         }
@@ -756,26 +756,27 @@ final class CompositionEditingTests: XCTestCase {
         ]
         let composition = Composition(decoder: decoder, inputScheme: .microsoftShuangpin)
 
-        "wjqrlixm".forEach { composition.append(String($0)) }
+        "wjqrlixmma".forEach { composition.append(String($0)) }
         composition.activateCharacter(2)
         XCTAssertNil(composition.selectDisplayed(0))
 
         // Return must not fall back to the literal keys of the un-anchored
         // "完全" prefix; it commits the decoded sentence with the anchor.
-        XCTAssertEqual(composition.commitPreeditLiterally(), "完全离线")
+        XCTAssertEqual(composition.commitPreeditLiterally(), "完全离线吗")
         XCTAssertFalse(composition.isComposing)
     }
 
     func testCorrectionInsideMultiSyllableAnchorKeepsUntouchedSyllables() {
         let decoder = RecordingPinyinDecoder()
         decoder.decodeResult = { pinyin in
-            pinyin == "shiyushurufa"
-                ? [Candidate(text: "始于输入法", consumed: pinyin.count,
-                             tokens: [1, 2, 3, 4, 5], units: "shi'yu'shu'ru'fa")]
+            pinyin == "shiyushurufama"
+                ? [Candidate(text: "始于输入法吗", consumed: pinyin.count,
+                             tokens: [1, 2, 3, 4, 5, 6],
+                             units: "shi'yu'shu'ru'fa'ma")]
                 : []
         }
         let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
-        "shiyushurufa".forEach { composition.append(String($0)) }
+        "shiyushurufama".forEach { composition.append(String($0)) }
 
         // Tap the first character and pick a whole-sentence candidate: this
         // anchors all five syllables as one segment.
@@ -796,7 +797,7 @@ final class CompositionEditingTests: XCTestCase {
         composition.activateCharacter(1)
         XCTAssertNil(composition.selectDisplayed(0))
 
-        XCTAssertEqual(composition.commitPreeditLiterally(), "是语输入法")
+        XCTAssertEqual(composition.commitPreeditLiterally(), "是语输入法吗")
     }
 
     func testShuangpinDisablesEngineExpansionForCorrectionOnly() {

@@ -28,6 +28,18 @@ enum InputScheme: String, CaseIterable {
         }
     }
 
+    /// Whether this scheme decodes through the prebuilt shuangpin index
+    /// (`sime.sp.index`), feeding the engine raw keys instead of expanding to
+    /// full pinyin. The bundled index is built from the Microsoft/Sogou map, so
+    /// only those schemes qualify; 小鹤/自然码 stay on the full-pinyin pipeline
+    /// until their own index files exist.
+    var usesShuangpinIndex: Bool {
+        switch self {
+        case .microsoftShuangpin, .sogouShuangpin: return true
+        default: return false
+        }
+    }
+
     var displayName: String {
         switch self {
         case .fullPinyin: return "全拼"
