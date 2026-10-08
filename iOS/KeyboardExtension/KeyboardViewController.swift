@@ -1042,6 +1042,44 @@ final class KeyboardViewController: UIInputViewController {
 }
 
 final class KeyButton: UIButton {
+    // Keep visual feedback in a non-interactive layer so the button's hit
+    // geometry never changes during the press animation.
+    private let feedbackView = UIView()
+    private var syncingBackground = false
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        setupFeedbackView()
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        setupFeedbackView()
+    }
+
+    private func setupFeedbackView() {
+        feedbackView.isUserInteractionEnabled = false
+        feedbackView.backgroundColor = backgroundColor
+        feedbackView.layer.cornerRadius = 10
+        insertSubview(feedbackView, at: 0)
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        feedbackView.bounds = bounds
+        feedbackView.center = CGPoint(x: bounds.midX, y: bounds.midY)
+    }
+
+    override var backgroundColor: UIColor? {
+        didSet {
+            guard !syncingBackground else { return }
+            feedbackView.backgroundColor = backgroundColor
+            syncingBackground = true
+            super.backgroundColor = .clear
+            syncingBackground = false
+        }
+    }
+
     // Grow the touch area horizontally into the gaps between keys so a tap in
     // the spacing lands inside a key and fires. (Only horizontal: the vertical
     // inter-row spacing sits outside the row frame, so a key there is never
@@ -1057,12 +1095,14 @@ final class KeyButton: UIButton {
         didSet {
             guard isHighlighted != oldValue else { return }
             if isHighlighted {
-                restingBackground = backgroundColor
+                restingBackground = feedbackView.backgroundColor
                 backgroundColor = Self.pressedBackground
-                transform = Self.pressedTransform(for: bounds.size)
+                feedbackView.transform = Self.pressedTransform(for: bounds.size)
             } else {
                 backgroundColor = restingBackground
-                transform = .identity
+                UIView.animate(withDuration: 0.12) {
+                    self.feedbackView.transform = .identity
+                }
             }
         }
     }
