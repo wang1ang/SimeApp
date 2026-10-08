@@ -271,15 +271,7 @@ final class KeyboardViewController: UIInputViewController {
                 button.addGestureRecognizer(gesture)
                 addSchemeHint(to: button)
             }
-            if title.count == 1, title.first?.isLetter == true {
-                // Touch-down mode is optional because it changes normal key
-                // activation semantics.
-                let event: UIControl.Event = KeyboardConfig.processLettersOnTouchDown
-                    ? .touchDown : .touchUpInside
-                button.addTarget(self, action: #selector(keyTapped(_:)), for: event)
-            } else {
-                button.addTarget(self, action: #selector(keyTapped(_:)), for: .touchUpInside)
-            }
+            button.addTarget(self, action: #selector(keyTapped(_:)), for: .touchUpInside)
         }
         return button
     }
