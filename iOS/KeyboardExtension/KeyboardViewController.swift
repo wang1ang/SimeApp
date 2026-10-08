@@ -1089,6 +1089,14 @@ final class KeyButton: UIButton {
     // Background to restore when the press ends; captured on first highlight so
     // callers can keep setting backgroundColor normally (e.g. armed Shift).
     private var restingBackground: UIColor?
+    private var suppressHighlightAnimation = false
+
+    private func setHighlight(_ highlighted: Bool, animated: Bool) {
+        suppressHighlightAnimation = !animated
+        isHighlighted = highlighted
+        suppressHighlightAnimation = false
+    }
+    private weak var draggedKey: KeyButton?
 
     // Apply press feedback synchronously so hit testing stays stable.
     override var isHighlighted: Bool {
@@ -1100,8 +1108,12 @@ final class KeyButton: UIButton {
                 feedbackView.transform = Self.pressedTransform(for: bounds.size)
             } else {
                 backgroundColor = restingBackground
-                UIView.animate(withDuration: 0.12) {
-                    self.feedbackView.transform = .identity
+                if suppressHighlightAnimation {
+                    feedbackView.transform = .identity
+                } else {
+                    UIView.animate(withDuration: 0.12) {
+                        self.feedbackView.transform = .identity
+                    }
                 }
             }
         }
@@ -1118,6 +1130,53 @@ final class KeyButton: UIButton {
         let sx = max(0, (size.width - 2 * pressInset) / size.width)
         let sy = max(0, (size.height - 2 * pressInset) / size.height)
         return CGAffineTransform(scaleX: sx, y: sy)
+    }
+
+    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
+        guard let touch = touches.first, let window else {
+            super.touchesMoved(touches, with: event)
+            return
+        }
+        super.touchesMoved(touches, with: event)
+        let target = window.hitTest(touch.location(in: window), with: event) as? KeyButton
+        draggedKey?.setHighlight(false, animated: false)
+        setHighlight(false, animated: false)
+        draggedKey = nil
+        if let target, target.isEnabled {
+            if target === self {
+                setHighlight(true, animated: false)
+            } else {
+                target.setHighlight(true, animated: false)
+                draggedKey = target
+            }
+        }
+    }
+
+    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
+        guard let touch = touches.first, let window else {
+            super.touchesEnded(touches, with: event)
+            return
+        }
+        let endPoint = touch.location(in: window)
+        let target = window.hitTest(endPoint, with: event) as? KeyButton
+        if let target, target !== self, target.isEnabled {
+            // The original button must not receive touch-up handling when the
+            // finger finishes on another key.
+            setHighlight(false, animated: false)
+            target.sendActions(for: .touchUpInside)
+            target.setHighlight(false, animated: true)
+            draggedKey = nil
+            return
+        }
+        draggedKey?.setHighlight(false, animated: false)
+        draggedKey = nil
+        super.touchesEnded(touches, with: event)
+    }
+
+    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
+        draggedKey?.setHighlight(false, animated: false)
+        draggedKey = nil
+        super.touchesCancelled(touches, with: event)
     }
 
     override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
