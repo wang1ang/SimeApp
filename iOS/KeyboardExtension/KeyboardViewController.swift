@@ -1163,6 +1163,7 @@ final class KeyButton: UIButton {
             // The original button must not receive touch-up handling when the
             // finger finishes on another key.
             setHighlight(false, animated: false)
+            // Known limitation: drag release omits .touchDown, so sliding to delete has no effect.
             target.sendActions(for: .touchUpInside)
             target.setHighlight(false, animated: true)
             draggedKey = nil
