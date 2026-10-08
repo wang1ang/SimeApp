@@ -1052,14 +1052,11 @@ final class KeyButton: UIButton {
     // callers can keep setting backgroundColor normally (e.g. armed Shift).
     private var restingBackground: UIColor?
 
-    // Custom-type buttons provide immediate press feedback without animations,
-    // keeping hit testing stable during rapid typing.
+    // Apply press feedback synchronously so hit testing stays stable.
     override var isHighlighted: Bool {
         didSet {
             guard isHighlighted != oldValue else { return }
             if isHighlighted {
-                // Apply feedback immediately; animated transforms can move the
-                // hit area while the next key is being touched.
                 restingBackground = backgroundColor
                 backgroundColor = Self.pressedBackground
                 transform = Self.pressedTransform(for: bounds.size)
