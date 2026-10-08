@@ -150,6 +150,7 @@ final class KeyboardViewController: UIInputViewController {
         // taps fall through to the host (they never reach hitTest), and an
         // opaque subview backdrop doesn't help — iOS samples this view itself.
         view.backgroundColor = UIColor.secondarySystemBackground.withAlphaComponent(0.9)
+        view.isMultipleTouchEnabled = KeyboardConfig.enableMultipleTouch
         let root = UIStackView()
         root.axis = .vertical
         root.spacing = 4
@@ -236,6 +237,7 @@ final class KeyboardViewController: UIInputViewController {
         default: displayedTitle = title
         }
         let button = KeyButton()
+        button.isMultipleTouchEnabled = KeyboardConfig.enableMultipleTouch
         button.setTitle(displayedTitle, for: .normal)
         if title == "space" || title == "return" || title == "⇧" {
             button.accessibilityValue = title
@@ -260,7 +262,15 @@ final class KeyboardViewController: UIInputViewController {
                 button.addGestureRecognizer(gesture)
                 addSchemeHint(to: button)
             }
-            button.addTarget(self, action: #selector(keyTapped(_:)), for: .touchUpInside)
+            if title.count == 1, title.first?.isLetter == true {
+                // Touch-down mode is optional because it changes normal key
+                // activation semantics.
+                let event: UIControl.Event = KeyboardConfig.processLettersOnTouchDown
+                    ? .touchDown : .touchUpInside
+                button.addTarget(self, action: #selector(keyTapped(_:)), for: event)
+            } else {
+                button.addTarget(self, action: #selector(keyTapped(_:)), for: .touchUpInside)
+            }
         }
         return button
     }
