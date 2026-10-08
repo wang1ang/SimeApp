@@ -36,6 +36,9 @@ final class KeyboardViewController: UIInputViewController {
     // decoders once per controller lifetime.
     private var usesNativeDecoder = false
     private var displayedReturnKeyType: UIReturnKeyType?
+    // Keep the action key instance stable while typing. Rebuilding the whole
+    // keyboard when composition starts can cancel neighboring rapid taps.
+    private weak var returnKeyButton: UIButton?
     // Whether the return key currently shows the composing “确定” label.
     private var displayedReturnComposing = false
     private var spaceCursorMode = false
@@ -142,7 +145,12 @@ final class KeyboardViewController: UIInputViewController {
         guard displayedReturnKeyType != type || displayedReturnComposing != composing else { return }
         displayedReturnKeyType = type
         displayedReturnComposing = composing
-        keyboardNeedsRebuild = true
+        if let button = returnKeyButton {
+            button.setTitle(returnKeyTitle(), for: .normal)
+        } else {
+            // During initial construction there is no button to update yet.
+            keyboardNeedsRebuild = true
+        }
     }
 
     private func setupView() {
@@ -211,6 +219,7 @@ final class KeyboardViewController: UIInputViewController {
         let mode = keyButton(keyboardPage == .letters ? "123" : schemeLabel)
         let space = keyButton("space")
         let enter = keyButton("return")
+        returnKeyButton = enter
         // Add every key to the row before activating cross-key width
         // constraints. Constraining against a sibling that is not yet in the
         // shared stack view has no common ancestor and aborts (crashes when
