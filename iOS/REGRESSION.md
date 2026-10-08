@@ -21,7 +21,7 @@
 
 ## App Store 上架配置
 
-61. 宿主 App 必须提供 `Sime/Assets.xcassets` 的 `AppIcon`（含 1024×1024），`project.yml` 通过 `ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon` 引用；键盘扩展不需要图标。当前 `AppIcon.png` 为占位图，正式上架前须替换为正式设计稿。
+61. 宿主 App 提供 `Sime/Assets.xcassets` 的 `AppIcon`（含 1024×1024），`project.yml` 通过 `ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon` 引用；键盘扩展不需要图标。
 62. 宿主与扩展的 Info.plist 均声明 `ITSAppUsesNonExemptEncryption=false`；如未来引入非豁免加密须同步更新并补交合规文档。
 63. 发布签名使用 `DEVELOPMENT_TEAM=8K3SQFBAJG`，`CODE_SIGN_STYLE=Automatic`。隐私政策 URL、隐私标签、截图等仅在 App Store Connect 维护，不入库。
 
