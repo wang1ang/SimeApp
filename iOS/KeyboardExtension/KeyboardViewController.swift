@@ -960,16 +960,8 @@ final class KeyboardViewController: UIInputViewController {
         view.setNeedsLayout()
     }
 
-    // Tint the letter keys that complete a valid syllable with the Shuangpin
-    // initial the user just typed; clear the tint once no initial is pending.
-    // A highlighted (legal) key also claims the whole gap toward each
-    // non-highlighted neighbor, and that neighbor cedes its facing side, so a
-    // tap in the spacing lands on the legal key without shrinking anyone's
-    // actual key face.
-    // The set of legal Shuangpin final keys drives two INDEPENDENT behaviors,
-    // each gated by its own flag below: (1) tinting those keys, and (2)
-    // enlarging their touch area. They share only the source set, so turning
-    // one off never affects the other.
+    // Highlight legal Shuangpin finals and optionally route adjacent gap taps to them.
+    // Keep tinting and hit-area expansion independent so either can be disabled.
     private let tintShuangpinFinalKeys = true
     private let enlargeShuangpinFinalKeys = true
 
@@ -1002,33 +994,33 @@ final class KeyboardViewController: UIInputViewController {
         }
     }
 
-    // Behavior 2: a legal final key claims the whole gap toward each
-    // non-legal neighbor (which cedes its facing side), without overlapping
-    // any neighbor's key face. With an empty set this is a no-op that restores
-    // the default gap-tapping insets (contract 63).
+    // Legal finals take the full gap toward non-legal neighbors without overlap.
     private func applyFinalKeyHitAreas(legalFinals: Set<Character>) {
-        // Inter-key spacing on every letter row (see makeRow).
-        let gap: CGFloat = 4
-        let defaultInset: CGFloat = 8
+        let outerInset: CGFloat = 8
         func isLegal(_ button: KeyButton) -> Bool {
             guard let c = char(ofKey: button) else { return false }
             return legalFinals.contains(c)
         }
         for case let row as UIStackView in keyboardStack.arrangedSubviews {
             let buttons = row.arrangedSubviews.compactMap { $0 as? KeyButton }
+            let gap = row.spacing
+            let splitGap = gap / 2
             for (index, button) in buttons.enumerated() {
                 let hi = isLegal(button)
                 let leftHi = index > 0 && isLegal(buttons[index - 1])
                 let rightHi = index < buttons.count - 1 && isLegal(buttons[index + 1])
-                var inset = UIEdgeInsets(top: 0, left: defaultInset,
-                                         bottom: 0, right: defaultInset)
+                var inset = UIEdgeInsets(
+                    top: 0,
+                    left: index == 0 ? outerInset : splitGap,
+                    bottom: 0,
+                    right: index == buttons.count - 1 ? outerInset : splitGap)
                 if hi {
                     // Claim exactly the gap toward a non-legal neighbor; keep
                     // the default reach toward edges / other legal keys.
                     if index > 0, !leftHi { inset.left = gap }
                     if index < buttons.count - 1, !rightHi { inset.right = gap }
                 } else {
-                    // Cede the gap to an adjacent legal key.
+                    // Transfer this gap to the adjacent legal final.
                     if leftHi { inset.left = 0 }
                     if rightHi { inset.right = 0 }
                 }
@@ -1081,11 +1073,8 @@ final class KeyButton: UIButton {
         }
     }
 
-    // Grow the touch area horizontally into the gaps between keys so a tap in
-    // the spacing lands inside a key and fires. (Only horizontal: the vertical
-    // inter-row spacing sits outside the row frame, so a key there is never
-    // consulted anyway.)
-    var hitInset = UIEdgeInsets(top: 0, left: 8, bottom: 0, right: 8)
+    // Expand into horizontal gaps; vertical gaps lie outside the row bounds.
+    var hitInset = UIEdgeInsets(top: 0, left: 2, bottom: 0, right: 2)
 
     // Background to restore when the press ends; captured on first highlight so
     // callers can keep setting backgroundColor normally (e.g. armed Shift).
