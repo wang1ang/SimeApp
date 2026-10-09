@@ -176,8 +176,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
         NSLayoutConstraint.activate([
             root.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 5),
             root.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -5),
-            root.topAnchor.constraint(equalTo: view.topAnchor, constant: -6),
-            root.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -6)
+            root.topAnchor.constraint(equalTo: view.topAnchor, constant: -2),
+            root.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         ])
 
         sentenceScrollView.showsHorizontalScrollIndicator = false
@@ -938,7 +938,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
         }
         if composition.isComposing {
             let confirm = UIButton(type: .system)
-            confirm.setImage(UIImage(systemName: "return"), for: .normal)
+            let returnSymbol = UIImage.SymbolConfiguration(pointSize: 11)
+            confirm.setImage(UIImage(systemName: "return", withConfiguration: returnSymbol), for: .normal)
             confirm.tintColor = .label
             confirm.accessibilityIdentifier = "preferredSentenceConfirm"
             confirm.frame = CGRect(x: sentenceX, y: 0, width: 24, height: 28)
