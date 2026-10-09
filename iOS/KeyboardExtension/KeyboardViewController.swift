@@ -165,10 +165,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     }
 
     private func setupView() {
-        // The root view must be near-opaque: a transparent keyboard lets gap
-        // taps fall through to the host (they never reach hitTest), and an
-        // opaque subview backdrop doesn't help — iOS samples this view itself.
-        view.backgroundColor = UIColor.secondarySystemBackground.withAlphaComponent(0.9)
+        // Let the keyboard host's backdrop show through under a faint system tint.
+        view.backgroundColor = UIColor.secondarySystemBackground.withAlphaComponent(0.05)
         view.isMultipleTouchEnabled = KeyboardConfig.enableMultipleTouch
         let root = KeyboardHitTestStackView()
         root.axis = .vertical

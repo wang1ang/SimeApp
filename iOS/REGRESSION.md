@@ -128,7 +128,7 @@
 
 61. 切换到“乐言输入法”时布局不得闪烁、按键不得在数百毫秒内失效。原生引擎（GRU embedding、ncnn 模型、score 表）加载昂贵，**不得在主线程/控制器属性初始化时同步构建**：`KeyboardViewController` 必须先用轻量 `BuiltinPinyinDecoder` 立即呈现可用键盘，再在后台队列加载 `NativePinyinDecoder` 并在就绪后换入、保留在打 raw。
 62. 已加载的原生引擎须以 `NativePinyinDecoder.shared` 在扩展进程内跨控制器实例复用，避免每次切换重新加载。换入不得丢失/错位当前 marked 组合（沿用 `restore(raw:committed:)`）。
-63. 缝隙点击需两个条件同时满足：根视图 `view` 近乎不透明（alpha 0.9，否则缝隙触摸穿透到宿主）；按键必须用 `KeyButton()`，不能用 `UIButton(type:.system)`。普通相邻键按实际行间距平分命中扩展（字母行4pt间距时两侧各2pt；底部行8pt间距时两侧各4pt），行首/行尾外侧保留8pt；全拼 home 行 `a` 左侧和 `l` 右侧扩展至行边缘（18pt）。双拼合法韵母键可独占其方向的整段间隙，相邻非合法键让出该段，不得重叠键面。
+63. 缝隙点击依赖键盘根视图与 `KeyboardHitTestStackView` 本身保持可 hit-test（`alpha > 0.01`、未隐藏且启用交互）；`backgroundColor` 的透明度不等于视图 `alpha`。真机已验证背景色用 `secondarySystemBackground.withAlphaComponent(0.05)` 时缝隙仍能接住点击。按键必须用 `KeyButton()`，不能用 `UIButton(type:.system)`。普通相邻键按实际行间距平分命中扩展（字母行4pt间距时两侧各2pt；底部行8pt间距时两侧各4pt），行首/行尾外侧保留8pt；全拼 home 行 `a` 左侧和 `l` 右侧扩展至行边缘（18pt）。双拼合法韵母键可独占其方向的整段间隙，相邻非合法键让出该段，不得重叠键面。
 
 ## 双拼解码路径
 
