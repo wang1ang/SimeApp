@@ -1,11 +1,14 @@
 import UIKit
 
-final class KeyboardViewController: UIInputViewController {
+final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDelegate {
     private var composition = KeyboardViewController.makeComposition()
     private let sentenceScrollView = UIScrollView()
     private let sentenceBar = UIView()
     // Tap gesture to pick a trailing whole-sentence candidate in row one.
     private let sentenceCandidateTap = UITapGestureRecognizer()
+    private let preferredCandidateSwipe = UIPanGestureRecognizer()
+    private var preferredCandidateHighlight: UIView?
+    private weak var preferredSentenceConfirmButton: UIButton?
     // Popup bubble listing a tapped first-row character's candidates.
     private var candidateBubble: UIView?
     // true = active char reached by direct tap (show bubble); false = reached by
@@ -186,6 +189,11 @@ final class KeyboardViewController: UIInputViewController {
         sentenceCandidateTap.cancelsTouchesInView = false
         sentenceCandidateTap.isEnabled = false
         sentenceBar.addGestureRecognizer(sentenceCandidateTap)
+        preferredCandidateSwipe.addTarget(self, action: #selector(preferredCandidateDragged(_:)))
+        preferredCandidateSwipe.delegate = self
+        preferredCandidateSwipe.maximumNumberOfTouches = 1
+        preferredCandidateSwipe.cancelsTouchesInView = true
+        sentenceScrollView.addGestureRecognizer(preferredCandidateSwipe)
         root.addArrangedSubview(sentenceScrollView)
         root.setCustomSpacing(1, after: sentenceScrollView)
 
@@ -570,6 +578,86 @@ final class KeyboardViewController: UIInputViewController {
         render()
     }
 
+    @objc private func preferredCandidateDragged(_ gesture: UIPanGestureRecognizer) {
+        switch gesture.state {
+        case .began, .changed:
+            setPreferredCandidateHighlighted(true)
+        case .ended:
+            setPreferredCandidateHighlighted(false)
+            guard gesture.translation(in: sentenceScrollView).y <= -16 else { return }
+            if composition.isComposing {
+                confirmSentence()
+            } else {
+                selectCandidate(at: 0)
+            }
+        case .cancelled, .failed:
+            setPreferredCandidateHighlighted(false)
+        default:
+            break
+        }
+    }
+
+    private func setPreferredCandidateHighlighted(_ highlighted: Bool) {
+        if !highlighted {
+            preferredCandidateHighlight?.removeFromSuperview()
+            preferredCandidateHighlight = nil
+            return
+        }
+        guard preferredCandidateHighlight == nil else { return }
+        let preferredViews: [UIView]
+        if composition.isComposing {
+            preferredViews = sentenceBar.subviews.filter { subview in
+                guard let button = subview as? UIButton else { return false }
+                return button.accessibilityValue != nil
+            }
+        } else {
+            preferredViews = sentenceBar.subviews.filter { subview in
+                guard let label = subview as? UILabel else { return false }
+                return label.tag == 0
+            }
+        }
+        guard let first = preferredViews.first else { return }
+        let bounds = preferredViews.dropFirst().reduce(first.frame) { $0.union($1.frame) }
+        let highlight = UIView(frame: bounds.insetBy(dx: -2, dy: -1))
+        highlight.backgroundColor = UIColor.systemBlue.withAlphaComponent(0.22)
+        highlight.layer.cornerRadius = 6
+        highlight.isUserInteractionEnabled = false
+        sentenceBar.addSubview(highlight)
+        preferredCandidateHighlight = highlight
+    }
+
+    private func isPreferredCandidate(at point: CGPoint) -> Bool {
+        if composition.isComposing {
+            return sentenceBar.subviews.contains { subview in
+                guard let button = subview as? UIButton else { return false }
+                let isSentencePart = button.accessibilityValue != nil
+                    || button === preferredSentenceConfirmButton
+                return isSentencePart && button.frame.contains(point)
+            }
+        }
+        return sentenceBar.subviews.contains { subview in
+            guard let label = subview as? UILabel, label.tag == 0 else { return false }
+            return label.frame.contains(point)
+        }
+    }
+
+    func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        guard gestureRecognizer === preferredCandidateSwipe,
+              let pan = gestureRecognizer as? UIPanGestureRecognizer else { return true }
+        let velocity = pan.velocity(in: sentenceScrollView)
+        return velocity.y < 0
+            && abs(velocity.y) > abs(velocity.x) * 1.2
+            && isPreferredCandidate(at: pan.location(in: sentenceBar))
+    }
+
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
+                           shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+        (gestureRecognizer === preferredCandidateSwipe
+            && otherGestureRecognizer === sentenceScrollView.panGestureRecognizer)
+            || (otherGestureRecognizer === preferredCandidateSwipe
+                && gestureRecognizer === sentenceScrollView.panGestureRecognizer)
+    }
+
     @objc private func sentenceCandidateTapped(_ gesture: UITapGestureRecognizer) {
         guard gesture.state == .ended else { return }
         let point = gesture.location(in: sentenceBar)
@@ -824,6 +912,9 @@ final class KeyboardViewController: UIInputViewController {
         updateFinalKeyHighlights()
         // Leaving char-editing mode clears any tone filter.
         if composition.activeCharacterIndex == nil { selectedTone = nil }
+        preferredCandidateHighlight?.removeFromSuperview()
+        preferredCandidateHighlight = nil
+        preferredSentenceConfirmButton = nil
         sentenceBar.subviews.forEach { $0.removeFromSuperview() }
         sentenceCandidateTap.isEnabled = composition.isComposing || !composition.displayCandidates.isEmpty
         var sentenceX: CGFloat = 8
@@ -851,7 +942,9 @@ final class KeyboardViewController: UIInputViewController {
             let confirm = UIButton(type: .system)
             confirm.setImage(UIImage(systemName: "return"), for: .normal)
             confirm.tintColor = .label
+            confirm.accessibilityIdentifier = "preferredSentenceConfirm"
             confirm.frame = CGRect(x: sentenceX, y: 0, width: 24, height: 28)
+            preferredSentenceConfirmButton = confirm
             confirm.addTarget(self, action: #selector(confirmSentence), for: .touchUpInside)
             sentenceBar.addSubview(confirm)
             confirmMaxX = sentenceX + 24
