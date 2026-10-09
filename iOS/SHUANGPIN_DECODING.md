@@ -1,77 +1,24 @@
-# 双拼解码流程
+# 双拼解码
 
-双拼在客户端（Swift 侧）先展开成全拼，再把全拼交给 C++ 引擎去查（trie 词典）。
+微软/搜狗、小鹤和自然码都通过各自的预建 index 解码原始键码。Swift 不将双拼码展开成全拼，也不生成拼音分隔符。
 
-## 路径（`Composition.swift:740-758`）
+## 运行流程
 
-1. 双拼 raw 按键（如 `nihc`）每两键一组，用 `ShuangpinLayout.expand` 展开成全拼音节（`ni`、`hao`）。
-2. 用 `'` 把音节拼起来 → `ni'hao`，再交给 `decoder.decode(...)`（C++ 引擎）。
-3. 引擎在词典（trie）里查。
+- `InputScheme.shuangpinIndexName` 选择 index：微软/搜狗共用 `sime.sp`，小鹤使用 `sime.xiaohe.sp`，自然码使用 `sime.ziranma.sp`。
+- `NativePinyinDecoder` 只加载当前方案对应的 index。切换方案时卸载旧 binding，扩展内不会同时保留多个双拼 index 或全拼 engine。
+- Native decoder 尚未就绪时，Builtin 只保留原始键作为可提交文本；不会走双拼转全拼的回退路径。
+- Decoder 返回候选的显示字符范围和原始键范围。Composition 用这些跨度做候选分组、逐字改选和提交，不按键数或汉字长度重建边界。
+- 中英混合输入作为完整原始输入送给 decoder，在同一 lattice 中竞价；Composition 不按大写位置切分或手工排序英文尾巴。
 
-## 和全拼路径的三个关键差别
+## 映射与验证
 
-1. **显式音节边界**：双拼主动插 `'` 分隔符（`ni'hao`），因为双拼每音节恰好两键，边界是确定的。这样引擎**不会重新切分**（否则 `pie` 可能被切成 `pi`+`e`）。全拼路径（`Composition.swift:762`）则是整串丢进去，让引擎自己切。
+索引映射由 `require/Sime/pipeline/` 中的脚本和映射表生成，运行时 index 位于 `require/Sime/save/`。重建小鹤/自然码 index：
 
-2. **expansion 开关**：
-   - 双拼：`expansion: hasLoneInitial`——只有在末尾落单一个声母（奇数键）时才让引擎补全；**打满的音节不扩展**（否则 `li` 会跑出“柳州”）。
-   - 全拼：`expansion: true`——允许缩写/尾部补全。
+```bash
+python3 pipeline/gen_shuangpin_map.py xiaohe
+python3 pipeline/gen_shuangpin_map.py ziranma
+build/sime-spbuild save/sime.dict pipeline/xiaohe.map.txt save/sime.xiaohe.sp.index
+build/sime-spbuild save/sime.dict pipeline/ziranma.map.txt save/sime.ziranma.sp.index
+```
 
-   这对应契约 64“双拼韵母不走扩展，单个声母才走扩展”。
-
-3. **末尾孤立声母**：落单的 `v/i/u` 通过 `shuangpin.initial(for:)` 展成 `zh/ch/sh`（`Composition.swift:752`）。
-
-## 小结
-
-- 双拼 = 客户端展开成「带显式边界的全拼」+ 受限扩展，再查引擎 trie。
-- 全拼 = 原串 + 自由切分/扩展查 trie。
-
-## 拟议重构：双拼 trie（尚未实现，仅设计方向）
-
-现状是在 Swift 侧把双拼**前向**展开成全拼（一对多，要按声母 resolve）再查全拼 trie。
-拟议改成：加载时按方案把 trie 的**键**重建成双拼码，输入侧直接送双拼码查，
-全程不再有全拼的事。
-
-关键洞察：前向（双拼码→全拼）一对多、要消歧；**反向（全拼→双拼码）一对一**、
-无歧义。所以用反向映射重建索引是确定、干净的。
-
-### 分工
-
-- **Swift 传两张映射表**（一对一）：声母表（`zh→v`、`h→h`…）、韵母表（`ao→k`、
-  `uang→d`…）。方案真相只在 Swift 的 `ShuangpinLayout` 一处；C 侧方案无关。
-- **C 侧重建索引**：枚举旧全拼 trie 的 `(键, value)`，逐字符 DFS，在每个音节内
-  先最长匹配声母表、再最长匹配韵母表，拼出双拼码作为新键；`value` 绑**原值**。
-  零声母 = 声母段为空。只重建 `LetterPinyin` 这一张 double-array 索引。
-
-### 表不动，只重建索引
-
-词表（side table / token 表 / value→词 / `pieces` 仍是 `ni'hao`）**原样 mmap、
-一个字节不改**。只重建 `dats_[LetterPinyin]` 这一个 double-array。因此 `units`、
-锚点、改选、LM 继续按全拼音节工作，上层无需改。
-
-### 边界与约定
-
-- **重建期查不到**：某音节段既不在声母表也不在韵母表 → **assert 崩掉**。表覆盖全
-  就不该发生，真发生即表/词典有 bug，加载期立即暴露，不静默丢词。
-- **末尾落单声母**（打一半）：不回退全拼。落单声母 → 枚举它能构成的所有合法韵母键
-  （同 `shuangpinFinalKeyHighlights` 的合法性判定）→ 拼成双拼双键前缀 → 查双拼 trie。
-- **全拼方案不受影响**：仍走原始 mmap 全拼 trie，不重建。只有双拼方案才重建。
-
-### 收益与注意
-
-- **中英混排**（最大收益）：现状把双拼按「每两键一音节」硬切（`stride(by:2)`
-  逐组 `expand`），一旦句中夹英文，键流不再偶数对齐，切分就乱——英文只能靠
-  `englishTail` 旁路拼回尾部，做不到真正的句中混排。重建后输入侧送的是原始双拼
-  按键流，引擎在双拼码索引上逐字符走 trie，没有「先按偶数切音节」这一步；走不通
-  处自然交给 `LetterEn` DAT，和全拼方案现在的混英文机制一致。双拼不再有「必须偶数
-  对齐」的人为约束，混排问题随之消失。
-- **漏打 / 错打的鲁棒性**：现状「每两键一音节」硬切，一旦某音节漏打一键（键流变
-  奇数）或打错一键，`stride(by:2)` 的对齐从该点起**整体错位**，后续所有音节边界
-  跟着切错，`expand` 出一串垃圾全拼，整段解不出来——局部错误污染整段。重建后逐字符
-  走双拼码 trie，没有全局偶数对齐假设，漏/错键只让局部音节走不通，由引擎既有容错
-  处理，后续音节照常匹配。与混排同源：都是「Swift 侧偶数硬切」这一前置步骤造成的。
-- **准确度**：反向一对一 ⇒ 双拼 trie 与全拼 trie 词条一一对应、候选集与排序
-  **完全相同**（同一 LM + 词频）。收益仅在于用无歧义反向表消除前向 `expand` 里
-  潜在的 resolve 错误。
-- 要动的文件：`require/Sime`（`trie.h/.cc` 加全量 `(键,value)` 枚举 + 重建；`dict.cc`
-  挂重建入口）、`iOS/Engine/sime_api.{h,cc}`（入口接双拼码 + 两张映射表）、
-  `Composition.swift` / `NativePinyinDecoder.swift`（去掉 `expand`，送双拼码 + 传映射表）。
+`ShuangpinCoverageTests` 用生成映射表和实际 decoder index 覆盖全拼音节；`ShuangpinEndToEndTests` 覆盖方案切换、逐字改选和中英混合。C++ index/改选断言位于 `require/Sime/tests/correction_test.cc`。

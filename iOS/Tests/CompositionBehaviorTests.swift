@@ -2,9 +2,12 @@ import XCTest
 @testable import Sime
 
 private final class RecordingPinyinDecoder: PinyinDecoder {
+    var shuangpinIndexName: String? = "sime.sp"
     var decodeCalls: [(pinyin: String, context: [UInt32], limit: Int)] = []
     var decodeExpansions: [Bool] = []
     var correctionExpansions: [Bool] = []
+    var correctionCalls: [(pinyin: String, fixedPrefix: String,
+                           prefixSyllables: Int, expansion: Bool)] = []
     var predictionCalls: [(context: [UInt32], limit: Int)] = []
     var decodeResult: (String) -> [Candidate] = { _ in [] }
     var correctionResult: [Candidate] = []
@@ -38,6 +41,7 @@ private final class RecordingPinyinDecoder: PinyinDecoder {
                               prefixSyllables: Int, limit: Int,
                               expansion: Bool) -> [Candidate] {
         correctionExpansions.append(expansion)
+        correctionCalls.append((pinyin, fixedPrefix, prefixSyllables, expansion))
         return Array((correctionResultsByPrefix[prefixSyllables] ?? correctionResult).prefix(limit))
     }
 
@@ -74,14 +78,16 @@ final class CompositionCandidateSelectionTests: XCTestCase {
         XCTAssertEqual(composition.sentencePreview, "你好")
     }
 
-    func testMicrosoftShuangpinConsumesTwoEnteredKeysPerSyllable() {
+    func testShuangpinSelectionUsesDecoderSourceSpans() {
         let decoder = RecordingPinyinDecoder()
-        decoder.decodeResult = { pinyin in
-            switch pinyin {
-            case "xiao'guo":
-                return [Candidate(text: "小", consumed: 4, tokens: [31], units: "xiao")]
-            case "guo":
-                return [Candidate(text: "国", consumed: 3, tokens: [32], units: "guo")]
+        decoder.decodeResult = { raw in
+            switch raw {
+            case "xcgo":
+                return [Candidate(text: "小", consumed: 2, tokens: [31], units: "",
+                                  segmentKeys: [2], segmentChars: [1])]
+            case "go":
+                return [Candidate(text: "国", consumed: 2, tokens: [32], units: "",
+                                  segmentKeys: [2], segmentChars: [1])]
             default:
                 return []
             }
@@ -98,13 +104,15 @@ final class CompositionCandidateSelectionTests: XCTestCase {
 
     func testActiveCorrectionLabelRetainsLiteralShuangpinKeys() {
         let decoder = RecordingPinyinDecoder()
-        decoder.decodeResult = { pinyin in
-            pinyin == "xiao'guo"
-                ? [Candidate(text: "小国", consumed: 7, tokens: [31, 32], units: "xiao'guo")]
+        decoder.decodeResult = { raw in
+            raw == "xcgo"
+                ? [Candidate(text: "小国", consumed: 4, tokens: [31, 32], units: "",
+                             segmentKeys: [2, 2], segmentChars: [1, 1])]
                 : []
         }
         decoder.correctionResult = [
-            Candidate(text: "晓", consumed: 0, tokens: [33], units: "xiao")
+            Candidate(text: "晓", consumed: 0, tokens: [33], units: "",
+                      segmentKeys: [2], segmentChars: [1])
         ]
         let composition = Composition(decoder: decoder, inputScheme: .microsoftShuangpin)
 
@@ -145,11 +153,12 @@ final class CompositionCandidateSelectionTests: XCTestCase {
     func testActiveCorrectionRetainsTrailingShuangpinInitialForPinyinEditing() {
         let decoder = RecordingPinyinDecoder()
         decoder.decodeResult = { _ in
-            [Candidate(text: "你要", consumed: 3, tokens: [1, 2],
-                       units: "ni'yao")]
+            [Candidate(text: "你好", consumed: 3, tokens: [1, 2], units: "",
+                       segmentKeys: [2, 1], segmentChars: [1, 1])]
         }
         decoder.correctionResult = [
-            Candidate(text: "要", consumed: 0, tokens: [3], units: "yao")
+            Candidate(text: "号", consumed: 0, tokens: [3], units: "",
+                      segmentKeys: [1], segmentChars: [1])
         ]
         let composition = Composition(decoder: decoder, inputScheme: .microsoftShuangpin)
 
@@ -161,41 +170,43 @@ final class CompositionCandidateSelectionTests: XCTestCase {
         XCTAssertEqual(composition.cursor, 3)
     }
 
-    func testShuangpinHighlightsValidFinalKeysAfterInitial() {
-        let valid: Set<String> = ["xi", "xiao", "xian", "xie", "xin"]
+    func testShuangpinHighlightsDecoderValidatedFinalKeys() {
+        let validCodes: Set<String> = ["xi", "xc", "xm", "xx", "xn"]
         let decoder = RecordingPinyinDecoder()
-        decoder.decodeResult = { pinyin in
-            // Mirror the engine: valid syllables yield a Han candidate, while
-            // invalid combos only echo the literal letters back.
-            valid.contains(pinyin)
-                ? [Candidate(text: "小", consumed: pinyin.count, tokens: [], units: pinyin)]
-                : [Candidate(text: pinyin, consumed: pinyin.count, tokens: [], units: pinyin)]
+        decoder.decodeResult = { raw in
+            if raw == "x" {
+                return [Candidate(text: "小", consumed: 1, tokens: [], units: "",
+                                  segmentKeys: [1], segmentChars: [1])]
+            }
+            if validCodes.contains(raw) {
+                return [Candidate(text: "小", consumed: raw.count, tokens: [], units: "",
+                                  segmentKeys: [raw.count], segmentChars: [1])]
+            }
+            return [Candidate(text: raw, consumed: raw.count, tokens: [], units: "")]
         }
         let composition = Composition(decoder: decoder, inputScheme: .microsoftShuangpin)
 
-        // Typing the lone initial highlights exactly the keys whose expanded
-        // two-key syllable the decoder can produce (i->xi, c->xiao, m->xian,
-        // x->xie, n->xin).
         composition.append("x")
         XCTAssertEqual(composition.shuangpinFinalKeyHighlights(), Set("icmxn"))
-
-        // Completing the syllable clears the highlight (no pending initial).
         composition.append("i")
         XCTAssertTrue(composition.shuangpinFinalKeyHighlights().isEmpty)
     }
 
-    func testShuangpinRejectsMultiSyllableSplitAsFinal() {
+    func testShuangpinRejectsDecoderSpanThatCoversMultipleCharacters() {
         let decoder = RecordingPinyinDecoder()
-        decoder.decodeResult = { pinyin in
-            // "wuai" is not one syllable; the decoder splits it into wu'ai and
-            // still returns Han. That split must not count as a valid final.
-            pinyin == "wuai"
-                ? [Candidate(text: "无碍", consumed: 4, tokens: [], units: "wu'ai")]
-                : [Candidate(text: pinyin, consumed: pinyin.count, tokens: [], units: pinyin)]
+        decoder.decodeResult = { raw in
+            if raw == "w" {
+                return [Candidate(text: "无", consumed: 1, tokens: [], units: "",
+                                  segmentKeys: [1], segmentChars: [1])]
+            }
+            if raw == "wy" {
+                return [Candidate(text: "无碍", consumed: 2, tokens: [], units: "",
+                                  segmentKeys: [2], segmentChars: [2])]
+            }
+            return [Candidate(text: raw, consumed: raw.count, tokens: [], units: "")]
         }
         let composition = Composition(decoder: decoder, inputScheme: .microsoftShuangpin)
         composition.append("w")
-        // 'y' expands to wuai for the 'w' initial; the split parse is rejected.
         XCTAssertFalse(composition.shuangpinFinalKeyHighlights().contains("y"))
     }
 
@@ -209,11 +220,12 @@ final class CompositionCandidateSelectionTests: XCTestCase {
         XCTAssertTrue(composition.shuangpinFinalKeyHighlights().isEmpty)
     }
 
-    func testOddShuangpinKeyRemainsInCompositionUntilPairCompletes() {
+    func testOddShuangpinKeyRemainsUntilPairCompletes() {
         let decoder = RecordingPinyinDecoder()
-        decoder.decodeResult = { pinyin in
-            pinyin == "xiao'guo"
-                ? [Candidate(text: "小国", consumed: 7, tokens: [31, 32], units: "xiao'guo")]
+        decoder.decodeResult = { raw in
+            raw == "xcgo"
+                ? [Candidate(text: "小国", consumed: 4, tokens: [31, 32], units: "",
+                             segmentKeys: [2, 2], segmentChars: [1, 1])]
                 : []
         }
         let composition = Composition(decoder: decoder, inputScheme: .microsoftShuangpin)
@@ -222,105 +234,94 @@ final class CompositionCandidateSelectionTests: XCTestCase {
 
         XCTAssertEqual(composition.raw, "xcg")
         XCTAssertEqual(composition.cursor, 3)
-        XCTAssertEqual(decoder.decodeCalls.last?.pinyin, "xiao'g")
-        // No Chinese path yet, so only the literal English fallback competes.
+        XCTAssertEqual(decoder.decodeCalls.last?.pinyin, "xcg")
         XCTAssertEqual(composition.candidates.map(\.text), ["xcg"])
         XCTAssertEqual(composition.candidates.first?.isEnglish, true)
 
         composition.append("o")
 
-        XCTAssertEqual(decoder.decodeCalls.last?.pinyin, "xiao'guo")
+        XCTAssertEqual(decoder.decodeCalls.last?.pinyin, "xcgo")
         XCTAssertEqual(composition.select(0), "小国")
         XCTAssertFalse(composition.isComposing)
     }
 
-    func testLongShuangpinSentencePreservesAllSyllableBoundaries() {
+
+    func testLongShuangpinSentenceUsesDecoderProvidedSegments() {
         let decoder = RecordingPinyinDecoder()
-        decoder.decodeResult = { pinyin in
-            pinyin == "wo'men'de'zhong'guo"
-                ? [Candidate(
-                    text: "我们的中国",
-                    consumed: pinyin.count,
-                    tokens: [1, 2, 3, 4, 5],
-                    units: "wo'men'de'zhong'guo"
-                )]
+        decoder.decodeResult = { raw in
+            raw == "womfdevsgo"
+                ? [Candidate(text: "我们的中国", consumed: raw.count,
+                             tokens: [1, 2, 3, 4, 5], units: "",
+                             segmentKeys: [2, 2, 2, 2, 2],
+                             segmentChars: [1, 1, 1, 1, 1])]
                 : []
         }
         let composition = Composition(decoder: decoder, inputScheme: .microsoftShuangpin)
 
         "womfdevsgo".forEach { composition.append(String($0)) }
 
-        XCTAssertEqual(decoder.decodeCalls.last?.pinyin, "wo'men'de'zhong'guo")
+        XCTAssertEqual(decoder.decodeCalls.last?.pinyin, "womfdevsgo")
         XCTAssertEqual(composition.sentencePreview, "我们的中国")
         XCTAssertEqual(composition.select(0), "我们的中国")
         XCTAssertEqual(decoder.predictionCalls.last?.context, [1, 2, 3, 4, 5])
     }
 
-    func testShuangpinLocksCompletedFinalsAgainstShorterExpansions() {
+    func testShuangpinIndexPreservesDecoderCandidateOrder() {
         let decoder = RecordingPinyinDecoder()
-        decoder.decodeResult = { pinyin in
-            pinyin == "xi'huan"
-                ? [
-                    // Correct locked path and single-character alternatives.
-                    Candidate(text: "喜欢", consumed: 6, tokens: [1, 2], units: "xi'huan"),
-                    Candidate(text: "喜", consumed: 2, tokens: [1], units: "xi"),
-                    Candidate(text: "欢", consumed: 6, tokens: [2], units: "huan"),
-                    // Under-expanded finals the engine offers for full pinyin
-                    // but which Shuangpin has already locked out.
-                    Candidate(text: "喜互", consumed: 4, tokens: [1, 3], units: "xi'hu"),
-                    Candidate(text: "喜花", consumed: 5, tokens: [1, 4], units: "xi'hua")
-                ]
-                : []
+        decoder.decodeResult = { raw in
+            guard raw == "xihr" else { return [] }
+            return [
+                Candidate(text: "喜欢", consumed: 4, tokens: [1, 2], units: "",
+                          segmentKeys: [2, 2], segmentChars: [1, 1]),
+                Candidate(text: "喜", consumed: 2, tokens: [1], units: "",
+                          segmentKeys: [2], segmentChars: [1]),
+                Candidate(text: "欢", consumed: 2, tokens: [2], units: "",
+                          segmentKeys: [2], segmentChars: [1])
+            ]
         }
         let composition = Composition(decoder: decoder, inputScheme: .microsoftShuangpin)
-
-        // xi = "xi", huan = "hr" (h + uan) in Microsoft Shuangpin.
         "xihr".forEach { composition.append(String($0)) }
-
-        XCTAssertEqual(decoder.decodeCalls.last?.pinyin, "xi'huan")
-        // The under-expanded two-syllable paths are dropped; the locked path
-        // and single-character alternatives survive.
+        XCTAssertEqual(decoder.decodeCalls.last?.pinyin, "xihr")
         XCTAssertEqual(composition.candidates.map(\.text), ["喜欢", "喜", "欢", "xihr"])
     }
 
-    func testShuangpinCompleteSyllablesDecodeWithoutExpansion() {
+    func testShuangpinIndexReceivesCompleteRawCodes() {
         let decoder = RecordingPinyinDecoder()
-        decoder.decodeResult = { _ in [] }
-        let composition = Composition(decoder: decoder, inputScheme: .microsoftShuangpin)
-
-        // Even key count: "li" + "vb"(zhou) are both complete syllables, so the
-        // engine must NOT expand (expansion would invent 柳州/凉州 whose units
-        // echo the typed li'zhou and slip past the locked-final filter).
-        "livb".forEach { composition.append(String($0)) }
-
-        XCTAssertEqual(decoder.decodeCalls.last?.pinyin, "li'zhou")
-        XCTAssertEqual(decoder.decodeExpansions.last, false)
-    }
-
-    func testShuangpinCorrectionCandidatesRespectLockedFinals() {
-        let decoder = RecordingPinyinDecoder()
-        decoder.decodeResult = { pinyin in
-            pinyin == "shi'yu"
-                ? [Candidate(text: "是语", consumed: 5, tokens: [1, 2], units: "shi'yu")]
+        decoder.decodeResult = { raw in
+            raw == "livb"
+                ? [Candidate(text: "利州", consumed: raw.count, tokens: [], units: "",
+                             segmentKeys: [2, 2], segmentChars: [1, 1])]
                 : []
         }
-        // Second-row corrections for the tapped first character span into the
-        // locked second syllable "yu"; 石原/诗云 expand it to yuan/yun.
+        let composition = Composition(decoder: decoder, inputScheme: .microsoftShuangpin)
+        "livb".forEach { composition.append(String($0)) }
+        XCTAssertEqual(decoder.decodeCalls.last?.pinyin, "livb")
+        XCTAssertEqual(composition.candidates.first?.text, "利州")
+    }
+
+    func testShuangpinCorrectionUsesRawKeyColumnAndDecoderResults() {
+        let decoder = RecordingPinyinDecoder()
+        decoder.decodeResult = { raw in
+            raw == "uiyu"
+                ? [Candidate(text: "是语", consumed: raw.count, tokens: [1, 2], units: "",
+                             segmentKeys: [2, 2], segmentChars: [1, 1])]
+                : []
+        }
         decoder.correctionResult = [
-            Candidate(text: "始于", consumed: 5, tokens: [3, 4], units: "shi'yu"),
-            Candidate(text: "石原", consumed: 7, tokens: [5, 6], units: "shi'yuan"),
-            Candidate(text: "诗云", consumed: 6, tokens: [7, 8], units: "shi'yun"),
-            Candidate(text: "视域", consumed: 5, tokens: [9, 10], units: "shi'yu")
+            Candidate(text: "始于", consumed: 4, tokens: [3, 4], units: "",
+                      segmentKeys: [2, 2], segmentChars: [1, 1]),
+            Candidate(text: "视域", consumed: 4, tokens: [9, 10], units: "",
+                      segmentKeys: [2, 2], segmentChars: [1, 1])
         ]
         let composition = Composition(decoder: decoder, inputScheme: .microsoftShuangpin)
-
-        // shi = "ui" (sh + i), yu = "yu" in Microsoft Shuangpin.
         "uiyu".forEach { composition.append(String($0)) }
         composition.activateCharacter(0)
 
-        // Corrections that lengthen the locked "yu" final are dropped.
+        XCTAssertEqual(decoder.correctionCalls.last?.pinyin, "uiyu")
+        XCTAssertEqual(decoder.correctionCalls.last?.prefixSyllables, 0)
         XCTAssertEqual(composition.displayCandidates.map(\.text), ["始于", "视域"])
     }
+
 
     func testNormalCandidateOrderIsNotResortedByComposition() {
         let decoder = RecordingPinyinDecoder()
@@ -731,20 +732,17 @@ final class CompositionEditingTests: XCTestCase {
 
     func testSelectingFinalCorrectionSpanLeavesTrailingSyllablesEditable() {
         let decoder = RecordingPinyinDecoder()
-        decoder.decodeResult = { pinyin in
-            pinyin == "wan'quan'li'xian'ma"
-                ? [Candidate(
-                    text: "完全离线吗",
-                    consumed: pinyin.count,
-                    tokens: [1, 2, 3, 4, 5],
-                    units: "wan'quan'li'xian'ma"
-                )]
+        decoder.decodeResult = { raw in
+            raw == "wjqrlixmma"
+                ? [Candidate(text: "完全离线吗", consumed: raw.count,
+                             tokens: [1, 2, 3, 4, 5], units: "",
+                             segmentKeys: [2, 2, 2, 2, 2],
+                             segmentChars: [1, 1, 1, 1, 1])]
                 : []
         }
-        // Second-row replacement chosen for the tapped "离" spans two
-        // syllables ("离线") starting at syllable index 2.
         decoder.correctionResult = [
-            Candidate(text: "离线", consumed: 0, tokens: [30, 31], units: "li'xian")
+            Candidate(text: "离线", consumed: 0, tokens: [30, 31], units: "",
+                      segmentKeys: [2, 2], segmentChars: [1, 1])
         ]
         let composition = Composition(decoder: decoder, inputScheme: .microsoftShuangpin)
 
@@ -788,36 +786,41 @@ final class CompositionEditingTests: XCTestCase {
         XCTAssertEqual(composition.commitPreeditLiterally(), "是语输入法吗")
     }
 
-    func testShuangpinDisablesEngineExpansionForCorrectionOnly() {
+    func testDecoderBindingKeepsFullPinyinAndShuangpinInputsDistinct() {
         let decoder = RecordingPinyinDecoder()
-        decoder.decodeResult = { _ in
-            [Candidate(text: "是语", consumed: 5, tokens: [1, 2], units: "shi'yu")]
+        decoder.decodeResult = { raw in
+            if raw == "uiyu" {
+                return [Candidate(text: "是语", consumed: 4, tokens: [1, 2], units: "",
+                                  segmentKeys: [2, 2], segmentChars: [1, 1])]
+            }
+            if raw == "nihao" {
+                return [Candidate(text: "你好", consumed: 5, tokens: [1, 2],
+                                  units: "ni'hao")]
+            }
+            return []
         }
         decoder.correctionResult = [
-            Candidate(text: "已于", consumed: 5, tokens: [3, 4], units: "shi'yu")
+            Candidate(text: "已于", consumed: 4, tokens: [3, 4], units: "",
+                      segmentKeys: [2, 2], segmentChars: [1, 1])
         ]
 
-        // Correction disables expansion so a locked final isn't abbreviation-
-        // matched to a longer one (removed 石原/十元). Main decode expands only
-        // when the buffer ends in a lone initial (odd count).
         let shuangpin = Composition(decoder: decoder, inputScheme: .microsoftShuangpin)
         "uiyu".forEach { shuangpin.append(String($0)) }
         shuangpin.activateCharacter(0)
-        XCTAssertEqual(decoder.decodeExpansions, [true, false, true, false],
-                       "odd key counts (a trailing lone initial) expand; even counts do not")
-        XCTAssertEqual(decoder.correctionExpansions.last, false)
+        XCTAssertEqual(decoder.decodeCalls.last?.pinyin, "uiyu")
+        XCTAssertEqual(decoder.correctionCalls.last?.pinyin, "uiyu")
+        XCTAssertEqual(decoder.correctionCalls.last?.prefixSyllables, 0)
 
-        decoder.decodeExpansions.removeAll()
-        decoder.correctionExpansions.removeAll()
-        decoder.decodeResult = { _ in
-            [Candidate(text: "你好", consumed: 5, tokens: [1, 2], units: "ni'hao")]
-        }
+        decoder.correctionResult = [
+            Candidate(text: "拟好", consumed: 5, tokens: [5, 6], units: "ni'hao")
+        ]
         let fullPinyin = Composition(decoder: decoder, inputScheme: .fullPinyin)
         "nihao".forEach { fullPinyin.append(String($0)) }
         fullPinyin.activateCharacter(0)
-        XCTAssertEqual(decoder.decodeExpansions.last, true)
-        XCTAssertEqual(decoder.correctionExpansions.last, true)
+        XCTAssertEqual(decoder.decodeCalls.last?.pinyin, "nihao")
+        XCTAssertEqual(decoder.correctionCalls.last?.pinyin, "ni'hao")
     }
+
 
     func testDeleteRemovesTheKeyBeforeTheCompositionCursor() {
         let composition = Composition(
@@ -865,12 +868,12 @@ final class CompositionPreeditGroupingTests: XCTestCase {
         XCTAssertEqual(composition.preedit, "da yi chuan")
     }
 
-    func testShuangpinPreeditGroupsTwoKeysPerSyllable() {
+    func testShuangpinPreeditUsesDecoderSourceSpans() {
         let decoder = RecordingPinyinDecoder()
-        decoder.decodeResult = { pinyin in
-            pinyin == "xiao'guo"
-                ? [Candidate(text: "小国", consumed: 7, tokens: [31, 32],
-                             units: "xiao'guo")]
+        decoder.decodeResult = { raw in
+            raw == "xcgo"
+                ? [Candidate(text: "小国", consumed: 4, tokens: [31, 32], units: "",
+                             segmentKeys: [2, 2], segmentChars: [1, 1])]
                 : []
         }
         let composition = Composition(decoder: decoder, inputScheme: .microsoftShuangpin)

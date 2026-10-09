@@ -15,7 +15,7 @@
 1. `iOS/project.yml` 是唯一 Xcode 工程源，不提交生成的 `iOS/Sime.xcodeproj/`。
 2. 键盘完全离线运行，不申请“完全访问”，不得上传或记录用户输入正文。
 3. 系统只安装一个“乐言输入法”扩展；宿主 App 名称为“乐言输入法”。
-4. 输入方案（全拼 / 微软双拼 / 小鹤双拼 / 自然码 / 搜狗双拼）通过 App Group 共享；切换后不得混用旧 Composition 状态。方案由 `Shared/InputScheme.swift` 定义：双拼布局是数据驱动的 `ShuangpinLayout`（每方案给出键→韵母表与零声母约定，`ia/ua`、`iang/uang`、`ong/iong`、`uo/o`、`ui/ü`、`ue/üe`、`uai/ing` 等歧义按共享汉语音系规则解析）。App 内用 Picker 切换（不是开关），系统只保留单一扩展、菜单名不拆分。
+4. 输入方案（全拼 / 微软双拼 / 小鹤双拼 / 自然码 / 搜狗双拼）通过 App Group 共享；切换后不得混用旧 Composition 状态。方案由 `Shared/InputScheme.swift` 定义：每种双拼选择对应的预建 Sime index，原始按键直接交给解码器，不在 Swift 维护双拼到全拼的转换表。App 内用 Picker 切换（不是开关），系统只保留单一扩展、菜单名不拆分。
 5. 模型与 ncnn runtime 必须位于 Keyboard Extension 自身资源/链接范围内。
 6. ncnn XCFramework 是本地生成物，不提交；新环境用 `iOS/scripts/build-ncnn-xcframework.sh` 构建。
 
@@ -130,24 +130,13 @@
 
 ## 双拼解码不变量
 
-64. 双拼：**韵母不走扩展，单个声母才走扩展**。打全的音节韵母固定（`he` 只能是 喝/和，不能变 黑/很），只有末尾孤立声母才补全（微软 `nghem` → 能喝吗，非 能很忙/能黑马）。
-  - **微软/搜狗/小鹤/自然码**均使用解码器预建 index：微软与搜狗共用 `sime.sp.index`，另两种分别使用 `sime.xiaohe.sp.index` 和 `sime.ziranma.sp.index`。Swift 把原始键和方案对应的 index 交给解码器；拼音游程边界、末尾补全、候选逐字的原始键跨度均由 decoder 返回，不在 Composition 里按固定键数推断。
-  - index 没有子音节键，因此完整双拼游程要么以整体命中音节/词，要么不命中；不能把 `pie` 拆成 `pi+e` 再改韵母。
-  - 引擎异步加载期间的 Builtin fallback 仍走 layout 展开；Native decoder 就绪后应切换到当前方案对应的 index。
-  - 用例与断言见 `iOS/Tests/ShuangpinEndToEndTests.swift` 和 `require/Sime/tests/correction_test.cc`。
+64. 真机需验证微软/搜狗/小鹤/自然码方案切换与 Native decoder 异步换入：当前 raw 不丢失，且始终使用当前方案的 index，不串用旧 binding。
 
-64b. 双拼下打完声母（当前音节只剩一个待配对键）时，字母页**高亮能与该声母组成合法音节的韵母键**（蓝色底）；音节打满或全拼不高亮。合法性以引擎为准，不得用手写韵母白名单：
-  - **index 路径（所有有预建 index 的方案）**：把待测原始键交给引擎，合法性以解码器返回的汉字候选及其实际 source span 为准。Swift 不展开全拼，也不根据文本长度或固定键数造边界。
-  - Native index paths query the decoder with raw keys and accept only its single-Han-character span; the Builtin fallback uses layout expansion until the corresponding native index loads.
-  - 高亮键还**吸附与相邻非高亮键之间的缝隙**（行内 4pt），双方都不侵入对方键面，也不破坏契约 63。**“上色”与“扩大命中区”相互独立**，由 `tintShuangpinFinalKeys` / `enlargeShuangpinFinalKeys` 分别控制。合法集合逻辑见 `iOS/Tests`（`testShuangpin*FinalKeys*`）；此处只留真机回归：不闪烁、不阻碍连打、缝隙偏向合法键，引擎换入/切方案后一致。
+64b. 双拼打完待配对声母时，字母页高亮合法韵母键；音节打满或全拼时不高亮。真机需检查高亮不闪烁、不阻碍连打，键面之间的缝隙命中符合高亮状态；上色和扩大命中区相互独立，切方案及 Native decoder 换入后保持一致。
 
 64c. **只有微软/搜狗布局使用 `;` 韵母键**（`InputScheme.usesSemicolonKey`）：其字母页 home 行含 `;` 且不缩进；小鹤/自然码/全拼的 home 行为 `asdfghjkl`（缩进），`;` 只作标点。切方案后须 `keyboardNeedsRebuild` 重建键盘。
 
-64d. 各双拼方案的键→拼音映射由 `ShuangpinLayout.microsoft/xiaohe/ziranma` 表驱动，代表用例断言见 `iOS/Tests/MicrosoftShuangpinTests.swift`、`XiaoheShuangpinTests.swift`、`ZiranmaShuangpinTests.swift`。**微软/搜狗**共用同一张表（按官方搜狗码表）：`ui` 在 `v` 键，`uai` 与 `ü`（写作 `v`）共用 `y` 键（声母互斥：`n/l`→ü，`g/k/h/zh/ch/sh`→uai），`ue/üe` 在 `t` 键，`ing` 在 `;`。即 `贵=gv`、`乖=gy`、`女=ny`、`略=lt`。**自然码**按“与微软同键位、但 `ing` 移到 `y`（与 `uai` 共键，声母互斥不冲突）、零声母用韵母首字母（`爱=al`）”建模。全键位覆盖由 `ShuangpinCoverageTests` 对每个方案断言；布局细节尚未做真机长期回归，若与官方码表有出入，先改表与对应测试再改行为，不要让码表、测试与本条默默分叉。
 
-64e. **双拼必须覆盖全拼音节全集**：标准普通话约 410 个音节清单在 `iOS/Tests/quanpin.txt`（唱作资源），`ShuangpinCoverageTests` 枚举每方案所有两键组合的 `expand` 结果，逐条断言清单均可产出（`ü`归一为 `v`）。唯一已知例外是双拼无法区分的稀见叹词 `lo`（→luo）、`yo`（→yuo），在测试中显式排除。`quanpin.txt` 是该清单的唯一来源，不要另处重建。
-
-65. **index 路径（所有有预建 index 的双拼方案）**：双拼原始键直接交给解码器，index 按对应 layout 的映射分词，不生成全拼或撇号边界。因此跨音节 n-gram 上下文自然保留。不同 layout 的 index 值空间与 `sime.dict` 的 `LetterPinyin` 共用 token IDs/pieces/LM 分；改选从 decoder 返回的真实 source spans 重锚。全拼路径不传 index，继续覆盖撇号边界回归（`require/Sime/tests/correction_test.cc`）。
 
 ## 人工验证命令
 

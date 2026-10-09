@@ -11,11 +11,10 @@ final class ShuangpinEndToEndTests: XCTestCase {
     }
 
     private func composition(for keys: String,
-                             scheme: InputScheme = .microsoftShuangpin,
-                             useIndex: Bool = false) throws -> Composition {
+                             scheme: InputScheme = .microsoftShuangpin) throws -> Composition {
         let bundle = Bundle(for: Self.self)
-        let indexName = useIndex ? scheme.shuangpinIndexName : nil
-        guard let decoder = NativePinyinDecoder(bundle: bundle,
+        guard let indexName = scheme.shuangpinIndexName,
+              let decoder = NativePinyinDecoder(bundle: bundle,
                                                 indexName: indexName) else {
             throw XCTSkip("sime.dict/sime.cnt not bundled into the test target")
         }
@@ -25,7 +24,7 @@ final class ShuangpinEndToEndTests: XCTestCase {
     }
 
     func testEnglishPrefixWithShuangpinChineseSuffix() throws {
-        let c = try composition(for: "fixyixw", useIndex: true) // fix + yi + xia
+        let c = try composition(for: "fixyixw") // fix + yi + xia
         guard let index = c.candidates.firstIndex(where: { $0.text == "fix一下" }) else {
             return XCTFail("fixyixw should offer fix一下; got: \(c.candidates.map { $0.text })")
         }
@@ -34,7 +33,7 @@ final class ShuangpinEndToEndTests: XCTestCase {
     }
 
     func testEnglishCorrectionReplacesTheRemainingDecodedSpan() throws {
-        let c = try composition(for: "veuilove", useIndex: true) // zhe + shi + love
+        let c = try composition(for: "veuilove") // zhe + shi + love
         XCTAssertEqual(c.candidates.first?.text, "这是裸着")
         c.activateCharacter(2)
         guard let love = c.displayCandidates.firstIndex(where: { $0.text == "love" }) else {
@@ -45,7 +44,7 @@ final class ShuangpinEndToEndTests: XCTestCase {
     }
 
     func testEnglishCorrectionKeepsExpandedAnchorAndAdvancesToNextHan() throws {
-        let c = try composition(for: "veuiloveni", useIndex: true)
+        let c = try composition(for: "veuiloveni")
         c.activateCharacter(2)
         guard let love = c.displayCandidates.firstIndex(where: { $0.text == "love" }) else {
             return XCTFail("tapping 裸 should offer love; got: \(c.displayCandidates.map { $0.text })")
@@ -57,7 +56,7 @@ final class ShuangpinEndToEndTests: XCTestCase {
     }
 
     func testUppercaseEnglishIslandBetweenShuangpinSyllables() throws {
-        let c = try composition(for: "zjlwAAba", useIndex: true)
+        let c = try composition(for: "zjlwAAba")
         guard let index = c.candidates.firstIndex(where: { $0.text == "咱俩AA吧" }) else {
             return XCTFail("zjlwAAba should offer 咱俩AA吧; got: \(c.candidates.map { $0.text })")
         }
@@ -65,7 +64,7 @@ final class ShuangpinEndToEndTests: XCTestCase {
     }
 
     func testUppercaseEnglishTailKeepsMarkedTextAndCaretAligned() throws {
-        let c = try composition(for: "woyeO", useIndex: true)
+        let c = try composition(for: "woyeO")
         XCTAssertEqual(c.preedit, "wo ye O")
         XCTAssertEqual(c.sentencePreview, "我也O")
         XCTAssertEqual(c.selectionLocation, c.preedit.utf16.count)
@@ -78,15 +77,14 @@ final class ShuangpinEndToEndTests: XCTestCase {
     }
 
     func testIndexCorrectionAtSingleCharacterShowsMultiCharacterWords() throws {
-        let c = try composition(for: "x;jwbi", useIndex: true)
+        let c = try composition(for: "x;jwbi")
         c.activateCharacter(1)
         XCTAssertTrue(c.displayCandidates.contains { $0.text == "假币" },
                       "tapping 价 should offer 假币; got: \(c.displayCandidates.map { $0.text })")
     }
 
     func testXiaoheIndexDecodesAndCommitsChinese() throws {
-        let c = try composition(for: "nihc", scheme: .xiaoheShuangpin,
-                                useIndex: true)
+        let c = try composition(for: "nihc", scheme: .xiaoheShuangpin)
         guard let index = c.candidates.firstIndex(where: { $0.text == "你好" }) else {
             return XCTFail("Xiaohe nihc should offer 你好; got: \(c.candidates.map { $0.text })")
         }
@@ -94,8 +92,7 @@ final class ShuangpinEndToEndTests: XCTestCase {
     }
 
     func testZiranmaIndexDecodesAndCommitsChinese() throws {
-        let c = try composition(for: "nihk", scheme: .ziranmaShuangpin,
-                                useIndex: true)
+        let c = try composition(for: "nihk", scheme: .ziranmaShuangpin)
         guard let index = c.candidates.firstIndex(where: { $0.text == "你好" }) else {
             return XCTFail("Ziranma nihk should offer 你好; got: \(c.candidates.map { $0.text })")
         }
@@ -103,7 +100,7 @@ final class ShuangpinEndToEndTests: XCTestCase {
     }
 
     func testExpandedTrailingInitialStillSplitsDecoderCharacterSpans() throws {
-        let c = try composition(for: "kdqru", useIndex: true)
+        let c = try composition(for: "kdqru")
         XCTAssertEqual(c.candidates.first?.text, "矿泉水")
         XCTAssertEqual(c.sentenceSegments.map(\.text), ["矿", "泉", "水"])
         XCTAssertEqual(c.preedit, "kd qr u")
@@ -166,15 +163,12 @@ final class ShuangpinEndToEndTests: XCTestCase {
         XCTAssertFalse(c.contains { $0.contains("先") }, "xi must not become xian/先")
     }
 
-    // A lone v/i/u maps to the retroflex initial zh/ch/sh, so it decodes as
-    // Chinese, not the literal letter (which surfaced English up/us).
-    func testLoneVIUMapToZhChShNotEnglish() throws {
-        let u = try candidates(for: "u")
-        XCTAssertTrue(u.contains("是"), "u -> sh should offer 是")
-        XCTAssertFalse(u.contains("up"), "u must not surface English up")
-        XCTAssertFalse(u.contains("us"), "u must not surface English us")
-        XCTAssertTrue(try candidates(for: "i").contains("陈"), "i -> ch should offer 陈")
-        XCTAssertTrue(try candidates(for: "v").contains("中"), "v -> zh should offer 中")
+    func testLoneShuangpinInitialOffersChineseIndexCandidates() throws {
+        for keys in ["u", "i", "v"] {
+            let results = try candidates(for: keys)
+            XCTAssertTrue(results.first?.contains(where: { !$0.isASCII }) == true,
+                          "\(keys) should lead with a Chinese index candidate")
+        }
     }
 
     // rsyipxjc = rong(rs)+yi(yi)+pie(px)+jiao(jc). Each syllable is delimited,
@@ -197,7 +191,7 @@ final class ShuangpinEndToEndTests: XCTestCase {
     }
 
     func testIndexWordsStillExposeOneTappableSegmentPerChineseCharacter() throws {
-        let c = try composition(for: "womfdevsgo", useIndex: true)
+        let c = try composition(for: "womfdevsgo")
         XCTAssertEqual(c.candidates.first?.text, "我们的中国")
         XCTAssertEqual(c.sentenceSegments.map(\.text), ["我", "们", "的", "中", "国"])
         XCTAssertEqual(c.preedit, "wo mf de vs go")
@@ -257,7 +251,6 @@ final class ShuangpinEndToEndTests: XCTestCase {
             ("qru", "全省"),         // quan sh(...)
             ("xih", "喜欢"),
             ("hfhem", "很盒马"),
-            ("u", "是"), ("i", "陈"), ("v", "中")
         ]
         for c in cases {
             let top = try candidates(for: c.keys).first

@@ -7,6 +7,17 @@ private struct MinimalPinyinDecoder: PinyinDecoder {
     }
 }
 
+private final class IndexRecordingDecoder: PinyinDecoder {
+    var shuangpinIndexName: String? { "sime.sp" }
+    private(set) var inputs: [String] = []
+
+    func decode(_ pinyin: String, limit: Int) -> [Candidate] {
+        inputs.append(pinyin)
+        return [Candidate(text: "效果", consumed: pinyin.count, tokens: [1, 2],
+                          segmentKeys: [2, 2], segmentChars: [1, 1])]
+    }
+}
+
 final class PinyinDecoderContractTests: XCTestCase {
     func testProtocolDefaultsPreserveTheBasicDecoderResult() {
         let decoder = MinimalPinyinDecoder()
@@ -22,6 +33,21 @@ final class PinyinDecoderContractTests: XCTestCase {
         XCTAssertEqual(decoder.syllableCandidates("ni").map(\.text), ["结果"])
         XCTAssertTrue(decoder.tokenize("上下文").isEmpty)
         XCTAssertTrue(decoder.predict([7], limit: 9).isEmpty)
+    }
+
+    func testShuangpinIndexReceivesRawKeysAndBuiltinFallbackDoesNotTranslate() {
+        let decoder = IndexRecordingDecoder()
+        let indexed = decoder.decodeComposition(
+            "xcgo", scheme: .microsoftShuangpin, context: [], limit: 60
+        )
+        XCTAssertEqual(decoder.inputs, ["xcgo"])
+        XCTAssertEqual(indexed.first?.text, "效果")
+
+        let fallback = BuiltinPinyinDecoder().decodeComposition(
+            "xcgo", scheme: .microsoftShuangpin, context: [], limit: 60
+        )
+        XCTAssertEqual(fallback.map(\.text), ["xcgo"])
+        XCTAssertTrue(fallback.first?.isEnglish == true)
     }
 
     func testBuiltinDecoderKeepsLongestCandidateFirst() {
