@@ -22,7 +22,9 @@ open Sime.xcodeproj
 在宿主 App“乐言输入法”中切换：
 
 - **全拼**：标准拼音键盘布局。
-- **微软双拼**：双拼布局（含 `;` 的 `ing` 键）。
+- **微软双拼**：微软双拼键盘布局，`;` 键输入 `ing`。
+
+双拼按键由当前方案对应的预建 Sime index 解码；当前支持微软、搜狗、小鹤和自然码。完整输入路径见 [`SHUANGPIN_DECODING.md`](SHUANGPIN_DECODING.md)。
 
 ## 解码器与资源
 
