@@ -571,6 +571,8 @@ final class KeyboardViewController: UIInputViewController {
         selectedTone = nil
         if let text = composition.selectDisplayed(index) {
             commit(text)
+        } else {
+            updateMarkedText()
         }
         render()
     }
