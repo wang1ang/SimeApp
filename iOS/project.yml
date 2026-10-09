@@ -57,6 +57,9 @@ targets:
           cp "$SRCROOT/../require/Sime/save/sime.sp.index" "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/sime.sp.index"
           cp "$SRCROOT/../require/Sime/save/sime.xiaohe.sp.index" "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/sime.xiaohe.sp.index"
           cp "$SRCROOT/../require/Sime/save/sime.ziranma.sp.index" "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/sime.ziranma.sp.index"
+          cp "$SRCROOT/../require/Sime/pipeline/sogou.map.txt" "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/sogou.map.txt"
+          cp "$SRCROOT/../require/Sime/pipeline/xiaohe.map.txt" "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/xiaohe.map.txt"
+          cp "$SRCROOT/../require/Sime/pipeline/ziranma.map.txt" "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/ziranma.map.txt"
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.ismantic.sime.tests

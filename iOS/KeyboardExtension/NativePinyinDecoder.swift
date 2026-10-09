@@ -206,8 +206,7 @@ final class NativePinyinDecoder: PinyinDecoder {
         }
         // A phrase decode only yields whole-phrase paths. Add short word
         // alternatives for both ends, so "nihao" also exposes 你/呢 and 好/号.
-        // The shuangpin-index path re-feeds raw key spans (two keys per
-        // syllable); the full-pinyin path re-feeds its pinyin units.
+        // Re-query the chosen path's first and last decoder-reported raw spans.
         for syllable in endSyllables(of: results.first, rawInput: pinyin)
         where !syllable.isEmpty {
             var syllableResults = sime_decode_str(handle, syllable, Int32(limit))
@@ -220,10 +219,7 @@ final class NativePinyinDecoder: PinyinDecoder {
         return Array(results.prefix(limit))
     }
 
-    /// The first and last segment spans of the top candidate, re-queried for
-    /// single-character alternatives. On the index path these are raw key spans
-    /// from `segmentKeys` (no two-key assumption); on the full-pinyin path they
-    /// are the pinyin units split on the apostrophe.
+    /// Re-query the first and last source spans reported by the decoder path.
     private func endSyllables(of top: Candidate?, rawInput: String) -> [String] {
         guard let top else { return [] }
         if hasShuangpinIndex {

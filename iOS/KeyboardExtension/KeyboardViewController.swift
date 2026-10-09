@@ -59,10 +59,8 @@ final class KeyboardViewController: UIInputViewController {
         return Composition(decoder: decoder, inputScheme: inputScheme)
     }
 
-    /// Load the native engine off the main thread and swap it into the current
-    /// composition when ready, preserving any in-progress raw pinyin. Loads the
-    /// index-bound engine for shuangpin-index schemes; the full-pinyin engine
-    /// otherwise. Cheap no-op once the matching decoder is already active.
+    /// Load the matching native engine off-main-thread and preserve current raw
+    /// input. Uses the scheme index, or the full-pinyin engine when applicable.
     private func activateNativeDecoder() {
         let indexName = keyboardScheme.shuangpinIndexName
         if usesNativeDecoder, composition.decoderIndexName == indexName {
@@ -998,8 +996,10 @@ final class KeyboardViewController: UIInputViewController {
     private func applyFinalKeyTint(legalFinals: Set<Character>) {
         for case let row as UIStackView in keyboardStack.arrangedSubviews {
             for case let button as KeyButton in row.arrangedSubviews {
-                guard let c = char(ofKey: button),
-                      MicrosoftShuangpin.finalKeyCandidates.contains(c) else { continue }
+                guard let c = char(ofKey: button), c.isASCII,
+                      c.isLetter || (keyboardScheme.usesSemicolonKey && c == ";") else {
+                    continue
+                }
                 button.backgroundColor = legalFinals.contains(c)
                     ? UIColor.systemBlue.withAlphaComponent(0.28)
                     : .tertiarySystemBackground

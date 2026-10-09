@@ -70,8 +70,8 @@ extension PinyinDecoder {
         decode(pinyin, limit: limit)
     }
 
-    // Abbreviation/tail expansion is a full-pinyin convenience; default to it
-    // so existing callers keep their behavior. Shuangpin passes false.
+    // Engine-side completion for unfinished input. Shuangpin index decoding
+    // still receives raw keys; this flag does not translate them to pinyin.
     func decode(_ pinyin: String, context: [UInt32], limit: Int,
                 expansion: Bool) -> [Candidate] {
         decode(pinyin, context: context, limit: limit)
@@ -112,124 +112,89 @@ extension PinyinDecoder {
         return shuangpinIndexName == requested
     }
 
-    /// Decode the raw composition through the decoder binding selected by the
-    /// scheme, preserving the entered casing for mixed-English lookup.
     func decodeComposition(_ raw: String, scheme: InputScheme,
                            context: [UInt32], limit: Int) -> [Candidate] {
         let decoded: [Candidate]
-        if usesIndex(for: scheme) {
-            decoded = decode(raw, context: context, limit: limit, expansion: true)
-        } else if let layout = scheme.shuangpin {
-            let keys = Array(raw.lowercased())
-            let hasLoneInitial = keys.count % 2 == 1
-            var syllables = stride(from: 0, to: keys.count - 1, by: 2).map {
-                layout.expand(String(keys[$0..<$0 + 2]))
-            }
-            if hasLoneInitial, let last = keys.last {
-                syllables.append(layout.initial(for: last))
-            }
-            let expanded = syllables.joined(separator: "'")
-            let candidates = decode(expanded, context: context, limit: limit,
-                                    expansion: hasLoneInitial)
-            let locked = stride(from: 0, to: keys.count - 1, by: 2).map {
-                layout.expand(String(keys[$0..<$0 + 2]))
-            }
-            decoded = candidates.filter { candidate in
-                let units = candidate.units.split(separator: "'").map(String.init)
-                guard units.count >= 2 else { return true }
-                for index in 0..<min(units.count, locked.count) {
-                    if units[index] != locked[index] { return false }
-                }
-                return true
-            }
+        if scheme.shuangpinIndexName != nil {
+            decoded = usesIndex(for: scheme)
+                ? decode(raw, context: context, limit: limit, expansion: true)
+                : []
         } else {
             decoded = decode(raw, context: context, limit: limit, expansion: true)
         }
-
         guard !raw.isEmpty,
               !decoded.contains(where: { $0.text == raw }) else { return decoded }
-        return decoded + [Candidate(text: raw, consumed: raw.count,
-                                    tokens: [], units: "", isEnglish: true)]
+        return decoded + [Candidate(text: raw, consumed: raw.count, tokens: [],
+                                    units: "", segmentKeys: [raw.count],
+                                    segmentChars: [raw.count], isEnglish: true)]
     }
 
-    /// Correction dispatch mirrors decodeComposition: the engine receives raw
-    /// keys when indexed, while legacy decoders receive expanded pinyin units.
     func correctionCandidatesForComposition(
         raw: String, top: Candidate, scheme: InputScheme,
         fixedPrefix: String, prefixSegment: Int, rawKeyColumn: Int,
         limit: Int
     ) -> [Candidate] {
-        if usesIndex(for: scheme) {
+        if scheme.shuangpinIndexName != nil {
+            guard usesIndex(for: scheme) else { return [] }
             return correctionCandidates(
                 raw, fixedPrefix: fixedPrefix, prefixSyllables: rawKeyColumn,
                 limit: limit, expansion: true)
         }
-        let expansion = scheme.shuangpin == nil || raw.count % 2 == 1
-        let results = correctionCandidates(
+        return correctionCandidates(
             top.units, fixedPrefix: fixedPrefix,
-            prefixSyllables: prefixSegment, limit: limit,
-            expansion: expansion)
-        guard let layout = scheme.shuangpin else { return results }
-        let keys = Array(raw)
-        var locked: [String] = []
-        var offset = 0
-        while offset + 1 < keys.count {
-            locked.append(layout.expand(String(keys[offset...offset + 1])))
-            offset += 2
-        }
-        return results.filter { candidate in
-            let units = candidate.units.split(separator: "'").map(String.init)
-            for index in 0..<min(units.count, locked.count) {
-                let lockedIndex = prefixSegment + index
-                if lockedIndex < locked.count && units[index] != locked[lockedIndex] {
-                    return false
-                }
-            }
-            return true
-        }
+            prefixSyllables: prefixSegment, limit: limit, expansion: true)
     }
 
     func pendingShuangpinInitial(raw: String, cursor: Int, scheme: InputScheme,
                                   candidate: Candidate?) -> Character? {
-        guard scheme.shuangpin != nil,
-              cursor > 0, cursor <= raw.count else { return nil }
+        guard scheme.shuangpinIndexName != nil, usesIndex(for: scheme),
+              cursor > 0, cursor <= raw.count,
+              let candidate,
+              candidate.segmentKeys.count == candidate.segmentChars.count else {
+            return nil
+        }
+        let text = Array(candidate.text)
+        var displayOffset = 0
+        var rawOffset = 0
         var runStart = 0
-        if usesIndex(for: scheme),
-           let candidate,
-           candidate.segmentKeys.count == candidate.segmentChars.count {
-            let text = Array(candidate.text)
-            var displayOffset = 0
-            var rawOffset = 0
-            for (keys, chars) in zip(candidate.segmentKeys,
-                                     candidate.segmentChars) {
-                let end = min(text.count, displayOffset + chars)
-                let range = displayOffset..<end
-                if !range.isEmpty && range.allSatisfy({
-                    text[$0].isASCII && text[$0].isLetter
-                }) {
-                    runStart = rawOffset + keys
-                }
-                displayOffset += chars
-                rawOffset += keys
+        for (keys, chars) in zip(candidate.segmentKeys, candidate.segmentChars) {
+            let end = min(text.count, displayOffset + chars)
+            let range = displayOffset..<end
+            if !range.isEmpty && range.allSatisfy({
+                text[$0].isASCII && text[$0].isLetter
+            }) {
+                runStart = rawOffset + keys
             }
+            displayOffset += chars
+            rawOffset += keys
         }
         let keysBeforeCursor = cursor - runStart
         guard keysBeforeCursor > 0, keysBeforeCursor % 2 == 1 else { return nil }
         return raw[raw.index(raw.startIndex, offsetBy: cursor - 1)]
     }
 
-    func isLegalShuangpinSyllable(rawKeys: String, expanded: String,
+    func isLegalShuangpinSyllable(rawKeys: String,
                                   scheme: InputScheme) -> Bool {
-        if usesIndex(for: scheme) {
-            return syllableCandidates(rawKeys).contains { candidate in
-                candidate.text.contains { !$0.isASCII }
-                    && candidate.segmentKeys == [rawKeys.count]
-                    && candidate.segmentChars == [1]
-            }
+        guard usesIndex(for: scheme) else { return false }
+        return syllableCandidates(rawKeys).contains { candidate in
+            candidate.text.contains { !$0.isASCII }
+                && candidate.segmentKeys == [rawKeys.count]
+                && candidate.segmentChars == [1]
         }
-        return syllableCandidates(expanded).contains { candidate in
-            candidate.units == expanded && candidate.text.contains { !$0.isASCII }
-        }
+    }
+
+    func shuangpinFinalKeyHighlights(
+        raw: String, cursor: Int, scheme: InputScheme,
+        candidate: Candidate?
+    ) -> Set<Character> {
+        guard let initial = pendingShuangpinInitial(
+            raw: raw, cursor: cursor, scheme: scheme, candidate: candidate
+        ) else { return [] }
+        let finals = Array("abcdefghijklmnopqrstuvwxyz")
+            + (scheme.usesSemicolonKey ? [";" as Character] : [])
+        return Set(finals.filter {
+            isLegalShuangpinSyllable(rawKeys: String([initial, $0]), scheme: scheme)
+        })
     }
 }
 

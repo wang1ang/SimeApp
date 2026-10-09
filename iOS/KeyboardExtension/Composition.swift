@@ -17,10 +17,6 @@ final class Composition {
 
     private let decoder: PinyinDecoder
     private let inputScheme: InputScheme
-    // The active Shuangpin layout, or nil for full pinyin. All two-key
-    // Shuangpin behavior is gated on this being non-nil rather than on a
-    // specific scheme, so every layout shares one code path.
-    private let shuangpin: ShuangpinLayout?
     private(set) var raw = ""
     private(set) var committed = ""
     private(set) var cursor = 0
@@ -42,11 +38,6 @@ final class Composition {
     // anchors stay sparse so every sentence position remains editable.
     private var prefixSegments: [CompositionSegment] = []
     private var anchorSegments: [CompositionSegment] = []
-    // Per-initial cache of the final keys that complete a valid Shuangpin
-    // syllable. Bounded by the alphabet, so each initial is validated through
-    // the decoder at most once for this Composition (a decoder swap builds a
-    // fresh Composition, which resets the cache).
-    private var shuangpinFinalHighlightCache: [Character: Set<Character>] = [:]
 
     /// Exposed so the controller can tell whether the active composition already
     /// runs on a native engine with the binding the current scheme wants.
@@ -58,7 +49,6 @@ final class Composition {
          inputScheme: InputScheme = InputSettings.scheme) {
         self.decoder = decoder
         self.inputScheme = inputScheme
-        self.shuangpin = inputScheme.shuangpin
     }
 
     /// When false, the empty-preedit association bar (联想) is suppressed.
@@ -265,29 +255,9 @@ final class Composition {
         return groups[rawSegmentIndex]
     }
 
-    /// Letter-layout keys that complete a valid syllable with the Shuangpin
-    /// initial the user just typed. Non-empty only while a lone initial (the
-    /// odd key at the composition cursor) awaits its final; empty for full
-    /// pinyin and once the syllable is complete. Legality comes from the engine:
-    /// the index path feeds it the two raw keys and asks whether they resolve to
-    /// one Han syllable; the legacy path probes the expanded pinyin. Either way
-    /// Swift keeps no hand-written final whitelist.
     func shuangpinFinalKeyHighlights() -> Set<Character> {
-        guard let shuangpin else { return [] }
-        guard let key = decoder.pendingShuangpinInitial(
-            raw: raw, cursor: cursor, scheme: inputScheme, candidate: candidates.first
-        )?.lowercased().first else { return [] }
-        if let cached = shuangpinFinalHighlightCache[key] { return cached }
-        let highlights = shuangpin.finalKeyCandidates.filter { finalKey in
-            let rawKeys = String([key, finalKey])
-            return decoder.isLegalShuangpinSyllable(
-                rawKeys: rawKeys,
-                expanded: shuangpin.expand(rawKeys),
-                scheme: inputScheme)
-        }
-        let set = Set(highlights)
-        shuangpinFinalHighlightCache[key] = set
-        return set
+        decoder.shuangpinFinalKeyHighlights(
+            raw: raw, cursor: cursor, scheme: inputScheme, candidate: candidates.first)
     }
 
     /// Display spans come from the decoder, which can expose characters inside
@@ -295,6 +265,7 @@ final class Composition {
     private func segmentCharCounts(_ candidate: Candidate?) -> [Int] {
         guard let candidate else { return [] }
         if !candidate.segmentChars.isEmpty { return candidate.segmentChars }
+        guard !inputScheme.isShuangpin else { return [] }
 
         let units = candidate.units.split(separator: "'").map(String.init)
         let text = Array(candidate.text)
@@ -324,12 +295,12 @@ final class Composition {
         return counts
     }
 
-    /// Per-segment raw-key lengths for a candidate, path-agnostic. The index
-    /// path takes the engine's spans (no two-key assumption); the full-pinyin /
-    /// legacy-shuangpin path slices `raw` the way it was typed.
+    /// Raw-key spans come from the decoder; full pinyin may derive them from
+    /// the decoder's `units` when explicit spans are unavailable.
     private func segmentRawLengths(_ candidate: Candidate?) -> [Int] {
         guard let candidate else { return [] }
         if !candidate.segmentKeys.isEmpty { return candidate.segmentKeys }
+        guard !inputScheme.isShuangpin else { return [] }
         let syllables = candidate.units.split(separator: "'").map(String.init)
         return enteredKeyGroups(for: syllables).map(\.count)
     }
@@ -362,36 +333,20 @@ final class Composition {
         var remaining = Substring(raw)
         var groups: [String] = []
         for syllable in syllables {
-            if shuangpin != nil {
-                if remaining.count >= 2 {
-                    groups.append(String(remaining.prefix(2)))
-                    remaining.removeFirst(2)
-                } else {
-                    // Keep a trailing lone initial editable.
-                    guard syllable == syllables.last, !remaining.isEmpty else { return [] }
-                    groups.append(String(remaining))
-                    remaining.removeAll()
-                }
-            } else {
-                // Apostrophes are input keys too; associate one with the
-                // syllable that follows it so the displayed label is literal.
-                var group = ""
-                if remaining.first == "'" {
-                    group.append("'")
-                    remaining.removeFirst()
-                }
-                if remaining.count < syllable.count {
-                    guard syllable == syllables.last, !remaining.isEmpty else {
-                        return []
-                    }
-                    groups.append(group + remaining)
-                    remaining.removeAll()
-                    continue
-                }
-                group += String(remaining.prefix(syllable.count))
-                remaining.removeFirst(syllable.count)
-                groups.append(group)
+            var group = ""
+            if remaining.first == "'" {
+                group.append("'")
+                remaining.removeFirst()
             }
+            if remaining.count < syllable.count {
+                guard syllable == syllables.last, !remaining.isEmpty else { return [] }
+                groups.append(group + remaining)
+                remaining.removeAll()
+                continue
+            }
+            group += String(remaining.prefix(syllable.count))
+            remaining.removeFirst(syllable.count)
+            groups.append(group)
         }
         return groups
     }
@@ -865,8 +820,7 @@ final class Composition {
                     guard !input.isEmpty else { break }
                     var group = ""
                     if input.first == "'" { group.append("'"); input.removeFirst() }
-                    let width = shuangpin != nil ? 2 : unit.count
-                    let length = min(width, input.count)
+                    let length = min(unit.count, input.count)
                     group += String(input.prefix(length))
                     input.removeFirst(length)
                     parts.append(group)
