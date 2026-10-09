@@ -787,54 +787,20 @@ final class Composition {
             raw: raw, units: candidates.first?.units ?? "", top: candidates.first)
     }
 
-    /// Group raw keys by decoder spans, joining adjacent spans shown as one
-    /// ASCII word. Display grouping never changes commit consumption.
+    /// Group raw keys by decoder spans, then join spans committed as one
+    /// English anchor. Display grouping never changes commit consumption.
     private func computeDisplayGroups(raw: String, units: String,
                                       top: Candidate?) -> [String] {
-        let topText = top?.text ?? ""
         if let top, !top.segmentKeys.isEmpty {
-            let groups = rawGroups(of: top)
-            let spans = sentenceMapping.unitRanges
-            let text = Array(sentencePreview)
-            var parts: [String] = []
-            var index = 0
-            while index < groups.count {
-                guard spans.indices.contains(index) else {
-                    parts.append(contentsOf: groups[index...])
-                    break
-                }
-                let span = spans[index]
-                let isEnglish = !span.isEmpty && span.allSatisfy {
-                    text[$0].isASCII && text[$0].isLetter
-                }
-                guard isEnglish else {
-                    parts.append(groups[index])
-                    index += 1
-                    continue
-                }
-                var end = index + 1
-                var previous = span
-                while end < min(groups.count, spans.count) {
-                    let next = spans[end]
-                    guard !next.isEmpty,
-                          next.allSatisfy({ text[$0].isASCII && text[$0].isLetter }),
-                          next.lowerBound == previous.upperBound || next == previous else {
-                        break
-                    }
-                    previous = next
-                    end += 1
-                }
-                parts.append(groups[index..<end].joined())
-                index = end
-            }
-            let used = groups.reduce(0) { $0 + $1.count }
+            var parts = rawGroups(of: top)
+            let used = parts.reduce(0) { $0 + $1.count }
             if used < raw.count { parts.append(String(raw.dropFirst(used))) }
-            return parts.isEmpty && !raw.isEmpty ? [raw] : parts
+            return coalescingEnglishAnchorGroups(parts)
         }
         var parts: [String] = []
         var pinyinPrefix = raw
         var remainingUnits = units.split(separator: "'").map(String.init)
-        let englishPrefix = topText.prefix(while: { $0.isASCII && $0.isLetter })
+        let englishPrefix = (top?.text ?? "").prefix(while: { $0.isASCII && $0.isLetter })
         if englishPrefix.count > 1, raw.count >= englishPrefix.count {
             let end = raw.index(raw.startIndex, offsetBy: englishPrefix.count)
             parts.append(String(raw[..<end]))
@@ -862,5 +828,33 @@ final class Composition {
             }
         }
         return parts
+    }
+
+    private func coalescingEnglishAnchorGroups(_ groups: [String]) -> [String] {
+        let englishRanges = Dictionary(
+            anchorSegments.compactMap { anchor -> (Int, Range<Int>)? in
+                guard !anchor.text.isEmpty,
+                      anchor.text.allSatisfy({ $0.isASCII && $0.isLetter }) else { return nil }
+                return (anchor.syllableRange.lowerBound, anchor.syllableRange)
+            }, uniquingKeysWith: { first, _ in first })
+        guard !englishRanges.isEmpty else { return groups }
+
+        var result: [String] = []
+        var index = 0
+        while index < groups.count {
+            guard let range = englishRanges[index], range.upperBound > index else {
+                result.append(groups[index])
+                index += 1
+                continue
+            }
+            var end = min(range.upperBound, groups.count)
+            while end < groups.count,
+                  let next = englishRanges[end], next.upperBound > end {
+                end = min(next.upperBound, groups.count)
+            }
+            result.append(groups[index..<end].joined())
+            index = end
+        }
+        return result
     }
 }

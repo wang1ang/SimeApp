@@ -26,6 +26,7 @@ final class FullPinyinEndToEndTests: XCTestCase {
         guard let decoder = NativePinyinDecoder(bundle: bundle) else { throw XCTSkip() }
         let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
         "fixyixia".forEach { composition.append(String($0)) }
+        XCTAssertEqual(composition.preedit, "fix yi xia")
         guard let index = composition.candidates.firstIndex(where: { $0.text == "fix一下" }) else {
             return XCTFail("fixyixia should offer fix一下; got: \(composition.candidates.map { $0.text })")
         }
@@ -60,6 +61,7 @@ final class FullPinyinEndToEndTests: XCTestCase {
         guard let decoder = NativePinyinDecoder(bundle: bundle) else { throw XCTSkip() }
         let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
         "zanliaAAba".forEach { composition.append(String($0)) }
+        XCTAssertEqual(composition.preedit, "zan lia AA ba")
         guard let index = composition.candidates.firstIndex(where: { $0.text == "咱俩AA吧" }) else {
             return XCTFail("zanliaAAba should offer 咱俩AA吧; got: \(composition.candidates.map { $0.text })")
         }
@@ -90,6 +92,7 @@ final class FullPinyinEndToEndTests: XCTestCase {
         guard let decoder = NativePinyinDecoder(bundle: bundle) else { throw XCTSkip() }
         let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
         "jiapaperlaiyuan".forEach { composition.append(String($0)) }
+        XCTAssertEqual(composition.preedit, "jia paper lai yuan")
         XCTAssertEqual(composition.candidates.first?.text, "加paper来源")
         XCTAssertEqual(composition.candidates.first?.units, "jia'paper'lai'yuan")
     }

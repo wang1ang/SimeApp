@@ -25,6 +25,7 @@ final class ShuangpinEndToEndTests: XCTestCase {
 
     func testEnglishPrefixWithShuangpinChineseSuffix() throws {
         let c = try composition(for: "fixyixw") // fix + yi + xia
+        XCTAssertEqual(c.preedit, "fix yi xw")
         guard let index = c.candidates.firstIndex(where: { $0.text == "fix一下" }) else {
             return XCTFail("fixyixw should offer fix一下; got: \(c.candidates.map { $0.text })")
         }
@@ -70,6 +71,7 @@ final class ShuangpinEndToEndTests: XCTestCase {
 
     func testUppercaseEnglishIslandBetweenShuangpinSyllables() throws {
         let c = try composition(for: "zjlwAAba")
+        XCTAssertEqual(c.preedit, "zj lw AA ba")
         guard let index = c.candidates.firstIndex(where: { $0.text == "咱俩AA吧" }) else {
             return XCTFail("zjlwAAba should offer 咱俩AA吧; got: \(c.candidates.map { $0.text })")
         }
