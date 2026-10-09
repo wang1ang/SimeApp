@@ -28,6 +28,18 @@ enum InputScheme: String, CaseIterable {
         }
     }
 
+    /// Runtime index bundled for this Shuangpin layout, if one is available.
+    var shuangpinIndexName: String? {
+        switch self {
+        case .fullPinyin: return nil
+        case .microsoftShuangpin, .sogouShuangpin: return "sime.sp"
+        case .xiaoheShuangpin: return "sime.xiaohe.sp"
+        case .ziranmaShuangpin: return "sime.ziranma.sp"
+        }
+    }
+
+    var usesShuangpinIndex: Bool { shuangpinIndexName != nil }
+
     var displayName: String {
         switch self {
         case .fullPinyin: return "全拼"

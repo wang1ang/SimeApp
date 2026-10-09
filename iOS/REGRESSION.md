@@ -80,7 +80,7 @@
 39. 回车标题跟随宿主 `returnKeyType`（发送/搜索/完成/前往/加入/继续/路线/紧急呼叫等）；`.google/.yahoo` 归为“搜索”。**但只要当前有组合（marked 拼音），动作键先显示“确定”（确认上屏），上屏/无组合后才恢复宿主语义。**组合状态变化需即时刷新键帽（`refreshReturnKeyAppearance` 同时感知 `returnKeyType` 与是否组合）。
 40. 第一行确认按钮（回车确认符）**无论有无锚点，总是提交首选整句中文**（`renderedText` 套用锚点：锚定位置用锚点文本，其余随首选整句解码），但不插入换行。
 40c. **逐字拼音编辑态（组合光标不在末尾）下，空格和回车都是“退出编辑”**：取消逐字高亮、光标回到末尾、回到整句预览，**不上屏、不插空格/换行**；判据仅为“光标不在末尾”（`composition.cursor < raw.count`）。纯选字高亮（光标在末尾）不算编辑态，空格/回车照常提交，不做特殊处理。
-40b. Shift 仅影响字母大小写（单击一次性大写首字母、输入后自动取消，无大写锁定）。大写字母不直接上屏，而是进入组合——作为字面英文候选（保留大小写；双拼下为原始按键），与中文候选同走 segment/选字路径，按空格/回车/点选才上屏。字面英文候选的存在与排序（首字母大写→排首；全小写→追加在中文之后）由 `iOS/Tests` 覆盖；此处只留真机验证 Shift 键交互（一次性高亮与键帽大写、输入后回小写）。
+40b. Shift 只影响字母键大小写：单击后一次性大写，输入后自动回小写，不提供大写锁定。真机仅需检查 Shift 高亮和一次性状态；字母大小写、中英混输候选由解码器决定，断言以 `iOS/Tests` 为准。
 40a. 回车（有组合时键帽显示“确定”）是字面英文逃生通道：**无任何锚点时**按原始按键上屏；**但凡组合中存在锚点**（用户从气泡/第一行做过改选），回车即视为提交整句中文——锚定位置用锚点文本，未锚定的音节随顶部候选整句解码，不能吐出原始双拼/全拼按键。即：有锚点时回车 ≡ 第一行确认符（都上屏整句中文）；无锚点时回车才走字面逃生，而确认符仍上屏中文。断言由 `iOS/Tests` 覆盖；此处只保留真机契约——须在备忘录及第三方输入框中验证不同宿主 marked-text context 下结果一致。
 
 ## 数字页与标点
@@ -130,9 +130,16 @@
 
 ## 双拼解码不变量
 
-64. 双拼（微软/小鹤/自然码/搜狗）：**韵母不走扩展，单个声母才走扩展**。打全的音节韵母固定（`he` 只能是 喝/和，不能变 黑/很），只有末尾孤立声母才补全（微软 `nghem` → 能喝吗，非 能很忙/能黑马）。逻辑对所有双拼方案共用（`Composition` 以 `shuangpin != nil` 判定，而非某个具体方案）。用例与断言见 `iOS/Tests/ShuangpinEndToEndTests.swift`（真机引擎端到端，当前以微软布局覆盖）。
+64. 双拼：**韵母不走扩展，单个声母才走扩展**。打全的音节韵母固定（`he` 只能是 喝/和，不能变 黑/很），只有末尾孤立声母才补全（微软 `nghem` → 能喝吗，非 能很忙/能黑马）。
+  - **微软/搜狗/小鹤/自然码**均使用解码器预建 index：微软与搜狗共用 `sime.sp.index`，另两种分别使用 `sime.xiaohe.sp.index` 和 `sime.ziranma.sp.index`。Swift 把原始键和方案对应的 index 交给解码器；拼音游程边界、末尾补全、候选逐字的原始键跨度均由 decoder 返回，不在 Composition 里按固定键数推断。
+  - index 没有子音节键，因此完整双拼游程要么以整体命中音节/词，要么不命中；不能把 `pie` 拆成 `pi+e` 再改韵母。
+  - 引擎异步加载期间的 Builtin fallback 仍走 layout 展开；Native decoder 就绪后应切换到当前方案对应的 index。
+  - 用例与断言见 `iOS/Tests/ShuangpinEndToEndTests.swift` 和 `require/Sime/tests/correction_test.cc`。
 
-64b. 双拼下打完声母（当前音节只剩一个待配对键）时，字母页**高亮能与该声母组成合法音节的韵母键**（蓝色底）；音节打满或全拼不高亮。合法性以引擎为准：两键经当前方案的 `ShuangpinLayout.expand` 展开后，须能作为单个音节返回汉字候选（`units` 恰好等于该拼音），否则不亮（如 `wuan`/`wue`/`wuai` 只回显字面或拆成 `wu'ai`）；不得用手写韵母白名单。高亮键还**吸附与相邻非高亮键之间的缝隙**（行内 4pt），双方都不侵入对方键面，也不破坏契约 63。**“上色”与“扩大命中区”相互独立**，由 `tintShuangpinFinalKeys` / `enlargeShuangpinFinalKeys` 分别控制。合法集合逻辑见 `iOS/Tests`（`testShuangpin*FinalKeys*`）；此处只留真机回归：不闪烁、不阻碍连打、缝隙偏向合法键，引擎换入/切方案后一致。
+64b. 双拼下打完声母（当前音节只剩一个待配对键）时，字母页**高亮能与该声母组成合法音节的韵母键**（蓝色底）；音节打满或全拼不高亮。合法性以引擎为准，不得用手写韵母白名单：
+  - **index 路径（所有有预建 index 的方案）**：把待测原始键交给引擎，合法性以解码器返回的汉字候选及其实际 source span 为准。Swift 不展开全拼，也不根据文本长度或固定键数造边界。
+  - Native index paths query the decoder with raw keys and accept only its single-Han-character span; the Builtin fallback uses layout expansion until the corresponding native index loads.
+  - 高亮键还**吸附与相邻非高亮键之间的缝隙**（行内 4pt），双方都不侵入对方键面，也不破坏契约 63。**“上色”与“扩大命中区”相互独立**，由 `tintShuangpinFinalKeys` / `enlargeShuangpinFinalKeys` 分别控制。合法集合逻辑见 `iOS/Tests`（`testShuangpin*FinalKeys*`）；此处只留真机回归：不闪烁、不阻碍连打、缝隙偏向合法键，引擎换入/切方案后一致。
 
 64c. **只有微软/搜狗布局使用 `;` 韵母键**（`InputScheme.usesSemicolonKey`）：其字母页 home 行含 `;` 且不缩进；小鹤/自然码/全拼的 home 行为 `asdfghjkl`（缩进），`;` 只作标点。切方案后须 `keyboardNeedsRebuild` 重建键盘。
 
@@ -140,7 +147,7 @@
 
 64e. **双拼必须覆盖全拼音节全集**：标准普通话约 410 个音节清单在 `iOS/Tests/quanpin.txt`（唱作资源），`ShuangpinCoverageTests` 枚举每方案所有两键组合的 `expand` 结果，逐条断言清单均可产出（`ü`归一为 `v`）。唯一已知例外是双拼无法区分的稀见叹词 `lo`（→luo）、`yo`（→yuo），在测试中显式排除。`quanpin.txt` 是该清单的唯一来源，不要另处重建。
 
-65. 双拼每个音节以撇号分隔发给引擎（`neng'he'ma`），撇号只表示**分词边界**：整句解码（`DecodeSentence`）必须**跨撇号保留 n-gram 上下文**（`Process(keep_sep_context=true)`），使同一串拼音带不带撇号打分一致（`neng'he'ma`=`nenghema`→能喝吗，`li'zhou`=`lizhou`→利州）。改选（`DecodeCorrection`）**保留**撇号处的上下文重置（`keep_sep_context=false`）——两条路径不可统一：全局去掉重置会破坏 `xing'jia'bi` 改选，去掉保留会让双拼整句排序退化。断言见 `iOS/Tests/ShuangpinEndToEndTests.swift`（双拼与全拼首选一致）与 `require/Sime/tests/correction_test.cc`（改选不变）。
+65. **index 路径（所有有预建 index 的双拼方案）**：双拼原始键直接交给解码器，index 按对应 layout 的映射分词，不生成全拼或撇号边界。因此跨音节 n-gram 上下文自然保留。不同 layout 的 index 值空间与 `sime.dict` 的 `LetterPinyin` 共用 token IDs/pieces/LM 分；改选从 decoder 返回的真实 source spans 重锚。全拼路径不传 index，继续覆盖撇号边界回归（`require/Sime/tests/correction_test.cc`）。
 
 ## 人工验证命令
 

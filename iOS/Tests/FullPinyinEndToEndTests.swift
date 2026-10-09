@@ -21,6 +21,51 @@ final class FullPinyinEndToEndTests: XCTestCase {
         return composition.candidates.map(\.text)
     }
 
+    func testFullPinyinEnglishPrefixWithChineseSuffix() throws {
+        let bundle = Bundle(for: Self.self)
+        guard let decoder = NativePinyinDecoder(bundle: bundle) else { throw XCTSkip() }
+        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
+        "fixyixia".forEach { composition.append(String($0)) }
+        guard let index = composition.candidates.firstIndex(where: { $0.text == "fix一下" }) else {
+            return XCTFail("fixyixia should offer fix一下; got: \(composition.candidates.map { $0.text })")
+        }
+        XCTAssertEqual(composition.select(index), "fix一下")
+    }
+
+    func testFullPinyinMixedLowercaseEnglishAndChinese() throws {
+        let bundle = Bundle(for: Self.self)
+        guard let decoder = NativePinyinDecoder(bundle: bundle) else { throw XCTSkip() }
+        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
+        "zheshilove".forEach { composition.append(String($0)) }
+        XCTAssertTrue(composition.candidates.contains { $0.text == "这是love" },
+                      "zheshilove should include 这是love; got: \(composition.candidates.map { $0.text })")
+    }
+
+    func testFullPinyinUppercaseEnglishTailHasSingleCaretSpan() throws {
+        let bundle = Bundle(for: Self.self)
+        guard let decoder = NativePinyinDecoder(bundle: bundle) else { throw XCTSkip() }
+        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
+        "woyeO".forEach { composition.append(String($0)) }
+        XCTAssertEqual(composition.preedit, "wo ye O")
+        XCTAssertTrue(composition.sentencePreview.hasPrefix("我也O"))
+        composition.append("K")
+        XCTAssertEqual(composition.preedit, "wo ye OK")
+        XCTAssertEqual(composition.sentencePreview, "我也OK")
+        XCTAssertEqual(composition.selectionLocation, composition.preedit.utf16.count)
+        XCTAssertEqual(composition.commitBestOrRaw(), "我也OK")
+    }
+
+    func testUppercaseEnglishIslandBetweenFullPinyinSyllables() throws {
+        let bundle = Bundle(for: Self.self)
+        guard let decoder = NativePinyinDecoder(bundle: bundle) else { throw XCTSkip() }
+        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
+        "zanliaAAba".forEach { composition.append(String($0)) }
+        guard let index = composition.candidates.firstIndex(where: { $0.text == "咱俩AA吧" }) else {
+            return XCTFail("zanliaAAba should offer 咱俩AA吧; got: \(composition.candidates.map { $0.text })")
+        }
+        XCTAssertEqual(composition.select(index), "咱俩AA吧")
+    }
+
     func testMixedEnglishWordWithChineseSuffix() throws {
         let bundle = Bundle(for: Self.self)
         guard let decoder = NativePinyinDecoder(bundle: bundle) else { throw XCTSkip() }

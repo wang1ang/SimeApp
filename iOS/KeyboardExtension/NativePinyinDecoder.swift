@@ -12,48 +12,81 @@ final class NativePinyinDecoder: PinyinDecoder {
     // the main thread.
     private static let loadQueue = DispatchQueue(
         label: "com.ismantic.sime.decoder-load", qos: .userInitiated)
-    private static var shared: NativePinyinDecoder?
-    private static var loading = false
-    private static var waiters: [(NativePinyinDecoder?) -> Void] = []
+    // Cache only the active binding: each Sime instance loads a distinct net
+    // and decode cache even though the read-only model mappings are shared.
+    private static var shared: [String: NativePinyinDecoder] = [:]
+    private static var loading: Set<String> = []
+    private static var waiters: [String: [(NativePinyinDecoder?) -> Void]] = [:]
 
-    /// The already-loaded native decoder, if it finished loading earlier in
-    /// this process. Main-thread only.
-    static var sharedIfLoaded: NativePinyinDecoder? { shared }
+    /// The index name this engine was initialized with, or nil for full pinyin.
+    let shuangpinIndexName: String?
+    var hasShuangpinIndex: Bool { shuangpinIndexName != nil }
+    var isNative: Bool { true }
 
-    /// Load (or reuse) the shared native decoder without blocking the main
-    /// thread. `completion` runs on the main thread; synchronously when the
-    /// decoder is already cached. Main-thread only.
-    static func loadShared(_ completion: @escaping (NativePinyinDecoder?) -> Void) {
-        if let shared {
-            completion(shared)
+    private static func bindingKey(_ indexName: String?) -> String {
+        indexName ?? ""
+    }
+
+    /// The loaded decoder for this binding, if it is available. Main-thread only.
+    static func sharedIfLoaded(indexName: String? = nil) -> NativePinyinDecoder? {
+        shared[bindingKey(indexName)]
+    }
+
+    /// Release every loaded engine's caches under memory pressure. Main-thread only.
+    static func resetAllCaches() {
+        shared.values.forEach { $0.resetCaches() }
+    }
+
+    /// Load the requested native binding off the main thread. Only one native
+    /// engine binding is cached to keep extension memory bounded.
+    static func loadShared(indexName: String? = nil,
+                           _ completion: @escaping (NativePinyinDecoder?) -> Void) {
+        let key = bindingKey(indexName)
+        if let decoder = shared[key] {
+            completion(decoder)
             return
         }
-        waiters.append(completion)
-        guard !loading else { return }
-        loading = true
+        waiters[key, default: []].append(completion)
+        guard !loading.contains(key) else { return }
+        for loadedKey in Array(shared.keys) where loadedKey != key {
+            shared[loadedKey] = nil
+        }
+        loading.insert(key)
         loadQueue.async {
-            let decoder = NativePinyinDecoder()
+            let decoder = NativePinyinDecoder(indexName: indexName)
             DispatchQueue.main.async {
-                shared = decoder
-                loading = false
-                let pending = waiters
-                waiters.removeAll()
+                for loadedKey in Array(shared.keys) where loadedKey != key {
+                    shared[loadedKey] = nil
+                }
+                shared[key] = decoder
+                loading.remove(key)
+                let pending = waiters[key] ?? []
+                waiters[key] = nil
                 pending.forEach { $0(decoder) }
             }
         }
     }
 
-    init?(bundle: Bundle = .main) {
+    init?(bundle: Bundle = .main, indexName: String? = nil) {
         guard let dict = bundle.path(forResource: "sime", ofType: "dict"),
               let cnt = bundle.path(forResource: "sime", ofType: "cnt") else {
             return nil
         }
-        let created = sime_create(dict, cnt)
+        // The requested index must be bundled for this binding.
+        var spIndex: String?
+        if let indexName {
+            guard let path = bundle.path(forResource: indexName, ofType: "index") else {
+                return nil
+            }
+            spIndex = path
+        }
+        let created = sime_create(dict, cnt, spIndex)
         guard sime_ready(created) else {
             if let created { sime_destroy(created) }
             return nil
         }
         handle = created
+        shuangpinIndexName = indexName
     }
 
     deinit {
@@ -173,21 +206,54 @@ final class NativePinyinDecoder: PinyinDecoder {
         }
         // A phrase decode only yields whole-phrase paths. Add short word
         // alternatives for both ends, so "nihao" also exposes 你/呢 and 好/号.
-        if let units = results.first?.units {
-            let syllables = units.split(separator: "'").map(String.init)
-            var ends: [String] = []
-            if let first = syllables.first { ends.append(first) }
-            if let last = syllables.last, last != syllables.first { ends.append(last) }
-            for syllable in ends where !syllable.isEmpty {
-                var syllableResults = sime_decode_str(handle, syllable, Int32(limit))
-                defer { sime_free_results(&syllableResults) }
-                for item in unpack(syllableResults)
-                    where !results.contains(where: { $0.text == item.text && $0.consumed == item.consumed }) {
-                    results.append(item)
-                }
+        // The shuangpin-index path re-feeds raw key spans (two keys per
+        // syllable); the full-pinyin path re-feeds its pinyin units.
+        for syllable in endSyllables(of: results.first, rawInput: pinyin)
+        where !syllable.isEmpty {
+            var syllableResults = sime_decode_str(handle, syllable, Int32(limit))
+            defer { sime_free_results(&syllableResults) }
+            for item in unpack(syllableResults)
+                where !results.contains(where: { $0.text == item.text && $0.consumed == item.consumed }) {
+                results.append(item)
             }
         }
         return Array(results.prefix(limit))
+    }
+
+    /// The first and last segment spans of the top candidate, re-queried for
+    /// single-character alternatives. On the index path these are raw key spans
+    /// from `segmentKeys` (no two-key assumption); on the full-pinyin path they
+    /// are the pinyin units split on the apostrophe.
+    private func endSyllables(of top: Candidate?, rawInput: String) -> [String] {
+        guard let top else { return [] }
+        if hasShuangpinIndex {
+            let keys = Array(rawInput)
+            let spans = top.segmentKeys
+            guard !spans.isEmpty else { return [] }
+            // Prefix sums give each segment's [start, end) in raw keys.
+            var starts: [Int] = []
+            var acc = 0
+            for span in spans { starts.append(acc); acc += span }
+            func slice(_ segment: Int) -> String? {
+                guard spans.indices.contains(segment) else { return nil }
+                let start = starts[segment]
+                let end = start + spans[segment]
+                guard start < end, end <= keys.count else { return nil }
+                return String(keys[start..<end])
+            }
+            var ends: [String] = []
+            if let first = slice(0) { ends.append(first) }
+            if spans.count > 1, let last = slice(spans.count - 1),
+               last != ends.first {
+                ends.append(last)
+            }
+            return ends
+        }
+        let syllables = top.units.split(separator: "'").map(String.init)
+        var ends: [String] = []
+        if let first = syllables.first { ends.append(first) }
+        if let last = syllables.last, last != syllables.first { ends.append(last) }
+        return ends
     }
 
     private func unpack(_ results: SimeResults) -> [Candidate] {
@@ -198,12 +264,23 @@ final class NativePinyinDecoder: PinyinDecoder {
             let tokens: [UInt32] = item.token_count > 0 && item.tokens != nil
                 ? (0..<Int(item.token_count)).map { item.tokens![$0] } : []
             let units = item.units.map { String(cString: $0) } ?? ""
+            let segmentKeys: [Int] = item.segment_count > 0 && item.segment_keys != nil
+                ? (0..<Int(item.segment_count)).map { Int(item.segment_keys![$0]) } : []
+            let segmentChars: [Int] = item.segment_count > 0 && item.segment_chars != nil
+                ? (0..<Int(item.segment_count)).map { Int(item.segment_chars![$0]) } : []
+            let display = String(cString: text)
+            let isEnglish = !display.isEmpty && display.unicodeScalars.allSatisfy {
+                $0.isASCII && CharacterSet.letters.contains($0)
+            }
             return Candidate(
-                text: String(cString: text),
+                text: display,
                 consumed: Int(item.consumed),
                 tokens: tokens,
                 units: units,
-                score: Double(item.score)
+                segmentKeys: segmentKeys,
+                segmentChars: segmentChars,
+                score: Double(item.score),
+                isEnglish: isEnglish
             )
         }
     }
