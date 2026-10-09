@@ -116,16 +116,20 @@ final class Composition {
         let segments: [SentenceSegment]
         let unitRanges: [Range<Int>]
 
-        /// `segmentChars` is the display-character count of each decoder
-        /// segment. The index path supplies these spans; full pinyin derives
-        /// them by matching decoder units to Han characters and ASCII runs.
-        /// Adjacent ASCII segments are coalesced into one touch target.
-        init(text: String, segmentChars: [Int]) {
+        init(text: String, segmentChars: [Int], anchors: [CompositionSegment] = [],
+             prefixLength: Int = 0) {
             let chars = Array(text)
             var segments: [SentenceSegment] = []
             var ranges = Array(repeating: 0..<0, count: segmentChars.count)
-            var display = 0
+            var display = min(prefixLength, chars.count)
             var unit = 0
+            let anchorsByStart = Dictionary(
+                anchors.map { ($0.syllableRange.lowerBound, $0) },
+                uniquingKeysWith: { first, _ in first })
+            for index in 0..<display {
+                segments.append(SentenceSegment(text: String(chars[index]),
+                                                displayIndex: index))
+            }
             // Per-segment character span for the segment at `index`, clamped.
             func span(_ index: Int, from offset: Int) -> Range<Int> {
                 let count = max(1, segmentChars[index])
@@ -137,17 +141,31 @@ final class Composition {
                 }
             }
             while unit < segmentChars.count && display < chars.count {
+                if let anchor = anchorsByStart[unit],
+                   anchor.syllableRange.upperBound <= segmentChars.count {
+                    let start = display
+                    let end = min(chars.count, start + anchor.text.count)
+                    let range = start..<end
+                    for anchoredUnit in anchor.syllableRange {
+                        if ranges.indices.contains(anchoredUnit) {
+                            ranges[anchoredUnit] = range
+                        }
+                    }
+                    segments.append(SentenceSegment(
+                        text: String(chars[range]), displayIndex: start))
+                    display = end
+                    unit = anchor.syllableRange.upperBound
+                    continue
+                }
                 let runStart = display
                 var range = span(unit, from: display)
                 ranges[unit] = range
                 display = range.upperBound
                 unit += 1
-                // Coalesce a run of adjacent ASCII-letter segments into one
-                // display segment so an embedded English word is one touch
-                // target (你好App → 你 / 好 / App), while each segment keeps its
-                // own unit range for correction.
+                // Keep adjacent ASCII decoder segments as one touch target.
                 if isEnglish(range) {
-                    while unit < segmentChars.count {
+                    while unit < segmentChars.count,
+                          anchorsByStart[unit] == nil {
                         let next = span(unit, from: display)
                         guard isEnglish(next) else { break }
                         ranges[unit] = next
@@ -172,7 +190,9 @@ final class Composition {
 
     private var sentenceMapping: SentenceMapping {
         SentenceMapping(text: sentencePreview,
-                        segmentChars: segmentCharCounts(candidates.first))
+                        segmentChars: segmentCharCounts(candidates.first),
+                        anchors: anchorSegments,
+                        prefixLength: prefixText.count)
     }
 
     var hasLiteralEnglishCandidate: Bool {
@@ -211,10 +231,12 @@ final class Composition {
         let relative = index - prefixText.count
         guard relative >= 0, candidates.first != nil else { return relative }
         let mapping = sentenceMapping
-        guard mapping.segments.contains(where: { $0.displayIndex == relative }) else {
+        guard mapping.segments.contains(where: { $0.displayIndex == index }) else {
             return relative
         }
-        return mapping.unitRanges.firstIndex { $0.lowerBound <= relative && relative < $0.upperBound } ?? relative
+        return mapping.unitRanges.firstIndex {
+            $0.lowerBound <= index && index < $0.upperBound
+        } ?? relative
     }
 
     /// The display-character index where segment `segmentIndex` of the top
@@ -222,13 +244,11 @@ final class Composition {
     /// committed prefix). A segment can span several characters, so this is not
     /// the segment index itself.
     private func displayIndex(forSegment segmentIndex: Int) -> Int {
-        let ranges = unitCharacterRanges(
-            text: sentencePreview,
-            segmentChars: segmentCharCounts(candidates.first))
+        let ranges = sentenceMapping.unitRanges
         guard ranges.indices.contains(segmentIndex) else {
             return prefixText.count + segmentIndex
         }
-        return prefixText.count + ranges[segmentIndex].lowerBound
+        return ranges[segmentIndex].lowerBound
     }
 
     /// The literal key sequence entered for the active correction syllable.
@@ -548,14 +568,29 @@ final class Composition {
            replacementCandidates.indices.contains(index),
            let top = candidates.first {
             let replacement = replacementCandidates[index]
-            let span = max(1, segmentCharCounts(replacement).count)
             let relativeActive = unitIndex(forDisplayIndex: active)
             let segmentCount = segmentCharCounts(top).count
-            guard relativeActive >= 0,
-                  relativeActive + span <= segmentCount else { return nil }
+            guard relativeActive >= 0, relativeActive < segmentCount else { return nil }
+
+            let topKeyLengths = segmentRawLengths(top)
+            let replacementKeyCount = segmentRawLengths(replacement).reduce(0, +)
+            var span = max(1, segmentCharCounts(replacement).count)
+            if !replacement.segmentKeys.isEmpty, replacementKeyCount > 0 {
+                var coveredKeys = 0
+                span = 0
+                while relativeActive + span < segmentCount,
+                      coveredKeys < replacementKeyCount {
+                    coveredKeys += topKeyLengths[relativeActive + span]
+                    span += 1
+                }
+                guard coveredKeys == replacementKeyCount else { return nil }
+            }
+            guard relativeActive + span <= segmentCount else { return nil }
 
             let keyStart = rawLength(forSegments: relativeActive, of: top)
-            let keyEnd = rawLength(forSegments: relativeActive + span, of: top)
+            let keyEnd = !replacement.segmentKeys.isEmpty && replacementKeyCount > 0
+                ? keyStart + replacementKeyCount
+                : rawLength(forSegments: relativeActive + span, of: top)
             guard keyEnd > keyStart else { return nil }
             let selectedRange = relativeActive..<(relativeActive + span)
             // Anchor per segment: re-choosing a position just replaces that
@@ -789,127 +824,56 @@ final class Composition {
     }
 
     private func refresh() {
-        // Chinese-English mixed input: split at the first uppercase letter.
-        // The lowercase prefix decodes as pinyin; from the first capital to
-        // the end is a literal English tail. Decoding only the prefix keeps
-        // the pinyin segmentation clean (the tail must not pollute it).
-        let upperIndex = raw.firstIndex(where: { $0.isUppercase })
-        let pinyinPart = upperIndex.map { String(raw[..<$0]) } ?? raw
-        let englishTail = upperIndex.map { String(raw[$0...]) } ?? ""
-
-        var result: [Candidate] = []
-        var pinyinUnits = ""
-        if !pinyinPart.isEmpty {
-            let lower = pinyinPart.lowercased()
-            // Include fixed prefix segments so the trailing pinyin re-decodes
-            // with the locked-in words (学校 + fangjia → 放假, not 房价).
-            let context = Array(
-                ((hostContextTokens ?? contextTokens) + committedTokens)
-                    .suffix(32))
-            let chinese = lower.isEmpty ? [] : decoder.decodeComposition(
-                lower, scheme: inputScheme, context: context, limit: 60)
-            if englishTail.isEmpty {
-                result = chinese
-            } else {
-                // Keep the explicit English tail as one decoder-facing segment.
-                result = chinese.map {
-                    Candidate(text: $0.text + englishTail, consumed: raw.count,
-                              tokens: $0.tokens, units: "",
-                              segmentKeys: $0.segmentKeys.isEmpty
-                                  ? [] : $0.segmentKeys + [englishTail.count],
-                              segmentChars: $0.segmentChars.isEmpty
-                                  ? [] : $0.segmentChars + [englishTail.count])
-                }
-            }
-            pinyinUnits = chinese.first?.units ?? ""
-        }
-        // The literal typed string (case preserved; raw keys in Shuangpin) is
-        // the same kind of candidate as a word. A leading capital signals
-        // English intent and ranks it first; otherwise it trails the Chinese
-        // so a clean pinyin sentence looks free of English, and surfaces on
-        // top only when no Chinese path exists.
-        if !raw.isEmpty {
-            let literal = Candidate(text: raw, consumed: raw.count,
-                                    tokens: [], units: "", isEnglish: true)
-            if raw.first?.isUppercase == true {
-                result.insert(literal, at: 0)
-            } else {
-                result.append(literal)
-            }
-        }
-        candidates = result
-        displayGroups = computeDisplayGroups(pinyinPart: pinyinPart,
-                                             englishTail: englishTail,
-                                             pinyinUnits: pinyinUnits,
-                                             top: result.first)
+        let context = Array(
+            ((hostContextTokens ?? contextTokens) + committedTokens).suffix(32))
+        candidates = decoder.decodeComposition(
+            raw, scheme: inputScheme, context: context, limit: 60)
+        displayGroups = computeDisplayGroups(
+            raw: raw, units: candidates.first?.units ?? "", top: candidates.first)
     }
 
-    /// Segment `raw` to line up 1:1 with the top candidate's segments: the
-    /// pinyin prefix splits by the engine's real per-segment key spans (index
-    /// path) or by the pinyin units (legacy), while a literal English tail stays
-    /// together as one display group. Display only — never changes commit
-    /// consumption.
-    private func computeDisplayGroups(pinyinPart: String, englishTail: String,
-                                      pinyinUnits: String,
+    /// Group the raw input according to the selected candidate's decoder units
+    /// or source spans. Display grouping never changes commit consumption.
+    private func computeDisplayGroups(raw: String, units: String,
                                       top: Candidate?) -> [String] {
         let topText = top?.text ?? ""
-        // Prefer decoder-supplied source spans when available; they also keep
-        // English words and per-character Han correction groups aligned.
         if let top, !top.segmentKeys.isEmpty {
             var parts = rawGroups(of: top)
             let used = parts.reduce(0) { $0 + $1.count }
-            if used < pinyinPart.count {
-                parts.append(String(pinyinPart.dropFirst(used)))
-            } else if parts.isEmpty, !pinyinPart.isEmpty {
-                parts.append(pinyinPart)
-            }
-            if !englishTail.isEmpty { parts.append(englishTail) }
-            return parts
+            if used < raw.count { parts.append(String(raw.dropFirst(used))) }
+            return parts.isEmpty && !raw.isEmpty ? [raw] : parts
         }
         var parts: [String] = []
-        var pinyinPrefix = pinyinPart
-        var units = pinyinUnits
-        // Sime may identify a lowercase English word inside an otherwise
-        // full-pinyin candidate (for example `fixyixia` -> `fix一下`). In
-        // that case the decoder can expose the letters as separate pseudo-
-        // syllables; collapse the corresponding raw prefix into one word.
-        let word = topText.prefix(while: { $0.isASCII && $0.isLetter })
-        if word.count > 1, pinyinPart.count >= word.count {
-            let end = pinyinPart.index(pinyinPart.startIndex,
-                                       offsetBy: word.count)
-            parts.append(String(pinyinPart[..<end]))
-            pinyinPrefix = String(pinyinPart[end...])
-            var remaining = units.split(separator: "'").map(String.init)
+        var pinyinPrefix = raw
+        var remainingUnits = units.split(separator: "'").map(String.init)
+        let englishPrefix = topText.prefix(while: { $0.isASCII && $0.isLetter })
+        if englishPrefix.count > 1, raw.count >= englishPrefix.count {
+            let end = raw.index(raw.startIndex, offsetBy: englishPrefix.count)
+            parts.append(String(raw[..<end]))
+            pinyinPrefix = String(raw[end...])
             var consumed = 0
-            while !remaining.isEmpty && consumed < word.count {
-                consumed += remaining.removeFirst().count
+            while !remainingUnits.isEmpty && consumed < englishPrefix.count {
+                consumed += remainingUnits.removeFirst().count
             }
-            units = remaining.joined(separator: "'")
         }
         if !pinyinPrefix.isEmpty {
-            let syllables = units.split(separator: "'").map(String.init)
-            if syllables.isEmpty {
-                // No Chinese decode: keep the pinyin as one ungrouped chunk.
+            if remainingUnits.isEmpty {
                 parts.append(pinyinPrefix)
             } else {
-                var remaining = Substring(pinyinPrefix)
-                for syllable in syllables {
-                    if remaining.isEmpty { break }
+                var input = Substring(pinyinPrefix)
+                for unit in remainingUnits {
+                    guard !input.isEmpty else { break }
                     var group = ""
-                    if remaining.first == "'" { group.append("'"); remaining.removeFirst() }
-                    let want = shuangpin != nil ? 2 : syllable.count
-                    let take = min(want, remaining.count)
-                    group += String(remaining.prefix(take))
-                    remaining.removeFirst(take)
+                    if input.first == "'" { group.append("'"); input.removeFirst() }
+                    let width = shuangpin != nil ? 2 : unit.count
+                    let length = min(width, input.count)
+                    group += String(input.prefix(length))
+                    input.removeFirst(length)
                     parts.append(group)
                 }
-                if !remaining.isEmpty { parts.append(String(remaining)) }
+                if !input.isEmpty { parts.append(String(input)) }
             }
         }
-        // Keep a literal English tail together as one word. It is a single
-        // candidate/commit unit, so splitting it by key makes the marked
-        // preedit look unlike the first-row candidate (e.g. "你好 App").
-        if !englishTail.isEmpty { parts.append(englishTail) }
         return parts
     }
 }

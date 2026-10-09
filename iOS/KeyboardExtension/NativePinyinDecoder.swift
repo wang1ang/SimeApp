@@ -269,14 +269,19 @@ final class NativePinyinDecoder: PinyinDecoder {
                 ? (0..<Int(item.segment_count)).map { Int(item.segment_keys![$0]) } : []
             let segmentChars: [Int] = item.segment_count > 0 && item.segment_chars != nil
                 ? (0..<Int(item.segment_count)).map { Int(item.segment_chars![$0]) } : []
+            let display = String(cString: text)
+            let isEnglish = !display.isEmpty && display.unicodeScalars.allSatisfy {
+                $0.isASCII && CharacterSet.letters.contains($0)
+            }
             return Candidate(
-                text: String(cString: text),
+                text: display,
                 consumed: Int(item.consumed),
                 tokens: tokens,
                 units: units,
                 segmentKeys: segmentKeys,
                 segmentChars: segmentChars,
-                score: Double(item.score)
+                score: Double(item.score),
+                isEnglish: isEnglish
             )
         }
     }

@@ -18,9 +18,8 @@ typedef struct {
   int token_count;
   float score;
   int consumed;    // raw keys/bytes of input consumed
-  // Shuangpin UI spans (both malloc'd arrays of length segment_count; empty
-  // on the full-pinyin path). Han characters are separate spans when the
-  // decoder can align their pinyin pieces; English words stay together.
+  // Optional Shuangpin UI spans (both malloc'd arrays of length
+  // segment_count); empty on the full-pinyin path, which uses `units`.
   // segment_keys[i] is the raw-key span; segment_chars[i] is its display width.
   int *segment_keys;
   int *segment_chars;

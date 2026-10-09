@@ -32,6 +32,40 @@ final class ShuangpinEndToEndTests: XCTestCase {
         XCTAssertFalse(c.isComposing)
     }
 
+    func testEnglishCorrectionReplacesTheRemainingDecodedSpan() throws {
+        let c = try composition(for: "veuilove", useIndex: true) // zhe + shi + love
+        XCTAssertEqual(c.candidates.first?.text, "这是裸着")
+        c.activateCharacter(2)
+        guard let love = c.displayCandidates.firstIndex(where: { $0.text == "love" }) else {
+            return XCTFail("tapping 裸 should offer love; got: \(c.displayCandidates.map { $0.text })")
+        }
+        XCTAssertEqual(c.selectDisplayed(love), "这是love")
+        XCTAssertFalse(c.isComposing)
+    }
+
+    func testEnglishCorrectionKeepsExpandedAnchorAndAdvancesToNextHan() throws {
+        let c = try composition(for: "veuiloveni", useIndex: true)
+        c.activateCharacter(2)
+        guard let love = c.displayCandidates.firstIndex(where: { $0.text == "love" }) else {
+            return XCTFail("tapping 裸 should offer love; got: \(c.displayCandidates.map { $0.text })")
+        }
+        XCTAssertNil(c.selectDisplayed(love))
+        XCTAssertEqual(c.sentencePreview, "这是love你")
+        XCTAssertEqual(c.sentenceSegments.map(\.text), ["这", "是", "love", "你"])
+        XCTAssertEqual(c.activeCharacterIndex, 6)
+    }
+
+    func testUppercaseEnglishTailKeepsMarkedTextAndCaretAligned() throws {
+        let c = try composition(for: "woyeO", useIndex: true)
+        XCTAssertEqual(c.preedit, "wo ye O")
+        XCTAssertEqual(c.selectionLocation, c.preedit.utf16.count)
+
+        c.append("K")
+        XCTAssertEqual(c.preedit, "wo ye OK")
+        XCTAssertEqual(c.selectionLocation, c.preedit.utf16.count)
+        XCTAssertEqual(c.commitBestOrRaw(), "我也OK")
+    }
+
     func testIndexCorrectionAtSingleCharacterShowsMultiCharacterWords() throws {
         let c = try composition(for: "x;jwbi", useIndex: true)
         c.activateCharacter(1)

@@ -5,9 +5,8 @@ struct Candidate {
     let consumed: Int
     let tokens: [UInt32]
     let units: String
-    /// Decoder-supplied Shuangpin UI spans, aligned with `segmentChars`.
-    /// Han characters are separate when their pinyin pieces align; English
-    /// words or irregular segments remain grouped. Empty on full pinyin.
+    /// Optional decoder-supplied source spans aligned with `segmentChars`.
+    /// Shuangpin index decoders provide them; other decoders may use `units`.
     let segmentKeys: [Int]
     /// Display-character widths aligned 1:1 with `segmentKeys`.
     let segmentChars: [Int]
@@ -109,38 +108,44 @@ extension PinyinDecoder {
         predict(context, limit: limit)
     }
 
-    /// Decode the active scheme's raw input while keeping Composition agnostic
-    /// to the decoder binding.
+    /// Decode the raw composition through the decoder binding selected by the
+    /// scheme, preserving the entered casing for mixed-English lookup.
     func decodeComposition(_ raw: String, scheme: InputScheme,
                            context: [UInt32], limit: Int) -> [Candidate] {
+        let decoded: [Candidate]
         if scheme.usesShuangpinIndex && hasShuangpinIndex {
-            return decode(raw, context: context, limit: limit, expansion: true)
-        }
-        guard let layout = scheme.shuangpin else {
-            return decode(raw, context: context, limit: limit, expansion: true)
-        }
-        let keys = Array(raw.lowercased())
-        let hasLoneInitial = keys.count % 2 == 1
-        var syllables = stride(from: 0, to: keys.count - 1, by: 2).map {
-            layout.expand(String(keys[$0..<$0 + 2]))
-        }
-        if hasLoneInitial, let last = keys.last {
-            syllables.append(layout.initial(for: last))
-        }
-        let expanded = syllables.joined(separator: "'")
-        let candidates = decode(expanded, context: context, limit: limit,
-                                expansion: hasLoneInitial)
-        let locked = stride(from: 0, to: keys.count - 1, by: 2).map {
-            layout.expand(String(keys[$0..<$0 + 2]))
-        }
-        return candidates.filter { candidate in
-            let units = candidate.units.split(separator: "'").map(String.init)
-            guard units.count >= 2 else { return true }
-            for index in 0..<min(units.count, locked.count) {
-                if units[index] != locked[index] { return false }
+            decoded = decode(raw, context: context, limit: limit, expansion: true)
+        } else if let layout = scheme.shuangpin {
+            let keys = Array(raw.lowercased())
+            let hasLoneInitial = keys.count % 2 == 1
+            var syllables = stride(from: 0, to: keys.count - 1, by: 2).map {
+                layout.expand(String(keys[$0..<$0 + 2]))
             }
-            return true
+            if hasLoneInitial, let last = keys.last {
+                syllables.append(layout.initial(for: last))
+            }
+            let expanded = syllables.joined(separator: "'")
+            let candidates = decode(expanded, context: context, limit: limit,
+                                    expansion: hasLoneInitial)
+            let locked = stride(from: 0, to: keys.count - 1, by: 2).map {
+                layout.expand(String(keys[$0..<$0 + 2]))
+            }
+            decoded = candidates.filter { candidate in
+                let units = candidate.units.split(separator: "'").map(String.init)
+                guard units.count >= 2 else { return true }
+                for index in 0..<min(units.count, locked.count) {
+                    if units[index] != locked[index] { return false }
+                }
+                return true
+            }
+        } else {
+            decoded = decode(raw, context: context, limit: limit, expansion: true)
         }
+
+        guard !raw.isEmpty,
+              !decoded.contains(where: { $0.text == raw }) else { return decoded }
+        return decoded + [Candidate(text: raw, consumed: raw.count,
+                                    tokens: [], units: "", isEnglish: true)]
     }
 
     /// Correction dispatch mirrors decodeComposition: the engine receives raw
