@@ -5,7 +5,7 @@
 ## 运行流程
 
 - `InputScheme.shuangpinIndexName` 选择当前 index：微软/搜狗共用 `sime.sp`，小鹤使用 `sime.xiaohe.sp`，自然码使用 `sime.ziranma.sp`；该选择决定整段组合使用的双拼映射。
-- `NativePinyinDecoder` 按当前方案加载 index；方案切换时切换对应 binding，扩展进程缓存当前使用的 Native decoder，以控制引擎资源占用。
+- `NativePinyinDecoder` 按当前方案绑定唯一的中文 DAT：全拼使用 `sime.dict` 的 `LetterPinyin` trie；双拼跳过该 trie 的挂载与扫描，将所选 Shuangpin index 绑定到同一 `LetterPinyin` 槽位，同时保留候选 side table。`LetterEn` DAT 独立用于中英混合。
 - Native decoder 加载期间，Builtin fallback 将原始按键作为可提交文本显示；Native decoder 就绪后，使用当前方案 index 继续解码保留的 raw composition。
 - Decoder 返回候选文本、token，以及原始按键跨度和显示字符跨度；这组 spans 是候选分组、逐字改选和提交时的边界依据，`Composition` 全程沿用这些跨度。双拼路径的 `units` 为空。
 - 中英混合输入由 decoder 接收完整原始输入，并在同一 lattice 中统一排序；`Composition` 根据 decoder 返回的候选与 units 展示预编辑内容。
