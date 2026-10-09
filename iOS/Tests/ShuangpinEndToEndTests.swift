@@ -55,13 +55,23 @@ final class ShuangpinEndToEndTests: XCTestCase {
         XCTAssertEqual(c.activeCharacterIndex, 6)
     }
 
+    func testUppercaseEnglishIslandBetweenShuangpinSyllables() throws {
+        let c = try composition(for: "zjlwAAba", useIndex: true)
+        guard let index = c.candidates.firstIndex(where: { $0.text == "咱俩AA吧" }) else {
+            return XCTFail("zjlwAAba should offer 咱俩AA吧; got: \(c.candidates.map { $0.text })")
+        }
+        XCTAssertEqual(c.select(index), "咱俩AA吧")
+    }
+
     func testUppercaseEnglishTailKeepsMarkedTextAndCaretAligned() throws {
         let c = try composition(for: "woyeO", useIndex: true)
         XCTAssertEqual(c.preedit, "wo ye O")
+        XCTAssertEqual(c.sentencePreview, "我也O")
         XCTAssertEqual(c.selectionLocation, c.preedit.utf16.count)
 
         c.append("K")
         XCTAssertEqual(c.preedit, "wo ye OK")
+        XCTAssertEqual(c.sentencePreview, "我也OK")
         XCTAssertEqual(c.selectionLocation, c.preedit.utf16.count)
         XCTAssertEqual(c.commitBestOrRaw(), "我也OK")
     }

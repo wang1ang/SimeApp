@@ -47,10 +47,23 @@ final class FullPinyinEndToEndTests: XCTestCase {
         let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
         "woyeO".forEach { composition.append(String($0)) }
         XCTAssertEqual(composition.preedit, "wo ye O")
+        XCTAssertTrue(composition.sentencePreview.hasPrefix("我也O"))
         composition.append("K")
         XCTAssertEqual(composition.preedit, "wo ye OK")
+        XCTAssertEqual(composition.sentencePreview, "我也OK")
         XCTAssertEqual(composition.selectionLocation, composition.preedit.utf16.count)
         XCTAssertEqual(composition.commitBestOrRaw(), "我也OK")
+    }
+
+    func testUppercaseEnglishIslandBetweenFullPinyinSyllables() throws {
+        let bundle = Bundle(for: Self.self)
+        guard let decoder = NativePinyinDecoder(bundle: bundle) else { throw XCTSkip() }
+        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
+        "zanliaAAba".forEach { composition.append(String($0)) }
+        guard let index = composition.candidates.firstIndex(where: { $0.text == "咱俩AA吧" }) else {
+            return XCTFail("zanliaAAba should offer 咱俩AA吧; got: \(composition.candidates.map { $0.text })")
+        }
+        XCTAssertEqual(composition.select(index), "咱俩AA吧")
     }
 
     func testMixedEnglishWordWithChineseSuffix() throws {
