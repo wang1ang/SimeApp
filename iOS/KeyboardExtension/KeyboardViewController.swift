@@ -167,7 +167,7 @@ final class KeyboardViewController: UIInputViewController {
         // opaque subview backdrop doesn't help — iOS samples this view itself.
         view.backgroundColor = UIColor.secondarySystemBackground.withAlphaComponent(0.9)
         view.isMultipleTouchEnabled = KeyboardConfig.enableMultipleTouch
-        let root = UIStackView()
+        let root = KeyboardHitTestStackView()
         root.axis = .vertical
         root.spacing = 4
         root.translatesAutoresizingMaskIntoConstraints = false
@@ -1005,15 +1005,20 @@ final class KeyboardViewController: UIInputViewController {
             let buttons = row.arrangedSubviews.compactMap { $0 as? KeyButton }
             let gap = row.spacing
             let splitGap = gap / 2
+            let extendsToRowEdges = keyboardScheme == .fullPinyin
+                && keyboardPage == .letters
+                && buttons.first.flatMap({ char(ofKey: $0) }) == "a"
+                && buttons.last.flatMap({ char(ofKey: $0) }) == "l"
+            let edgeInset: CGFloat = extendsToRowEdges ? 18 : outerInset
             for (index, button) in buttons.enumerated() {
                 let hi = isLegal(button)
                 let leftHi = index > 0 && isLegal(buttons[index - 1])
                 let rightHi = index < buttons.count - 1 && isLegal(buttons[index + 1])
                 var inset = UIEdgeInsets(
                     top: 0,
-                    left: index == 0 ? outerInset : splitGap,
+                    left: index == 0 ? edgeInset : splitGap,
                     bottom: 0,
-                    right: index == buttons.count - 1 ? outerInset : splitGap)
+                    right: index == buttons.count - 1 ? edgeInset : splitGap)
                 if hi {
                     // Claim exactly the gap toward a non-legal neighbor; keep
                     // the default reach toward edges / other legal keys.
@@ -1027,6 +1032,39 @@ final class KeyboardViewController: UIInputViewController {
                 button.hitInset = inset
             }
         }
+    }
+}
+
+final class KeyboardHitTestStackView: UIStackView {
+    // Route expanded key areas before stack-view hit testing drops them.
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        guard !isHidden, isUserInteractionEnabled, alpha > 0.01,
+              bounds.contains(point) else {
+            return nil
+        }
+
+        let normalHit = super.hitTest(point, with: event)
+        if normalHit is KeyButton { return normalHit }
+        if let button = expandedKeyHit(at: point, in: self, event: event) {
+            let buttonPoint = button.convert(point, from: self)
+            return button.hitTest(buttonPoint, with: event) ?? button
+        }
+        return normalHit
+    }
+
+    private func expandedKeyHit(at point: CGPoint, in view: UIView,
+                                event: UIEvent?) -> KeyButton? {
+        for child in view.subviews.reversed() {
+            guard !child.isHidden, child.isUserInteractionEnabled, child.alpha > 0.01
+            else { continue }
+            if let button = child as? KeyButton {
+                let buttonPoint = button.convert(point, from: self)
+                if button.point(inside: buttonPoint, with: event) { return button }
+            } else if let button = expandedKeyHit(at: point, in: child, event: event) {
+                return button
+            }
+        }
+        return nil
     }
 }
 
