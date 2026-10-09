@@ -131,13 +131,14 @@
 ## 双拼解码不变量
 
 64. 双拼：**韵母不走扩展，单个声母才走扩展**。打全的音节韵母固定（`he` 只能是 喝/和，不能变 黑/很），只有末尾孤立声母才补全（微软 `nghem` → 能喝吗，非 能很忙/能黑马）。
-  - **微软/搜狗**（`InputScheme.usesShuangpinIndex`）走引擎的预建双拼 index（`sime.sp.index`）：`Composition` 把**原始键**直接交给引擎，不经 `ShuangpinLayout.expand` 展开全拼、不拼撇号、不在 Swift 侧过滤锁韵母（完全交给引擎）。韵母锁定是**结构性保证**——index 无子音节键，在每个双拼游程内按两键对齐，单段要么解析成音节/词、要么不命中，`pie→pi+e` 不可能发生。英文 edge 可在任意原始键列结束，后续双拼游程以 decoder 给出的边界重新对齐；末尾补全也由 decoder 按游程边界判断，候选逐字改选跨度由 decoder 返回，Swift 不推断键数。
-  - **小鹤/自然码**暂无 index，仍走旧 `expand()` 全拼管线 + Swift 锁韵母过滤（待各自 index 产出后迁移）。
-  - 用例与断言见 `iOS/Tests/ShuangpinEndToEndTests.swift`（真机引擎端到端，当前以微软布局覆盖，即 index 路径）。
+  - **微软/搜狗/小鹤/自然码**均使用解码器预建 index：微软与搜狗共用 `sime.sp.index`，另两种分别使用 `sime.xiaohe.sp.index` 和 `sime.ziranma.sp.index`。Swift 把原始键和方案对应的 index 交给解码器；拼音游程边界、末尾补全、候选逐字的原始键跨度均由 decoder 返回，不在 Composition 里按固定键数推断。
+  - index 没有子音节键，因此完整双拼游程要么以整体命中音节/词，要么不命中；不能把 `pie` 拆成 `pi+e` 再改韵母。
+  - 引擎异步加载期间的 Builtin fallback 仍走 layout 展开；Native decoder 就绪后应切换到当前方案对应的 index。
+  - 用例与断言见 `iOS/Tests/ShuangpinEndToEndTests.swift` 和 `require/Sime/tests/correction_test.cc`。
 
 64b. 双拼下打完声母（当前音节只剩一个待配对键）时，字母页**高亮能与该声母组成合法音节的韵母键**（蓝色底）；音节打满或全拼不高亮。合法性以引擎为准，不得用手写韵母白名单：
-  - **index 路径（微软/搜狗）**：把待测原始键交给引擎（`syllableCandidates`），合法 iff 返回汉字，且解码器返回的唯一 UI span 覆盖所测输入并对应一个显示字符。非法码要么回显字面、要么只能拆分，都不会有这样的 span；Swift 不组全拼、不推断键数。
-  - **legacy 路径（小鹤/自然码）**：两键经 `ShuangpinLayout.expand` 展开后须作为单个音节返回汉字候选（`units` 恰等于该拼音）。
+  - **index 路径（所有有预建 index 的方案）**：把待测原始键交给引擎，合法性以解码器返回的汉字候选及其实际 source span 为准。Swift 不展开全拼，也不根据文本长度或固定键数造边界。
+  - Native index paths query the decoder with raw keys and accept only its single-Han-character span; the Builtin fallback uses layout expansion until the corresponding native index loads.
   - 高亮键还**吸附与相邻非高亮键之间的缝隙**（行内 4pt），双方都不侵入对方键面，也不破坏契约 63。**“上色”与“扩大命中区”相互独立**，由 `tintShuangpinFinalKeys` / `enlargeShuangpinFinalKeys` 分别控制。合法集合逻辑见 `iOS/Tests`（`testShuangpin*FinalKeys*`）；此处只留真机回归：不闪烁、不阻碍连打、缝隙偏向合法键，引擎换入/切方案后一致。
 
 64c. **只有微软/搜狗布局使用 `;` 韵母键**（`InputScheme.usesSemicolonKey`）：其字母页 home 行含 `;` 且不缩进；小鹤/自然码/全拼的 home 行为 `asdfghjkl`（缩进），`;` 只作标点。切方案后须 `keyboardNeedsRebuild` 重建键盘。
@@ -146,12 +147,7 @@
 
 64e. **双拼必须覆盖全拼音节全集**：标准普通话约 410 个音节清单在 `iOS/Tests/quanpin.txt`（唱作资源），`ShuangpinCoverageTests` 枚举每方案所有两键组合的 `expand` 结果，逐条断言清单均可产出（`ü`归一为 `v`）。唯一已知例外是双拼无法区分的稀见叹词 `lo`（→luo）、`yo`（→yuo），在测试中显式排除。`quanpin.txt` 是该清单的唯一来源，不要另处重建。
 
-65. **index 路径（微软/搜狗）**：双拼发**原始键**给引擎（无撇号、无全拼、无 sentinel 列），引擎用 `sime.sp.index` 按音节分词，`InitNetSp` 相邻音节边直连。因此：
-  - **跨音节 n-gram 上下文自然保留**——没有撇号 sentinel 边，`Process` 的 `keep_sep_context` 分支在 sp 路径永不触发，上下文跨音节直连，“带不带撇号打分一致”变成平凡成立。
-  - **双拼与全拼首选一致**由结构保证：`sime.sp.index` 的值空间 == `sime.dict` 的 `LetterPinyin` 值空间（同 TokenID/pieces/LM 分）。
-  - **改选**（`DecodeCorrection`）的上下文重置由 `CollectCandidates` 在 `correction_col` 处以全新 `InitialState(context)` 重锚实现，与撇号无关；`correction_col` 由调用方按**所选路径的真实每段键跨度之和**（原始键列）给出，**不预设 2 键一音节**（ABI 上 sp 路径的 `prefix_syllables` 即原始键列）。
-  - 断言见 `iOS/Tests/ShuangpinEndToEndTests.swift`（真源）。
-  - **全拼路径**（`correction_test.cc`，不传 sp.index）仍覆盖撇号分词的改选不变量，零改动。
+65. **index 路径（所有有预建 index 的双拼方案）**：双拼原始键直接交给解码器，index 按对应 layout 的映射分词，不生成全拼或撇号边界。因此跨音节 n-gram 上下文自然保留。不同 layout 的 index 值空间与 `sime.dict` 的 `LetterPinyin` 共用 token IDs/pieces/LM 分；改选从 decoder 返回的真实 source spans 重锚。全拼路径不传 index，继续覆盖撇号边界回归（`require/Sime/tests/correction_test.cc`）。
 
 ## 人工验证命令
 

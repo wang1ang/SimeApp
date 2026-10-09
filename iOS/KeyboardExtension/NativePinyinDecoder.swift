@@ -12,71 +12,70 @@ final class NativePinyinDecoder: PinyinDecoder {
     // the main thread.
     private static let loadQueue = DispatchQueue(
         label: "com.ismantic.sime.decoder-load", qos: .userInitiated)
-    // One shared instance per binding: the full-pinyin engine and the
-    // shuangpin-index engine are distinct `Sime` objects (a single instance is
-    // bound to one path at creation). They are memory-cheap to keep both: the
-    // dict, cnt, and GRU embedding are mmap'd read-only from the same files, so
-    // the OS shares those physical pages; only the tiny ncnn nets and per-engine
-    // decode caches duplicate.
-    private static var shared: [Bool: NativePinyinDecoder] = [:]
-    private static var loading: Set<Bool> = []
-    private static var waiters: [Bool: [(NativePinyinDecoder?) -> Void]] = [:]
+    // Cache only the active binding: each Sime instance loads a distinct net
+    // and decode cache even though the read-only model mappings are shared.
+    private static var shared: [String: NativePinyinDecoder] = [:]
+    private static var loading: Set<String> = []
+    private static var waiters: [String: [(NativePinyinDecoder?) -> Void]] = [:]
 
-    /// Whether this decoder is bound to the shuangpin index (raw-key path).
-    let usesShuangpinIndex: Bool
-
-    var hasShuangpinIndex: Bool { usesShuangpinIndex }
+    /// The index name this engine was initialized with, or nil for full pinyin.
+    let shuangpinIndexName: String?
+    var hasShuangpinIndex: Bool { shuangpinIndexName != nil }
     var isNative: Bool { true }
 
-    /// The already-loaded native decoder for the given binding, if it finished
-    /// loading earlier in this process. Main-thread only.
-    static func sharedIfLoaded(index: Bool = false) -> NativePinyinDecoder? {
-        shared[index]
+    private static func bindingKey(_ indexName: String?) -> String {
+        indexName ?? ""
     }
 
-    /// Release every loaded engine's caches under memory pressure. Main-thread
-    /// only, matching the rest of the shared-decoder access.
+    /// The loaded decoder for this binding, if it is available. Main-thread only.
+    static func sharedIfLoaded(indexName: String? = nil) -> NativePinyinDecoder? {
+        shared[bindingKey(indexName)]
+    }
+
+    /// Release every loaded engine's caches under memory pressure. Main-thread only.
     static func resetAllCaches() {
         shared.values.forEach { $0.resetCaches() }
     }
 
-    /// Load (or reuse) a shared native decoder without blocking the main
-    /// thread. `index` selects the shuangpin-index binding. `completion` runs on
-    /// the main thread; synchronously when the decoder is already cached.
-    /// Main-thread only.
-    static func loadShared(index: Bool = false,
+    /// Load the requested native binding off the main thread. Only one native
+    /// engine binding is cached to keep extension memory bounded.
+    static func loadShared(indexName: String? = nil,
                            _ completion: @escaping (NativePinyinDecoder?) -> Void) {
-        if let decoder = shared[index] {
+        let key = bindingKey(indexName)
+        if let decoder = shared[key] {
             completion(decoder)
             return
         }
-        waiters[index, default: []].append(completion)
-        guard !loading.contains(index) else { return }
-        loading.insert(index)
+        waiters[key, default: []].append(completion)
+        guard !loading.contains(key) else { return }
+        for loadedKey in Array(shared.keys) where loadedKey != key {
+            shared[loadedKey] = nil
+        }
+        loading.insert(key)
         loadQueue.async {
-            let decoder = NativePinyinDecoder(useShuangpinIndex: index)
+            let decoder = NativePinyinDecoder(indexName: indexName)
             DispatchQueue.main.async {
-                shared[index] = decoder
-                loading.remove(index)
-                let pending = waiters[index] ?? []
-                waiters[index] = nil
+                for loadedKey in Array(shared.keys) where loadedKey != key {
+                    shared[loadedKey] = nil
+                }
+                shared[key] = decoder
+                loading.remove(key)
+                let pending = waiters[key] ?? []
+                waiters[key] = nil
                 pending.forEach { $0(decoder) }
             }
         }
     }
 
-    init?(bundle: Bundle = .main, useShuangpinIndex: Bool = false) {
+    init?(bundle: Bundle = .main, indexName: String? = nil) {
         guard let dict = bundle.path(forResource: "sime", ofType: "dict"),
               let cnt = bundle.path(forResource: "sime", ofType: "cnt") else {
             return nil
         }
-        // The shuangpin index binds the engine to the raw-key path. Its absence
-        // from the bundle is fatal for this binding (the caller falls back to
-        // the full-pinyin decoder), so require it when requested.
+        // The requested index must be bundled for this binding.
         var spIndex: String?
-        if useShuangpinIndex {
-            guard let path = bundle.path(forResource: "sime.sp",
-                                         ofType: "index") else {
+        if let indexName {
+            guard let path = bundle.path(forResource: indexName, ofType: "index") else {
                 return nil
             }
             spIndex = path
@@ -87,7 +86,7 @@ final class NativePinyinDecoder: PinyinDecoder {
             return nil
         }
         handle = created
-        usesShuangpinIndex = useShuangpinIndex
+        shuangpinIndexName = indexName
     }
 
     deinit {
@@ -227,7 +226,7 @@ final class NativePinyinDecoder: PinyinDecoder {
     /// are the pinyin units split on the apostrophe.
     private func endSyllables(of top: Candidate?, rawInput: String) -> [String] {
         guard let top else { return [] }
-        if usesShuangpinIndex {
+        if hasShuangpinIndex {
             let keys = Array(rawInput)
             let spans = top.segmentKeys
             guard !spans.isEmpty else { return [] }

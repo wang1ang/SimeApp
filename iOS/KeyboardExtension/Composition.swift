@@ -51,7 +51,7 @@ final class Composition {
     /// Exposed so the controller can tell whether the active composition already
     /// runs on a native engine with the binding the current scheme wants.
     var decoderIsNative: Bool { decoder.isNative }
-    var decoderHasShuangpinIndex: Bool { decoder.hasShuangpinIndex }
+    var decoderIndexName: String? { decoder.shuangpinIndexName }
 
 
     init(decoder: PinyinDecoder = BuiltinPinyinDecoder(),

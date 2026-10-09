@@ -11,14 +11,15 @@ final class ShuangpinEndToEndTests: XCTestCase {
     }
 
     private func composition(for keys: String,
+                             scheme: InputScheme = .microsoftShuangpin,
                              useIndex: Bool = false) throws -> Composition {
         let bundle = Bundle(for: Self.self)
+        let indexName = useIndex ? scheme.shuangpinIndexName : nil
         guard let decoder = NativePinyinDecoder(bundle: bundle,
-                                                useShuangpinIndex: useIndex) else {
+                                                indexName: indexName) else {
             throw XCTSkip("sime.dict/sime.cnt not bundled into the test target")
         }
-        let composition = Composition(decoder: decoder,
-                                      inputScheme: .microsoftShuangpin)
+        let composition = Composition(decoder: decoder, inputScheme: scheme)
         keys.forEach { composition.append(String($0)) }
         return composition
     }
@@ -81,6 +82,24 @@ final class ShuangpinEndToEndTests: XCTestCase {
         c.activateCharacter(1)
         XCTAssertTrue(c.displayCandidates.contains { $0.text == "假币" },
                       "tapping 价 should offer 假币; got: \(c.displayCandidates.map { $0.text })")
+    }
+
+    func testXiaoheIndexDecodesAndCommitsChinese() throws {
+        let c = try composition(for: "nihc", scheme: .xiaoheShuangpin,
+                                useIndex: true)
+        guard let index = c.candidates.firstIndex(where: { $0.text == "你好" }) else {
+            return XCTFail("Xiaohe nihc should offer 你好; got: \(c.candidates.map { $0.text })")
+        }
+        XCTAssertEqual(c.select(index), "你好")
+    }
+
+    func testZiranmaIndexDecodesAndCommitsChinese() throws {
+        let c = try composition(for: "nihk", scheme: .ziranmaShuangpin,
+                                useIndex: true)
+        guard let index = c.candidates.firstIndex(where: { $0.text == "你好" }) else {
+            return XCTFail("Ziranma nihk should offer 你好; got: \(c.candidates.map { $0.text })")
+        }
+        XCTAssertEqual(c.select(index), "你好")
     }
 
     func testExpandedTrailingInitialStillSplitsDecoderCharacterSpans() throws {

@@ -33,10 +33,8 @@ struct Candidate {
 
 /// Keep the keyboard UI independent from the native Sime bridge.
 protocol PinyinDecoder {
-    /// True when this decoder is bound to the shuangpin index and expects raw
-    /// keystrokes (not expanded full pinyin). Composition uses it to drop the
-    /// full-pinyin expansion pipeline for index-backed shuangpin schemes.
-    var hasShuangpinIndex: Bool { get }
+    /// Index binding expected by the scheme, if this decoder has one.
+    var shuangpinIndexName: String? { get }
     /// True for the native Sime engine; false for the builtin fallback. The
     /// controller swaps to the native engine once loaded.
     var isNative: Bool { get }
@@ -64,7 +62,8 @@ protocol PinyinDecoder {
 }
 
 extension PinyinDecoder {
-    var hasShuangpinIndex: Bool { false }
+    var shuangpinIndexName: String? { nil }
+    var hasShuangpinIndex: Bool { shuangpinIndexName != nil }
     var isNative: Bool { false }
 
     func decode(_ pinyin: String, context: [UInt32], limit: Int) -> [Candidate] {
@@ -108,12 +107,17 @@ extension PinyinDecoder {
         predict(context, limit: limit)
     }
 
+    private func usesIndex(for scheme: InputScheme) -> Bool {
+        guard let requested = scheme.shuangpinIndexName else { return false }
+        return shuangpinIndexName == requested
+    }
+
     /// Decode the raw composition through the decoder binding selected by the
     /// scheme, preserving the entered casing for mixed-English lookup.
     func decodeComposition(_ raw: String, scheme: InputScheme,
                            context: [UInt32], limit: Int) -> [Candidate] {
         let decoded: [Candidate]
-        if scheme.usesShuangpinIndex && hasShuangpinIndex {
+        if usesIndex(for: scheme) {
             decoded = decode(raw, context: context, limit: limit, expansion: true)
         } else if let layout = scheme.shuangpin {
             let keys = Array(raw.lowercased())
@@ -155,7 +159,7 @@ extension PinyinDecoder {
         fixedPrefix: String, prefixSegment: Int, rawKeyColumn: Int,
         limit: Int
     ) -> [Candidate] {
-        if scheme.usesShuangpinIndex && hasShuangpinIndex {
+        if usesIndex(for: scheme) {
             return correctionCandidates(
                 raw, fixedPrefix: fixedPrefix, prefixSyllables: rawKeyColumn,
                 limit: limit, expansion: true)
@@ -190,7 +194,7 @@ extension PinyinDecoder {
         guard scheme.shuangpin != nil,
               cursor > 0, cursor <= raw.count else { return nil }
         var runStart = 0
-        if scheme.usesShuangpinIndex && hasShuangpinIndex,
+        if usesIndex(for: scheme),
            let candidate,
            candidate.segmentKeys.count == candidate.segmentChars.count {
             let text = Array(candidate.text)
@@ -216,7 +220,7 @@ extension PinyinDecoder {
 
     func isLegalShuangpinSyllable(rawKeys: String, expanded: String,
                                   scheme: InputScheme) -> Bool {
-        if scheme.usesShuangpinIndex && hasShuangpinIndex {
+        if usesIndex(for: scheme) {
             return syllableCandidates(rawKeys).contains { candidate in
                 candidate.text.contains { !$0.isASCII }
                     && candidate.segmentKeys == [rawKeys.count]

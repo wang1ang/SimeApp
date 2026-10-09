@@ -54,9 +54,7 @@ final class KeyboardViewController: UIInputViewController {
         // otherwise the lightweight builtin so the keyboard stays responsive
         // while the native engine loads in the background. The shuangpin-index
         // schemes prefer the index-bound engine.
-        let wantsIndex = inputScheme.usesShuangpinIndex
-        let native = NativePinyinDecoder.sharedIfLoaded(index: wantsIndex)
-            ?? NativePinyinDecoder.sharedIfLoaded(index: false)
+        let native = NativePinyinDecoder.sharedIfLoaded(indexName: inputScheme.shuangpinIndexName)
         let decoder: PinyinDecoder = native ?? BuiltinPinyinDecoder()
         return Composition(decoder: decoder, inputScheme: inputScheme)
     }
@@ -66,21 +64,16 @@ final class KeyboardViewController: UIInputViewController {
     /// index-bound engine for shuangpin-index schemes; the full-pinyin engine
     /// otherwise. Cheap no-op once the matching decoder is already active.
     private func activateNativeDecoder() {
-        let wantsIndex = keyboardScheme.usesShuangpinIndex
-        // Already on a native decoder with the binding this scheme needs.
-        if usesNativeDecoder,
-           composition.decoderHasShuangpinIndex == wantsIndex {
+        let indexName = keyboardScheme.shuangpinIndexName
+        if usesNativeDecoder, composition.decoderIndexName == indexName {
             return
         }
-        NativePinyinDecoder.loadShared(index: wantsIndex) { [weak self] decoder in
+        NativePinyinDecoder.loadShared(indexName: indexName) { [weak self] decoder in
             guard let self else { return }
-            // The scheme may have changed while loading; only swap if this
-            // binding still matches and we have not already adopted it.
-            guard self.keyboardScheme.usesShuangpinIndex == wantsIndex else { return }
-            guard let decoder = decoder
-                ?? NativePinyinDecoder.sharedIfLoaded(index: false) else { return }
+            guard self.keyboardScheme.shuangpinIndexName == indexName else { return }
+            guard let decoder else { return }
             if self.usesNativeDecoder,
-               self.composition.decoderHasShuangpinIndex == decoder.hasShuangpinIndex {
+               self.composition.decoderIndexName == decoder.shuangpinIndexName {
                 return
             }
             self.usesNativeDecoder = true

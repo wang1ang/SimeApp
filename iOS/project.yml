@@ -55,6 +55,8 @@ targets:
           cp "$SRCROOT/../require/Sime/save/sime.dict" "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/sime.dict"
           cp "$SRCROOT/../require/Sime/save/sime.cnt" "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/sime.cnt"
           cp "$SRCROOT/../require/Sime/save/sime.sp.index" "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/sime.sp.index"
+          cp "$SRCROOT/../require/Sime/save/sime.xiaohe.sp.index" "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/sime.xiaohe.sp.index"
+          cp "$SRCROOT/../require/Sime/save/sime.ziranma.sp.index" "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/sime.ziranma.sp.index"
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.ismantic.sime.tests
@@ -83,6 +85,8 @@ targets:
           cp "$SRCROOT/../require/Sime/save/sime.dict" "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/sime.dict"
           cp "$SRCROOT/../require/Sime/save/sime.cnt" "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/sime.cnt"
           cp "$SRCROOT/../require/Sime/save/sime.sp.index" "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/sime.sp.index"
+          cp "$SRCROOT/../require/Sime/save/sime.xiaohe.sp.index" "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/sime.xiaohe.sp.index"
+          cp "$SRCROOT/../require/Sime/save/sime.ziranma.sp.index" "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/sime.ziranma.sp.index"
           cp "$SRCROOT/../require/Sime/save/gru.embedding.i8" "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/gru.embedding.i8"
           cp "$SRCROOT/../require/Sime/save/gru.pinyin.ncnn.param" "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/gru.pinyin.ncnn.param"
           cp "$SRCROOT/../require/Sime/save/gru.pinyin.ncnn.bin" "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/gru.pinyin.ncnn.bin"
