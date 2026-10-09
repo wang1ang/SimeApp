@@ -960,13 +960,11 @@ final class KeyboardViewController: UIInputViewController {
         view.setNeedsLayout()
     }
 
-    // Highlight legal Shuangpin finals and optionally route adjacent gap taps to them.
-    // Keep tinting and hit-area expansion independent so either can be disabled.
-    private let tintShuangpinFinalKeys = true
+    // Debug-only visual aid.
+    private let tintShuangpinFinalKeys = false
     private let enlargeShuangpinFinalKeys = true
 
     private func updateFinalKeyHighlights() {
-        // Source of truth: which final keys form a legal syllable right now.
         let legalFinals = keyboardPage == .letters
             ? composition.shuangpinFinalKeyHighlights() : []
         applyFinalKeyTint(legalFinals: tintShuangpinFinalKeys ? legalFinals : [])
