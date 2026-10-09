@@ -970,7 +970,7 @@ final class KeyboardViewController: UIInputViewController {
     // each gated by its own flag below: (1) tinting those keys, and (2)
     // enlarging their touch area. They share only the source set, so turning
     // one off never affects the other.
-    private let tintShuangpinFinalKeys = false  // temporarily disabled (see REGRESSION 64b)
+    private let tintShuangpinFinalKeys = true
     private let enlargeShuangpinFinalKeys = true
 
     private func updateFinalKeyHighlights() {
@@ -1043,6 +1043,7 @@ final class KeyButton: UIButton {
     // geometry never changes during the press animation.
     private let feedbackView = UIView()
     private var syncingBackground = false
+    private var settingPressFeedbackColor = false
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -1070,6 +1071,9 @@ final class KeyButton: UIButton {
     override var backgroundColor: UIColor? {
         didSet {
             guard !syncingBackground else { return }
+            if isHighlighted && !settingPressFeedbackColor {
+                restingBackground = backgroundColor
+            }
             feedbackView.backgroundColor = backgroundColor
             syncingBackground = true
             super.backgroundColor = .clear
@@ -1101,7 +1105,9 @@ final class KeyButton: UIButton {
             guard isHighlighted != oldValue else { return }
             if isHighlighted {
                 restingBackground = feedbackView.backgroundColor
+                settingPressFeedbackColor = true
                 backgroundColor = Self.pressedBackground
+                settingPressFeedbackColor = false
                 feedbackView.transform = Self.pressedTransform(for: bounds.size)
             } else {
                 backgroundColor = restingBackground
