@@ -51,6 +51,8 @@ final class ShuangpinEndToEndTests: XCTestCase {
         }
         XCTAssertNil(c.selectDisplayed(love))
         XCTAssertEqual(c.sentencePreview, "这是love你")
+        XCTAssertEqual(c.preedit, "ve ui love ni")
+        XCTAssertEqual(c.selectionLocation, c.preedit.utf16.count)
         XCTAssertEqual(c.sentenceSegments.map(\.text), ["这", "是", "love", "你"])
         XCTAssertEqual(c.activeCharacterIndex, 6)
     }

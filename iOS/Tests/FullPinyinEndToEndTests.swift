@@ -75,6 +75,16 @@ final class FullPinyinEndToEndTests: XCTestCase {
         XCTAssertEqual(composition.candidates.first?.units, "item'ta")
     }
 
+    func testLowercaseEnglishWordIsOnePreeditGroup() throws {
+        let bundle = Bundle(for: Self.self)
+        guard let decoder = NativePinyinDecoder(bundle: bundle) else { throw XCTSkip() }
+        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
+        "woloveni".forEach { composition.append(String($0)) }
+
+        XCTAssertEqual(composition.candidates.first?.text, "我love你")
+        XCTAssertEqual(composition.preedit, "wo love ni")
+    }
+
     func testMixedChineseEnglishChineseWord() throws {
         let bundle = Bundle(for: Self.self)
         guard let decoder = NativePinyinDecoder(bundle: bundle) else { throw XCTSkip() }

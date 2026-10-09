@@ -787,14 +787,47 @@ final class Composition {
             raw: raw, units: candidates.first?.units ?? "", top: candidates.first)
     }
 
-    /// Group the raw input according to the selected candidate's decoder units
-    /// or source spans. Display grouping never changes commit consumption.
+    /// Group raw keys by decoder spans, joining adjacent spans shown as one
+    /// ASCII word. Display grouping never changes commit consumption.
     private func computeDisplayGroups(raw: String, units: String,
                                       top: Candidate?) -> [String] {
         let topText = top?.text ?? ""
         if let top, !top.segmentKeys.isEmpty {
-            var parts = rawGroups(of: top)
-            let used = parts.reduce(0) { $0 + $1.count }
+            let groups = rawGroups(of: top)
+            let spans = sentenceMapping.unitRanges
+            let text = Array(sentencePreview)
+            var parts: [String] = []
+            var index = 0
+            while index < groups.count {
+                guard spans.indices.contains(index) else {
+                    parts.append(contentsOf: groups[index...])
+                    break
+                }
+                let span = spans[index]
+                let isEnglish = !span.isEmpty && span.allSatisfy {
+                    text[$0].isASCII && text[$0].isLetter
+                }
+                guard isEnglish else {
+                    parts.append(groups[index])
+                    index += 1
+                    continue
+                }
+                var end = index + 1
+                var previous = span
+                while end < min(groups.count, spans.count) {
+                    let next = spans[end]
+                    guard !next.isEmpty,
+                          next.allSatisfy({ text[$0].isASCII && text[$0].isLetter }),
+                          next.lowerBound == previous.upperBound || next == previous else {
+                        break
+                    }
+                    previous = next
+                    end += 1
+                }
+                parts.append(groups[index..<end].joined())
+                index = end
+            }
+            let used = groups.reduce(0) { $0 + $1.count }
             if used < raw.count { parts.append(String(raw.dropFirst(used))) }
             return parts.isEmpty && !raw.isEmpty ? [raw] : parts
         }
