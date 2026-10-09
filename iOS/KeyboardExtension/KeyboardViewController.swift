@@ -1035,6 +1035,13 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
                 sentenceX += width + 6
             }
         }
+        for subview in sentenceBar.subviews {
+            if let label = subview as? UILabel {
+                label.transform = CGAffineTransform(translationX: 0, y: -1)
+            } else if let button = subview as? UIButton {
+                button.titleLabel?.transform = CGAffineTransform(translationX: 0, y: -1)
+            }
+        }
         sentenceContentWidth = sentenceX
         // Size now so the offset below isn't clamped by a stale contentSize.
         sentenceBar.frame.size.width = max(sentenceScrollView.bounds.width, sentenceContentWidth)
