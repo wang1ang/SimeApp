@@ -659,9 +659,18 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     @objc private func sentenceCandidateTapped(_ gesture: UITapGestureRecognizer) {
         guard gesture.state == .ended else { return }
         let point = gesture.location(in: sentenceBar)
-        guard let label = sentenceBar.subviews.compactMap({ $0 as? UILabel })
-            .first(where: { $0.frame.contains(point) }) else { return }
-        selectCandidate(at: label.tag)
+        if let label = sentenceBar.subviews.compactMap({ $0 as? UILabel })
+            .first(where: { $0.frame.contains(point) }) {
+            selectCandidate(at: label.tag)
+            return
+        }
+        guard candidateBubble != nil,
+              !sentenceBar.subviews.contains(where: { subview in
+                  guard let button = subview as? UIButton else { return false }
+                  return button.frame.contains(point)
+              }) else { return }
+        dismissCandidateBubble()
+        render()
     }
 
     // Active char's candidates paired with their original `displayCandidates`
