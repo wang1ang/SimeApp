@@ -404,21 +404,12 @@ final class KeyboardViewController: UIInputViewController {
         default:
             switch keyboardPage {
             case .numbers:
-                // Commit the marked text and digit as one transaction. Sending
-                // setMarkedText/unmarkText followed immediately by insertText
-                // can make UIKit place the digit before the committed letter.
-                composition.moveCursor(to: composition.raw.count)
                 let digit = title.lowercased()
-                if let text = composition.commitBestOrRaw() {
-                    commit(text + digit)
-                } else {
-                    textDocumentProxy.insertText(digit)
-                }
+                commitComposition(appending: digit)
             case .symbols:
                 // Symbols insert literally and stay on the symbol page, like
                 // the system keyboard's #+= layout.
-                commitComposition()
-                textDocumentProxy.insertText(title)
+                commitComposition(appending: title)
             case .letters:
                 // `title` is already uppercase when Shift is active; the
                 // composition preserves its case and surfaces it as a literal
@@ -492,8 +483,8 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func insertPunctuation(_ punctuation: String) {
-        commitComposition()
-        textDocumentProxy.insertText(punctuation == ";" ? "；" : punctuation)
+        let text = punctuation == ";" ? "；" : punctuation
+        commitComposition(appending: text)
         let keepsNumberPage = keyboardPage == .numbers && punctuation == "."
         if keyboardPage != .letters && !keepsNumberPage {
             keyboardPage = .letters
@@ -528,10 +519,12 @@ final class KeyboardViewController: UIInputViewController {
         textDocumentProxy.unmarkText()
     }
 
-    private func commitComposition() {
+    private func commitComposition(appending suffix: String = "") {
         composition.moveCursor(to: composition.raw.count)
         if let text = composition.commitBestOrRaw() {
-            commit(text)
+            commit(text + suffix)
+        } else if !suffix.isEmpty {
+            textDocumentProxy.insertText(suffix)
         }
         render()
     }
