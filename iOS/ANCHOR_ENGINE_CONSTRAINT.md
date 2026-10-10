@@ -42,16 +42,19 @@
 
 - **逐字为单位**：每个锚点钉一个字 `X` + 它的输入字母区间 `[a,b)`。选中多字词时拆
   成多个单字锚点，各带各的 `[a,b)`。
-- **判定（按字，piece 级对齐）**：一条 path 合法 ⟺ 对每个中文锚点，**词内 piece 对
-  齐到输入 `[a,b)` 的那个输出字 == X**。
-- **端点不强制成为切分/词边界**：整词跨过 `a`/`b` 也行，只要词内对齐到 `[a,b)` 的字
-  是 X。按**字（Unicode char）**比，不是按 token——因为锚点字可能被包在一个整词
-  token 里（如 `中国`、`机关枪`），只能看词内对齐出的那个字。
+- **判定（覆盖 + 包含，不碰字母子区间）**：一条 path 合法 ⟺ 对每个中文锚点，path 里
+  有一条边 `e` **完整覆盖 `[a,b)`（`e.start<=a && e.end>=b`）且其输出文本含字 X**。
+  **不还原词内每个字占几个字母**（trie 里没这信息、重算还踩契约 23）：词的输出顺序
+  跟它的 code 顺序一致，所以"边覆盖了锚点输入区间、输出里有这个字"就够了。
+- **端点不强制成为切分/词边界**：整词跨过 `a`/`b` 也行——`中国`（边 `[0,4)`）覆盖了
+  `国` 的区间 `[2,4)`、输出含"国"，就命中 国@[2,4)。按**字（Unicode char）**比。
+- **剪枝即约束**：删掉"与 `[a,b)` 相交但不是'覆盖+含 X'"的边后，任何跨越 `[a,b)` 的
+  path 只能走一条覆盖边 → 锚点必然成立。
 
 例子（均为合法 path，不该被误杀）：
 
-- 输入 `vsgo` 锚"中"：`中(vs)+国(go)` 与整词 `中国`（letter 2 处无边界）都命中。
-- 输入 `jiguanqiang` 锚"关"：整词 `机关枪` 也命中（词内对齐到那段的字是关）。
+- 输入 `vsgo` 锚"中"：`中(vs)+国(go)` 与整词 `中国`（边 `[0,4)` 覆盖 `[0,2)`、含"中"）都命中。
+- 输入 `jiguanqiang` 锚"关"：整词 `机关枪` 也命中（边覆盖那段、输出含关）。
 - 输入 `vsgorfqr` 锚"国人"→ 拆成"国""人"两个单字锚点：`中国|人权`、`中国人|权`、
   `中|国人|权` 全合法。若错误地把"国人"当**一个整体区间**锚，会误杀 `中国|人权`
   （国在词`中国`里、人在词`人权`里，分属两词，一个整体"国人"跨不过词边界对齐）——
@@ -92,24 +95,30 @@
 
 ## 3. 实现方案
 
-### 3.1 引擎 `require/Sime`
+### 3.1 引擎 `require/Sime`（中文部分已实现）
 
-新增 `ApplyAnchors(net, anchors)`，在 `InitNet/InitNetSp` 建网之后、`Process` 之前调
-用。`anchors` 每条：`{ size_t a, size_t b, bool is_english, TokenID token /*中文*/,
-std::string text /*英文/校验*/ }`。
+`ApplyAnchors(net, input, anchors)`，在 `InitNet/InitNetSp` 建网之后、`ComputeEdge­
+Penalties`/`PruneNode`/`Process` 之前调用。`struct Anchor { size_t a, b; bool
+english; TokenID token; std::string text; }`。
 
-- **英文锚点**（`is_english`）：
-  1. 删除所有跨越 `a` 或 `b` 的边（`s<a<e` 或 `s<b<e`）。
-  2. `[a,b)` 内只保留"恰好 `(a,b)` 且产出 == S"的边；没有则造一条 `NotToken` 字面边
-     `(a,b)`（text 即 raw 的 `[a,b)` 子串）。
-- **中文锚点**：**不剪边界**。作为**输出一致性约束带进 beam/状态**：一条 path 到达
-  覆盖 `[a,b)` 的位置时，按词内 piece 对齐求出对齐到 `[a,b)` 的那个字，≠ X 的状态
-  剪掉。并**确保存在**一条在 `[a,b)` 产出 X 的边（没有则造单字边），保证可达。
-  - 实现细节待定：优先在 `Process` 的状态扩展里判定（这样 GRU 只见合法 path）；
-    次选在 `CollectCandidates` 收集时按 piece 对齐过滤（实现简单但 GRU 可能先在非法
-    path 上排过）。倾向前者。
+- **中文锚点**（已实现）：对每个锚点 `[a,b)→X`（`want = TokenAt(token)[0]`），扫全网
+  边：与 `[a,b)` 不相交的留；相交的只有"完整覆盖 `[a,b)` 且 `ToText(e)` 含 `want`"才留，
+  其余删。若无任何覆盖边幸存→注入一条单字边 `(a,b,token)` 保证可达。——不算字母子
+  区间（`EdgeCharSpans` 已废弃）：词输出顺序跟 code 一致，"覆盖+含字"即足够，且
+  剪掉非覆盖边后，每条跨 `[a,b)` 的 path 必走覆盖边。
+  - **建网时预过滤（性能）**：`InitNetSp` 收 `anchors`，在中文边 loop 里按 step-1 span
+    几何先判——部分相交的 span 直接跳过（连 `GetEntry` 都不做），覆盖的 span 进
+    `GetEntry` 后逐叶只判"含不含被覆盖锚点的字"，避免把同音字 fan-out 白建白删。
+    `anchors` 为空时走原路径（普通解码不受影响）。`ApplyAnchors` 仍在其后跑，作为
+    全部边类型的权威 + 可达性注入（此时中文边已被预过滤，复查为空转）。
+- **英文锚点**（未实现 / phase 2）：删所有跨越 `a`/`b` 的边；`[a,b)` 内只留"恰好
+  `(a,b)` 且产出 == S"的边，没有则造一条 `NotToken` 字面边。当前 `ApplyAnchors`
+  遇到 `english` 锚点直接跳过。
 
-新增解码入口（不动老 `DecodeSentence`，纯加法）：
+解码入口 `DecodeSentenceWithAnchors(input, context, anchors, extra, expansion)`（不动
+老 `DecodeSentence`，纯加法）：`InitNet*→ApplyAnchors→ComputeEdgePenalties→PruneNode
+→Process→CollectCandidates`。注入的单字边 `pieces=nullptr`，`ComputeEdgePenalties`
+对它 penalty=0（跳过 nullptr pieces），得到 anchor 字的正常 LM 分。
 
 ```cpp
 std::vector<DecodeResult> DecodeSentenceWithAnchors(
@@ -119,11 +128,8 @@ std::vector<DecodeResult> DecodeSentenceWithAnchors(
     std::size_t extra = 0, bool expansion = true) const;
 ```
 
-流程：`InitNet/InitNetSp` → `ApplyAnchors` → `ComputeEdgePenalties` → `PruneNode`
-→ `Process` → `CollectCandidates`。
-
-> 注意：`ApplyAnchors` 与 `PruneNode`/两轨 tier 过滤的先后顺序要保证造出来的锚点边
-> 不被 prune 误删（锚点边应豁免或最后加）。
+> 注意：注入的锚点边在 `ApplyAnchors`（在 `PruneNode` 之前）里加；锚点列已被剪到只剩
+> 覆盖边，所以注入边不会被 `PruneNode`（按分截 NodeSize）误删。
 
 ### 3.2 C ABI `iOS/Engine/sime_api.{h,cc}`
 
@@ -179,7 +185,7 @@ token; const char* text; }`。保持 noexcept 边界。
 
 ---
 
-## 7. 实现时要重验的交互（Swift 去掉 overlay 后）
+## 7. 实现时要重验的交互（开关开启 = 引擎重解模式）
 
 - 逐字改选气泡 / 第一行内联、自动前进到下一字。
 - 多锚点共存、追加输入 / 退格 / 切输入框 / 锁屏恢复后锚点仍合法（契约 13–15、32）。
@@ -188,34 +194,34 @@ token; const char* text; }`。保持 noexcept 边界。
 
 ---
 
-## 8. 清理目标：拆除强行覆盖
+## 8. 两种模式共存（开关切换，不拆 overlay）
 
-引擎约束就位、候选本身即锚点一致后，**尝试彻底拆除 Swift 的强行覆盖**
-（`renderedText`/`applyAnchors` 对锚点位置的 overlay，以及 `matchesAnchors` 过滤）。
-这是本次改动的收尾目标，标注"尝试"：拆之前要确认没有路径再依赖 overlay——
+**不拆除强行覆盖**。新引擎约束和老 overlay 两种模式都保留，用一个 App 开关切换：
 
-- 首选预览、第一行确认符 / 回车"确定" / 空格的提交结果，应直接等于引擎返回的锚点
-  一致候选，无需 Swift 侧再盖字；
-- 英文整段锚点经引擎造边后产出的文本，确认与旧 overlay 一致；
-- `commitBestOrRaw` / `commitPreeditLiterally` / `sentencePreview` 等不再调用
-  `renderedText` 覆盖。
+- 开关：**“手动更正后整句重新解码”，默认开**。App Group 共享（同 `predictionEnabled`
+  / `scheme` 的做法），键盘 `viewWillAppear` 刷到 `Composition`。
+- **开（默认）**：锚点走引擎——`refresh()` 调 `DecodeSentenceWithAnchors` 把锚点当硬约束
+  传进去，候选本身即锚点一致；此模式下**不走** `renderedText`/`matchesAnchors` 覆盖过滤（
+  锚点位置的文字已由引擎保证）。
+- **关**：完全走现在的老路——普通 `decodeComposition`（不带锚点）+ `renderedText` 强行
+  覆盖 + `matchesAnchors` 过滤。
 
-若某条路径暂时仍需 overlay 兜底，记录原因，不要默默保留。
+好处：灰度安全、随时回退；不用一次性证明所有路径都不再依赖 overlay。代价：Swift 侧
+两套路径长期并存。契约文档要说明两模式均存在、开关默认开。
+
+> 实现点：`InputSettings` 加一个布尔键（如 `reDecodeOnCorrection`，默认 true）；App
+> `ContentView` 加一个 Toggle；`KeyboardViewController.viewWillAppear` 读入并刷到
+> `Composition`；`Composition.refresh()` / 改选重解路径按此分支。
 
 ## 9. 未定 / 以后扩展
 
 语义层已定稿（中文逐字 / 英文整段 / 可达性造边）。以下为**实现时才拍板的不确定点**，
 先记录，遇到具体问题具体分析：
 
-1. **中文约束放哪、怎么算（最大分叉）**。要让 GRU 只见合法 path，就得在
-   `Process` 状态扩展里判"对齐到 `[a,b)` 的字 == X"；次选在 `CollectCandidates` 过
-   滤（实现简单但 GRU 可能先在非法 path 上排过）。实现前建议先做最小 probe 比一比再定。
-   难点：
-   - beam 过程中要对跨/覆盖 `[a,b)` 的边现算 piece→字母对齐（`ExtractSegments` 现在是
-     事后算的，搬进搜索有性能 / 复用问题）；
-   - 边界落在 `[a,b)` **内部**时的规则：若某 path 在 `[a,b)` 中间断成两条边、没有
-     单个字恰好对齐 `[a,b)` → 判不满足、剪掉（倾向这样，但要写死）；
-   - 有些词 `align` 会失败回退，对齐求不出时怎么判（保守保留还是剪）。
+1. **（已解决）中文约束怎么算**。最终采用**建网后按"覆盖+包含"剪边**（见 3.1），
+   不算字母子区间、不改 `Process`：剪掉非覆盖边后 beam 自然只剩合法 path，GRU 也只
+   见合法 path。原来担心的 piece→字母对齐、边界落在区间内、`align` 失败回退等难点
+   都因为改用"覆盖+包含"而**不再存在**。
 
 2. **造出来的锚点边怎么公平打分 / 不被 prune 误删**。注入的单字边/字面边要补
    `pieces`/`penalty`，并豁免 `PruneNode` 和两轨 tier 过滤，否则可能被剪掉或 LM 分不合理。
