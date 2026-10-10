@@ -91,6 +91,24 @@ final class ShuangpinEndToEndTests: XCTestCase {
         XCTAssertFalse(c.isComposing)
     }
 
+    func testCorrectionBubbleEnglishReplacementCrossingBoundaryCommits() throws {
+        // Top "B撤销" segments as B|ie|xc. Tapping the leading "B" opens its
+        // correction list, which offers "Bi". "Bi" is 2 keys and crosses the
+        // B|ie boundary, so it can't be a per-segment anchor; selecting it must
+        // commit "Bi" as a prefix and re-decode the tail (not silently fail and
+        // leave the active state dirtying later taps).
+        let c = try composition(for: "Biexc")
+        c.activateCharacter(0)
+        guard let bi = c.displayCandidates.firstIndex(where: { $0.text == "Bi" }) else {
+            return XCTFail("B correction list should offer Bi; got: \(c.displayCandidates.map { $0.text })")
+        }
+        XCTAssertNil(c.selectDisplayed(bi))
+        XCTAssertNil(c.activeCharacterIndex)
+        XCTAssertEqual(c.preedit, "Biex c")
+        XCTAssertTrue(c.sentencePreview.hasPrefix("Bi"))
+        XCTAssertTrue(c.isComposing)
+    }
+
     func testLeadingUppercaseRealignsRegardlessOfTheLetter() throws {
         // The realignment must not depend on which capital was typed: any
         // leading uppercase letter stays its own literal and the shuangpin

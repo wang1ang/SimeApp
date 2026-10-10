@@ -465,7 +465,15 @@ final class Composition {
 
     func select(_ index: Int) -> String? {
         guard candidates.indices.contains(index) else { return nil }
-        let candidate = candidates[index]
+        return commitCandidateAsPrefix(candidates[index])
+    }
+
+    /// Commit `candidate` by consuming its raw-key span off the front of
+    /// `raw`, pushing it onto the committed prefix, and re-decoding the rest.
+    /// Returns the final text once `raw` is empty, else nil (still composing).
+    /// Used by trailing-candidate selection and by a correction replacement
+    /// whose keys cross a top-segment boundary.
+    private func commitCandidateAsPrefix(_ candidate: Candidate) -> String? {
         let consumed = rawConsumption(of: candidate)
         let segments = max(1, segmentCharCounts(candidate).count)
         let sourceKeys = String(raw.prefix(min(consumed, raw.count)))
@@ -538,7 +546,22 @@ final class Composition {
                     coveredKeys += topKeyLengths[relativeActive + span]
                     span += 1
                 }
-                guard coveredKeys == replacementKeyCount else { return nil }
+                if coveredKeys != replacementKeyCount {
+                    // The replacement's keys cross a top-segment boundary
+                    // (English "Bi" over the B|ie split): the overlapped
+                    // syllable can't survive, so a per-segment anchor is
+                    // impossible. Commit it as a prefix and re-decode the tail
+                    // — the same well-defined result as picking it from the
+                    // trailing candidate row. Only defined when correcting
+                    // from the start; otherwise close the bubble cleanly so
+                    // the active state isn't left dirtying later taps.
+                    activeCharacterIndex = nil
+                    activeShowsKeys = false
+                    replacementCandidates = []
+                    guard relativeActive == 0 else { refresh(); return nil }
+                    anchorSegments = []
+                    return commitCandidateAsPrefix(replacement)
+                }
             }
             guard relativeActive + span <= segmentCount else { return nil }
 
