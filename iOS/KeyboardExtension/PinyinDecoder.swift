@@ -31,25 +31,15 @@ struct Candidate {
     }
 }
 
-/// A correction anchor passed to the engine: input letters [a,b) decode to a
-/// fixed output. Chinese anchors carry the pinned char's `token`; english
-/// anchors are phase 2 (currently a no-op in the engine).
+/// A correction anchor for the engine: input letters [a,b) decode to a fixed
+/// output. Chinese anchors carry the pinned char's `token`; English anchors
+/// set `english` and carry the literal `text` (S) for reuse matching.
 struct DecodeAnchor {
     let a: Int
     let b: Int
     let english: Bool
     let token: UInt32
-    /// English anchors: the pinned literal S (for reuse matching). Empty for
-    /// Chinese anchors.
-    let text: String
-
-    init(a: Int, b: Int, english: Bool, token: UInt32, text: String = "") {
-        self.a = a
-        self.b = b
-        self.english = english
-        self.token = token
-        self.text = text
-    }
+    var text = ""
 }
 
 /// Keep the keyboard UI independent from the native Sime bridge.
@@ -63,8 +53,7 @@ protocol PinyinDecoder {
     func decode(_ pinyin: String, context: [UInt32], limit: Int) -> [Candidate]
     func decode(_ pinyin: String, context: [UInt32], limit: Int,
                 expansion: Bool) -> [Candidate]
-    /// Anchor-constrained sentence decode (see DecodeAnchor). Default ignores
-    /// anchors; the native engine overrides it.
+    /// Anchor-constrained decode; default ignores anchors (native overrides).
     func decode(_ pinyin: String, context: [UInt32], limit: Int,
                 expansion: Bool, anchors: [DecodeAnchor]) -> [Candidate]
     /// High-recall candidates for one exact pinyin span, used to recover the
@@ -157,8 +146,7 @@ extension PinyinDecoder {
         }
         guard !raw.isEmpty,
               !decoded.contains(where: { $0.text == raw }) else { return decoded }
-        // Under anchors every candidate is anchor-consistent; the raw literal
-        // would violate them, so don't append it.
+        // The raw literal would violate the anchors, so skip it under anchors.
         if !anchors.isEmpty { return decoded }
         return decoded + [Candidate(text: raw, consumed: raw.count, tokens: [],
                                     units: "", segmentKeys: [raw.count],

@@ -59,12 +59,11 @@ final class Composition {
         }
     }
 
-    /// When true (default), a manual correction re-decodes the whole sentence
-    /// through the engine under the anchors; when false, the old Swift
-    /// overlay/filter is used. Refreshed by the keyboard from InputSettings.
+    /// Re-decode the whole sentence under the anchors on correction (default);
+    /// off keeps the Swift overlay. Set by the keyboard from InputSettings.
     var reDecodeOnCorrection: Bool = InputSettings.reDecodeOnCorrection
-    /// True when the last refresh fed anchors to the engine (so candidates are
-    /// already anchor-consistent and the Swift overlay/filter must stand down).
+    /// Set when the last refresh fed anchors to the engine, so the Swift
+    /// overlay/filter stands down (candidates are already anchor-consistent).
     private var usingEngineAnchors = false
 
     private var prefixText: String { prefixSegments.map(\.text).joined() }
@@ -527,9 +526,8 @@ final class Composition {
     }
 
     /// Auto-anchor every segment before `segmentIndex` to the current top
-    /// reading. Segments that already carry an anchor are left untouched (the
-    /// user's explicit choice wins). Used when a correction is made so the
-    /// left context stays fixed through the anchored re-decode.
+    /// reading (segments already anchored are left as-is), so a correction
+    /// keeps its left context fixed through the anchored re-decode.
     private func autoAnchorPrefix(before segmentIndex: Int, of top: Candidate) {
         guard segmentIndex > 0 else { return }
         let segChars = segmentCharCounts(top)
@@ -859,10 +857,8 @@ final class Composition {
             raw: raw, units: candidates.first?.units ?? "", top: candidates.first)
     }
 
-    /// Anchors to feed the engine, or nil to use the old Swift overlay. Only
-    /// for the native shuangpin-index path; Chinese anchors carry the pinned
-    /// token, English anchors are whole-span literals. nil (overlay) when an
-    /// anchor lacks a usable token or the scheme isn't a native sp index.
+    /// Anchors for the engine, or nil to use the Swift overlay. Native
+    /// sp-index path only; nil if any Chinese anchor lacks a usable token.
     private func engineAnchors() -> [DecodeAnchor]? {
         guard reDecodeOnCorrection, !anchorSegments.isEmpty,
               inputScheme.shuangpinIndexName != nil,
