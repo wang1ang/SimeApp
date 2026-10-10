@@ -526,6 +526,37 @@ final class Composition {
         return keys > 0 ? keys : candidate.consumed
     }
 
+    /// Auto-anchor every segment before `segmentIndex` to the current top
+    /// reading. Segments that already carry an anchor are left untouched (the
+    /// user's explicit choice wins). Used when a correction is made so the
+    /// left context stays fixed through the anchored re-decode.
+    private func autoAnchorPrefix(before segmentIndex: Int, of top: Candidate) {
+        guard segmentIndex > 0 else { return }
+        let segChars = segmentCharCounts(top)
+        guard segChars.count >= segmentIndex else { return }
+        let chars = Array(top.text)
+        let tokensAligned = top.tokens.count == segChars.count
+        var charCursor = 0
+        for seg in 0..<segmentIndex {
+            let start = charCursor
+            let end = min(chars.count, start + max(0, segChars[seg]))
+            charCursor = end
+            if anchorSegments.contains(where: { $0.syllableRange.contains(seg) }) {
+                continue
+            }
+            guard end > start else { continue }
+            let keyStart = rawLength(forSegments: seg, of: top)
+            let keyEnd = rawLength(forSegments: seg + 1, of: top)
+            guard keyEnd > keyStart else { continue }
+            anchorSegments.append(CompositionSegment(
+                sourceKeyRange: keyStart..<keyEnd,
+                syllableRange: seg..<(seg + 1),
+                text: String(chars[start..<end]),
+                tokens: tokensAligned ? [top.tokens[seg]] : []
+            ))
+        }
+    }
+
     func selectDisplayed(_ index: Int) -> String? {
         if !isComposing, predictionCandidates.indices.contains(index) {
             let prediction = predictionCandidates[index]
@@ -608,6 +639,10 @@ final class Composition {
                     tokens: replacement.tokens
                 ))
             }
+            // Lock everything before the chosen position to the current top
+            // reading, so re-decoding under this anchor can't disturb the
+            // characters the user already accepted on its left.
+            autoAnchorPrefix(before: relativeActive, of: top)
             anchorSegments.sort {
                 $0.syllableRange.lowerBound < $1.syllableRange.lowerBound
             }
