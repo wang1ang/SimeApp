@@ -123,9 +123,23 @@ final class Composition {
             let anchorsByStart = Dictionary(
                 anchors.map { ($0.syllableRange.lowerBound, $0) },
                 uniquingKeysWith: { first, _ in first })
-            for index in 0..<display {
-                segments.append(SentenceSegment(text: String(chars[index]),
-                                                displayIndex: index))
+            // Committed prefix: one segment per character, but keep ASCII
+            // letter runs together (a committed English piece like "Bi" is one
+            // tappable unit, not "B" + "i").
+            var pre = 0
+            while pre < display {
+                if chars[pre].isASCII && chars[pre].isLetter {
+                    let start = pre
+                    while pre < display, chars[pre].isASCII, chars[pre].isLetter {
+                        pre += 1
+                    }
+                    segments.append(SentenceSegment(
+                        text: String(chars[start..<pre]), displayIndex: start))
+                } else {
+                    segments.append(SentenceSegment(
+                        text: String(chars[pre]), displayIndex: pre))
+                    pre += 1
+                }
             }
             // Per-segment character span for the segment at `index`, clamped.
             func span(_ index: Int, from offset: Int) -> Range<Int> {

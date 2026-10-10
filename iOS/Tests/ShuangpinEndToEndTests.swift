@@ -91,6 +91,18 @@ final class ShuangpinEndToEndTests: XCTestCase {
         XCTAssertFalse(c.isComposing)
     }
 
+    func testSelectingBiKeepsItAsOneFirstRowSegment() throws {
+        // Picking the English candidate "Bi" commits it as a prefix and
+        // re-decodes the tail; the first row must show "Bi" as one cell, not
+        // split into "B" + "i".
+        let c = try composition(for: "Biexc")
+        guard let bi = c.candidates.firstIndex(where: { $0.text == "Bi" }) else {
+            return XCTFail("Biexc should offer Bi; got: \(c.candidates.map { $0.text })")
+        }
+        _ = c.selectDisplayed(bi)
+        XCTAssertEqual(c.sentenceSegments.first?.text, "Bi")
+    }
+
     func testCorrectionBubbleEnglishReplacementCrossingBoundaryCommits() throws {
         // Top "B撤销" segments as B|ie|xc. Tapping the leading "B" opens its
         // correction list, which offers "Bi". "Bi" is 2 keys and crosses the
