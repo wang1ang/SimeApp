@@ -57,4 +57,12 @@ enum InputSettings {
         get { defaults.object(forKey: "predictionEnabled") as? Bool ?? true }
         set { defaults.set(newValue, forKey: "predictionEnabled") }
     }
+
+    /// After a manual per-character correction, re-decode the whole sentence
+    /// through the engine under the anchors (default). When off, keep the old
+    /// Swift overlay/filter behavior.
+    static var reDecodeOnCorrection: Bool {
+        get { defaults.object(forKey: "reDecodeOnCorrection") as? Bool ?? true }
+        set { defaults.set(newValue, forKey: "reDecodeOnCorrection") }
+    }
 }

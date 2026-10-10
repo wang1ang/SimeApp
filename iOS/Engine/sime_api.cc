@@ -197,6 +197,37 @@ SimeResults sime_decode_sentence_with_context(
   }, empty_results());
 }
 
+SimeResults sime_decode_sentence_with_anchors(
+    const SimeHandle *h, const char *input, const uint32_t *context,
+    int context_count, const SimeAnchor *anchors, int anchor_count, int extra,
+    bool expansion) {
+  return guard([&]() -> SimeResults {
+    if (!h || !h->sime || !h->sime->Ready() || !input || extra < 0)
+      return empty_results();
+    std::vector<sime::TokenID> ctx;
+    if (context && context_count > 0) {
+      ctx.assign(context, context + context_count);
+    }
+    std::vector<sime::Anchor> anc;
+    if (anchors && anchor_count > 0) {
+      anc.reserve(static_cast<size_t>(anchor_count));
+      for (int i = 0; i < anchor_count; ++i) {
+        const SimeAnchor &a = anchors[i];
+        if (a.a < 0 || a.b <= a.a) continue;
+        sime::Anchor out;
+        out.a = static_cast<size_t>(a.a);
+        out.b = static_cast<size_t>(a.b);
+        out.english = a.english;
+        out.token = a.token;
+        out.text = a.text ? a.text : "";
+        anc.push_back(std::move(out));
+      }
+    }
+    return to_c(h->sime->DecodeSentenceWithAnchors(
+        input, ctx, anc, static_cast<size_t>(extra), expansion));
+  }, empty_results());
+}
+
 SimeResults sime_decode_str(const SimeHandle *h, const char *input, int num) {
   return guard([&]() -> SimeResults {
     if (!h || !h->sime || !h->sime->Ready() || !input || num <= 0)

@@ -59,6 +59,14 @@ final class Composition {
         }
     }
 
+    /// When true (default), a manual correction re-decodes the whole sentence
+    /// through the engine under the anchors; when false, the old Swift
+    /// overlay/filter is used. Refreshed by the keyboard from InputSettings.
+    var reDecodeOnCorrection: Bool = InputSettings.reDecodeOnCorrection
+    /// True when the last refresh fed anchors to the engine (so candidates are
+    /// already anchor-consistent and the Swift overlay/filter must stand down).
+    private var usingEngineAnchors = false
+
     private var prefixText: String { prefixSegments.map(\.text).joined() }
     private var consumedKeyCount: Int { prefixSegments.last?.sourceKeyRange.upperBound ?? 0 }
     private var consumedSyllableCount: Int { prefixSegments.last?.syllableRange.upperBound ?? 0 }
@@ -181,7 +189,7 @@ final class Composition {
     private var sentenceMapping: SentenceMapping {
         SentenceMapping(text: sentencePreview,
                         segmentChars: segmentCharCounts(candidates.first),
-                        anchors: anchorSegments,
+                        anchors: usingEngineAnchors ? [] : anchorSegments,
                         prefixLength: prefixText.count)
     }
 
@@ -352,6 +360,8 @@ final class Composition {
     }
 
     private func renderedText(_ decoded: String) -> String {
+        // Engine already produced anchor-consistent text; don't overlay again.
+        if usingEngineAnchors { return decoded }
         let ranges = unitCharacterRanges(
             text: decoded, segmentChars: segmentCharCounts(candidates.first))
         let anchorRanges = anchorSegments.compactMap { anchor -> (range: Range<Int>, text: String)? in
@@ -626,6 +636,7 @@ final class Composition {
 
     /// 锚点视为 ground truth：整句候选在锚点位置与锚点文本不符则过滤掉。
     func matchesAnchors(_ candidate: Candidate) -> Bool {
+        if usingEngineAnchors { return true }
         guard !anchorSegments.isEmpty else { return true }
         let chars = Array(candidate.text)
         let segmentCount = segmentCharCounts(candidate).count
@@ -804,10 +815,38 @@ final class Composition {
     private func refresh() {
         let context = Array(
             ((hostContextTokens ?? contextTokens) + committedTokens).suffix(32))
+        let anchors = engineAnchors()
+        usingEngineAnchors = anchors != nil
         candidates = decoder.decodeComposition(
-            raw, scheme: inputScheme, context: context, limit: 60)
+            raw, scheme: inputScheme, context: context, limit: 60,
+            anchors: anchors ?? [])
         displayGroups = computeDisplayGroups(
             raw: raw, units: candidates.first?.units ?? "", top: candidates.first)
+    }
+
+    /// Chinese anchors to feed the engine, or nil to use the old Swift overlay.
+    /// Only for the native shuangpin-index path, and only when every anchor is
+    /// a Chinese single-char anchor (English anchors are engine phase 2, so
+    /// their presence falls back to overlay to avoid dropping the choice).
+    private func engineAnchors() -> [DecodeAnchor]? {
+        guard reDecodeOnCorrection, !anchorSegments.isEmpty,
+              inputScheme.shuangpinIndexName != nil,
+              decoder.isNative,
+              decoder.shuangpinIndexName == inputScheme.shuangpinIndexName
+        else { return nil }
+        var out: [DecodeAnchor] = []
+        for seg in anchorSegments {
+            let a = seg.sourceKeyRange.lowerBound
+            let b = seg.sourceKeyRange.upperBound
+            guard b > a, b <= raw.count else { return nil }
+            let english = !seg.text.isEmpty && seg.text.allSatisfy {
+                $0.isASCII && $0.isLetter
+            }
+            if english { return nil }
+            guard let token = seg.tokens.first, token != 0 else { return nil }
+            out.append(DecodeAnchor(a: a, b: b, english: false, token: token))
+        }
+        return out.isEmpty ? nil : out
     }
 
     /// Group raw keys by decoder spans, then join spans committed as one

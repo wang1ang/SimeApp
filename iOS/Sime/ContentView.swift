@@ -3,6 +3,7 @@ import SwiftUI
 struct ContentView: View {
     @State private var scheme = InputSettings.scheme
     @State private var prediction = InputSettings.predictionEnabled
+    @State private var reDecode = InputSettings.reDecodeOnCorrection
     @State private var testText = ""
 
     // The schemes offered in the picker, in display order.
@@ -37,6 +38,13 @@ struct ContentView: View {
                             InputSettings.predictionEnabled = enabled
                         }
                     Text(prediction ? "当前：上屏后显示联想候选" : "当前：关闭联想")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                    Toggle("更正后整句重解", isOn: $reDecode)
+                        .onChange(of: reDecode) { enabled in
+                            InputSettings.reDecodeOnCorrection = enabled
+                        }
+                    Text(reDecode ? "当前：手动改字后整句按引擎重新解码" : "当前：改字只覆盖该字，其余不变")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                     Divider()

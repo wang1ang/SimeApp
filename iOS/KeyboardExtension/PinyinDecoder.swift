@@ -31,6 +31,16 @@ struct Candidate {
     }
 }
 
+/// A correction anchor passed to the engine: input letters [a,b) decode to a
+/// fixed output. Chinese anchors carry the pinned char's `token`; english
+/// anchors are phase 2 (currently a no-op in the engine).
+struct DecodeAnchor {
+    let a: Int
+    let b: Int
+    let english: Bool
+    let token: UInt32
+}
+
 /// Keep the keyboard UI independent from the native Sime bridge.
 protocol PinyinDecoder {
     /// Index binding expected by the scheme, if this decoder has one.
@@ -42,6 +52,10 @@ protocol PinyinDecoder {
     func decode(_ pinyin: String, context: [UInt32], limit: Int) -> [Candidate]
     func decode(_ pinyin: String, context: [UInt32], limit: Int,
                 expansion: Bool) -> [Candidate]
+    /// Anchor-constrained sentence decode (see DecodeAnchor). Default ignores
+    /// anchors; the native engine overrides it.
+    func decode(_ pinyin: String, context: [UInt32], limit: Int,
+                expansion: Bool, anchors: [DecodeAnchor]) -> [Candidate]
     /// High-recall candidates for one exact pinyin span, used to recover the
     /// token path for a fixed correction prefix.
     func exactCandidates(_ pinyin: String, limit: Int) -> [Candidate]
@@ -75,6 +89,11 @@ extension PinyinDecoder {
     func decode(_ pinyin: String, context: [UInt32], limit: Int,
                 expansion: Bool) -> [Candidate] {
         decode(pinyin, context: context, limit: limit)
+    }
+
+    func decode(_ pinyin: String, context: [UInt32], limit: Int,
+                expansion: Bool, anchors: [DecodeAnchor]) -> [Candidate] {
+        decode(pinyin, context: context, limit: limit, expansion: expansion)
     }
 
     func exactCandidates(_ pinyin: String, limit: Int) -> [Candidate] {
@@ -113,17 +132,23 @@ extension PinyinDecoder {
     }
 
     func decodeComposition(_ raw: String, scheme: InputScheme,
-                           context: [UInt32], limit: Int) -> [Candidate] {
+                           context: [UInt32], limit: Int,
+                           anchors: [DecodeAnchor] = []) -> [Candidate] {
         let decoded: [Candidate]
         if scheme.shuangpinIndexName != nil {
             decoded = usesIndex(for: scheme)
-                ? decode(raw, context: context, limit: limit, expansion: true)
+                ? decode(raw, context: context, limit: limit, expansion: true,
+                         anchors: anchors)
                 : []
         } else {
-            decoded = decode(raw, context: context, limit: limit, expansion: true)
+            decoded = decode(raw, context: context, limit: limit, expansion: true,
+                             anchors: anchors)
         }
         guard !raw.isEmpty,
               !decoded.contains(where: { $0.text == raw }) else { return decoded }
+        // Under anchors every candidate is anchor-consistent; the raw literal
+        // would violate them, so don't append it.
+        if !anchors.isEmpty { return decoded }
         return decoded + [Candidate(text: raw, consumed: raw.count, tokens: [],
                                     units: "", segmentKeys: [raw.count],
                                     segmentChars: [raw.count], isEnglish: true)]

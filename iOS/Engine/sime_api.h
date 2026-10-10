@@ -64,6 +64,22 @@ SimeResults sime_decode_sentence(const SimeHandle *h, const char *input,
 SimeResults sime_decode_sentence_with_context(
     const SimeHandle *h, const char *input, const uint32_t *context,
     int context_count, int extra, bool expansion);
+// A correction anchor: input letters [a,b) decode to a fixed output. Chinese
+// anchors set english=false and token = the pinned single char's id; english
+// anchors (phase 2) set english=true and carry the literal text.
+typedef struct {
+  int a;
+  int b;
+  bool english;
+  uint32_t token;
+  const char *text;  // UTF-8, nullable; used for english/verification
+} SimeAnchor;
+// Anchor-constrained sentence decode: the beam keeps only paths consistent
+// with every anchor, so non-anchored positions re-rank under them.
+SimeResults sime_decode_sentence_with_anchors(
+    const SimeHandle *h, const char *input, const uint32_t *context,
+    int context_count, const SimeAnchor *anchors, int anchor_count, int extra,
+    bool expansion);
 // decode_str: single-word / multi-word candidates (all starting at input[0])
 SimeResults sime_decode_str(const SimeHandle *h, const char *input, int num);
 // One ordered correction list: fixed_prefix remains unchanged and returned

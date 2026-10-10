@@ -107,6 +107,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
             keyboardNeedsRebuild = true
         }
         composition.predictionEnabled = InputSettings.predictionEnabled
+        composition.reDecodeOnCorrection = InputSettings.reDecodeOnCorrection
         refreshReturnKeyAppearance()
         render()
         activateNativeDecoder()

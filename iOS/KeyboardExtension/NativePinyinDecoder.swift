@@ -186,6 +186,29 @@ final class NativePinyinDecoder: PinyinDecoder {
     }
 
     func decode(_ pinyin: String, context: [UInt32], limit: Int,
+                expansion: Bool, anchors: [DecodeAnchor]) -> [Candidate] {
+        guard !anchors.isEmpty else {
+            return decode(pinyin, context: context, limit: limit, expansion: expansion)
+        }
+        guard let handle, !pinyin.isEmpty else { return [] }
+        let cAnchors = anchors.map {
+            SimeAnchor(a: Int32($0.a), b: Int32($0.b), english: $0.english,
+                       token: $0.token, text: nil)
+        }
+        let extra = Int32(min(max(limit, 2), 20))
+        var results = context.withUnsafeBufferPointer { ctx in
+            cAnchors.withUnsafeBufferPointer { anc in
+                sime_decode_sentence_with_anchors(
+                    handle, pinyin,
+                    context.isEmpty ? nil : ctx.baseAddress, Int32(context.count),
+                    anc.baseAddress, Int32(anc.count), extra, expansion)
+            }
+        }
+        defer { sime_free_results(&results) }
+        return Array(unpack(results).prefix(limit))
+    }
+
+    func decode(_ pinyin: String, context: [UInt32], limit: Int,
                 expansion: Bool) -> [Candidate] {
         guard let handle, !pinyin.isEmpty else { return [] }
         var sentence = context.withUnsafeBufferPointer { buffer in
