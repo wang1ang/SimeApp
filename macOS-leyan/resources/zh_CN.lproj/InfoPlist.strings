@@ -1,0 +1,4 @@
+CFBundleName = "乐言输入法";
+CFBundleDisplayName = "乐言输入法";
+"com.leyan.inputmethod.LeyanIME" = "乐言输入法";
+"com.leyan.inputmethod.LeyanIME.Hans" = "乐言输入法";
