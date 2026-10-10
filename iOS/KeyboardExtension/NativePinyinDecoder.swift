@@ -191,9 +191,17 @@ final class NativePinyinDecoder: PinyinDecoder {
             return decode(pinyin, context: context, limit: limit, expansion: expansion)
         }
         guard let handle, !pinyin.isEmpty else { return [] }
-        let cAnchors = anchors.map {
-            SimeAnchor(a: Int32($0.a), b: Int32($0.b), english: $0.english,
-                       token: $0.token, text: nil)
+        let cAnchors = anchors.map { anchor -> SimeAnchor in
+            let text: UnsafeMutablePointer<CChar>? =
+                anchor.english && !anchor.text.isEmpty ? strdup(anchor.text) : nil
+            return SimeAnchor(a: Int32(anchor.a), b: Int32(anchor.b),
+                              english: anchor.english, token: anchor.token,
+                              text: UnsafePointer(text))
+        }
+        defer {
+            for anchor in cAnchors where anchor.text != nil {
+                free(UnsafeMutablePointer(mutating: anchor.text))
+            }
         }
         let extra = Int32(min(max(limit, 2), 20))
         var results = context.withUnsafeBufferPointer { ctx in

@@ -859,10 +859,10 @@ final class Composition {
             raw: raw, units: candidates.first?.units ?? "", top: candidates.first)
     }
 
-    /// Chinese anchors to feed the engine, or nil to use the old Swift overlay.
-    /// Only for the native shuangpin-index path, and only when every anchor is
-    /// a Chinese single-char anchor (English anchors are engine phase 2, so
-    /// their presence falls back to overlay to avoid dropping the choice).
+    /// Anchors to feed the engine, or nil to use the old Swift overlay. Only
+    /// for the native shuangpin-index path; Chinese anchors carry the pinned
+    /// token, English anchors are whole-span literals. nil (overlay) when an
+    /// anchor lacks a usable token or the scheme isn't a native sp index.
     private func engineAnchors() -> [DecodeAnchor]? {
         guard reDecodeOnCorrection, !anchorSegments.isEmpty,
               inputScheme.shuangpinIndexName != nil,
@@ -877,9 +877,13 @@ final class Composition {
             let english = !seg.text.isEmpty && seg.text.allSatisfy {
                 $0.isASCII && $0.isLetter
             }
-            if english { return nil }
-            guard let token = seg.tokens.first, token != 0 else { return nil }
-            out.append(DecodeAnchor(a: a, b: b, english: false, token: token))
+            if english {
+                out.append(DecodeAnchor(a: a, b: b, english: true, token: 0,
+                                        text: seg.text))
+            } else {
+                guard let token = seg.tokens.first, token != 0 else { return nil }
+                out.append(DecodeAnchor(a: a, b: b, english: false, token: token))
+            }
         }
         return out.isEmpty ? nil : out
     }
@@ -892,7 +896,9 @@ final class Composition {
             var parts = rawGroups(of: top)
             let used = parts.reduce(0) { $0 + $1.count }
             if used < raw.count { parts.append(String(raw.dropFirst(used))) }
-            return coalescingEnglishAnchorGroups(parts)
+            // Engine mode already groups by the decoder's spans; the overlay-era
+            // coalescing uses stale anchor syllable ranges and would mis-merge.
+            return usingEngineAnchors ? parts : coalescingEnglishAnchorGroups(parts)
         }
         var parts: [String] = []
         var pinyinPrefix = raw

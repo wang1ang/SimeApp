@@ -39,6 +39,17 @@ struct DecodeAnchor {
     let b: Int
     let english: Bool
     let token: UInt32
+    /// English anchors: the pinned literal S (for reuse matching). Empty for
+    /// Chinese anchors.
+    let text: String
+
+    init(a: Int, b: Int, english: Bool, token: UInt32, text: String = "") {
+        self.a = a
+        self.b = b
+        self.english = english
+        self.token = token
+        self.text = text
+    }
 }
 
 /// Keep the keyboard UI independent from the native Sime bridge.
