@@ -78,6 +78,49 @@ final class ShuangpinEndToEndTests: XCTestCase {
         XCTAssertEqual(c.select(index), "咱俩AA吧")
     }
 
+    func testLeadingUppercaseLetterDoesNotSwallowShuangpinSuffix() throws {
+        // A capital letter whose code happens to spell an English prefix (Bi)
+        // must stay a standalone literal so the shuangpin after it realigns
+        // (ie xc = 撤销), instead of gluing into "Biex" + a stray tail.
+        let c = try composition(for: "Biexc")
+        XCTAssertEqual(c.preedit, "B ie xc")
+        guard let index = c.candidates.firstIndex(where: { $0.text == "B撤销" }) else {
+            return XCTFail("Biexc should offer B撤销; got: \(c.candidates.map { $0.text })")
+        }
+        XCTAssertEqual(c.select(index), "B撤销")
+        XCTAssertFalse(c.isComposing)
+    }
+
+    func testLeadingUppercaseRealignsRegardlessOfTheLetter() throws {
+        // The realignment must not depend on which capital was typed: any
+        // leading uppercase letter stays its own literal and the shuangpin
+        // suffix (ie xc = 撤销) decodes the same.
+        for letter in ["H", "Z", "Q"] {
+            let c = try composition(for: "\(letter)iexc")
+            XCTAssertEqual(c.preedit, "\(letter) ie xc")
+            XCTAssertTrue(c.candidates.contains { $0.text == "\(letter)撤销" },
+                          "\(letter)iexc should offer \(letter)撤销; got: \(c.candidates.map { $0.text })")
+        }
+    }
+
+    func testLeadingUppercaseBeforeMultiSyllableWord() throws {
+        // B + vs go = 中国: the capital stays literal and both syllables align.
+        let c = try composition(for: "Bvsgo")
+        XCTAssertEqual(c.preedit, "B vs go")
+        guard let index = c.candidates.firstIndex(where: { $0.text == "B中国" }) else {
+            return XCTFail("Bvsgo should offer B中国; got: \(c.candidates.map { $0.text })")
+        }
+        XCTAssertEqual(c.select(index), "B中国")
+    }
+
+    func testCapitalizedEnglishWordIsNotSplitByUppercaseBoundary() throws {
+        // The uppercase-boundary edge must not break a genuine capitalized
+        // English word apart: Google stays one English candidate.
+        let c = try composition(for: "Google")
+        XCTAssertTrue(c.candidates.contains { $0.text == "Google" },
+                      "Google should stay one English candidate; got: \(c.candidates.map { $0.text })")
+    }
+
     func testUppercaseEnglishTailKeepsMarkedTextAndCaretAligned() throws {
         let c = try composition(for: "woyeO")
         XCTAssertEqual(c.preedit, "wo ye O")
