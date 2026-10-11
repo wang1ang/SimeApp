@@ -749,12 +749,11 @@ final class Composition {
                 activateCharacter(displayIndex(forSegment: next))
                 return nil
             }
-            // A replacement can span multiple final segments.
+            // A replacement can span multiple final segments. Commit the
+            // re-decoded top (engine mode) / anchor-overlaid top (overlay mode).
             if selectedRange.upperBound >= segmentCount {
-                let result = prefixText + renderedText(top.text)
-                predictionCandidates = []
-                clearComposition()
-                return result
+                return commitSentence(candidates.first?.text ?? top.text,
+                                      tokens: candidates.first?.tokens ?? [])
             }
             cursor = raw.count
             return nil
@@ -954,11 +953,12 @@ final class Composition {
 
     /// Anchors for the engine, or nil to use the Swift overlay. Native
     /// sp-index path only; nil if any Chinese anchor lacks a usable token.
-    /// True on the native shuangpin-index path with re-decode on, i.e. where
-    /// a selection becomes an engine anchor instead of a committed prefix.
+    /// True on the native engine with re-decode on (full pinyin or shuangpin
+    /// index), i.e. where a selection becomes an engine anchor, not a prefix.
+    /// Both decode `raw` 1:1 in input-letter coordinates, so anchor key ranges
+    /// line up with the engine input.
     private var supportsEngineAnchors: Bool {
         reDecodeOnCorrection
-            && inputScheme.shuangpinIndexName != nil
             && decoder.isNative
             && decoder.shuangpinIndexName == inputScheme.shuangpinIndexName
     }
