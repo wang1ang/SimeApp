@@ -9,16 +9,11 @@ final class Composition {
         let syllableRange: Range<Int>
         let text: String
         let tokens: [UInt32]
-        // The literal keys that produced this segment. Retained so a tap on an
-        // already-committed first-row character can restore them into `raw`
-        // and re-open selection. Empty for restored/lock-screen segments.
-        var sourceKeys: String = ""
     }
 
     private let decoder: PinyinDecoder
     private let inputScheme: InputScheme
     private(set) var raw = ""
-    private(set) var committed = ""
     private(set) var cursor = 0
     private(set) var candidates: [Candidate] = []
     private(set) var activeCharacterIndex: Int?
@@ -32,11 +27,9 @@ final class Composition {
     // supersede the local fallback whenever UIKit exposes that text.
     private var hostContextTokens: [UInt32]?
     private var contextTokens: [UInt32] = []
-    private var committedTokens: [UInt32] = []
-    // Sequential selections before `raw` and sparse user corrections inside
-    // `raw` use the same source-aligned segment representation. Correction
-    // anchors stay sparse so every sentence position remains editable.
-    private var prefixSegments: [CompositionSegment] = []
+    // Sparse user corrections inside `raw`. There is no in-composition prefix:
+    // a selection pins its span here and the whole input stays editable; the
+    // only "prefix" is already-committed host text, carried as context.
     private var anchorSegments: [CompositionSegment] = []
 
     /// Exposed so the controller can tell whether the active composition already
@@ -66,9 +59,6 @@ final class Composition {
     /// overlay/filter stands down (candidates are already anchor-consistent).
     private var usingEngineAnchors = false
 
-    private var prefixText: String { prefixSegments.map(\.text).joined() }
-    private var consumedKeyCount: Int { prefixSegments.last?.sourceKeyRange.upperBound ?? 0 }
-    private var consumedSyllableCount: Int { prefixSegments.last?.syllableRange.upperBound ?? 0 }
     private static let syllableSeparator = " "
     // Display-only grouping of `raw`, aligned 1:1 with the top candidate's
     // characters (first row). Computed in `refresh()`; never affects how many
@@ -82,11 +72,11 @@ final class Composition {
     }
     // Ungrouped preedit for commit paths: separators are display-only and must
     // never reach the host document.
-    private var rawPreedit: String { prefixText + raw }
-    var preedit: String { prefixText + groupedRaw }
-    /// The displayed preedit up to the composition cursor (committed prefix
-    /// plus grouped raw before the cursor). Callers strip this from the host
-    /// context so the marked, grouped pinyin never becomes model input.
+    private var rawPreedit: String { raw }
+    var preedit: String { groupedRaw }
+    /// The displayed preedit up to the composition cursor. Callers strip this
+    /// from the host context so the marked, grouped pinyin never becomes model
+    /// input.
     var markedPrefix: String {
         var out = ""
         var rawSeen = 0
@@ -96,12 +86,12 @@ final class Composition {
             out += String(group.prefix(cursor - rawSeen))
             rawSeen += group.count
         }
-        return prefixText + out
+        return out
     }
     var selectionLocation: Int { markedPrefix.utf16.count }
-    var isComposing: Bool { !raw.isEmpty || !prefixSegments.isEmpty }
+    var isComposing: Bool { !raw.isEmpty }
     var sentencePreview: String {
-        prefixText + renderedText(candidates.first?.text ?? "")
+        renderedText(candidates.first?.text ?? "")
     }
 
     struct SentenceSegment {
@@ -113,34 +103,15 @@ final class Composition {
         let segments: [SentenceSegment]
         let unitRanges: [Range<Int>]
 
-        init(text: String, segmentChars: [Int], anchors: [CompositionSegment] = [],
-             prefixLength: Int = 0) {
+        init(text: String, segmentChars: [Int], anchors: [CompositionSegment] = []) {
             let chars = Array(text)
             var segments: [SentenceSegment] = []
             var ranges = Array(repeating: 0..<0, count: segmentChars.count)
-            var display = min(prefixLength, chars.count)
+            var display = 0
             var unit = 0
             let anchorsByStart = Dictionary(
                 anchors.map { ($0.syllableRange.lowerBound, $0) },
                 uniquingKeysWith: { first, _ in first })
-            // Committed prefix: one segment per character, but keep ASCII
-            // letter runs together (a committed English piece like "Bi" is one
-            // tappable unit, not "B" + "i").
-            var pre = 0
-            while pre < display {
-                if chars[pre].isASCII && chars[pre].isLetter {
-                    let start = pre
-                    while pre < display, chars[pre].isASCII, chars[pre].isLetter {
-                        pre += 1
-                    }
-                    segments.append(SentenceSegment(
-                        text: String(chars[start..<pre]), displayIndex: start))
-                } else {
-                    segments.append(SentenceSegment(
-                        text: String(chars[pre]), displayIndex: pre))
-                    pre += 1
-                }
-            }
             // Per-segment character span for the segment at `index`, clamped.
             func span(_ index: Int, from offset: Int) -> Range<Int> {
                 let count = max(1, segmentChars[index])
@@ -202,8 +173,7 @@ final class Composition {
     private var sentenceMapping: SentenceMapping {
         SentenceMapping(text: sentencePreview,
                         segmentChars: segmentCharCounts(candidates.first),
-                        anchors: usingEngineAnchors ? anchorsAlignedToTop() : anchorSegments,
-                        prefixLength: prefixText.count)
+                        anchors: usingEngineAnchors ? anchorsAlignedToTop() : anchorSegments)
     }
 
     /// Re-map anchors onto the current top candidate's segmentation by their
@@ -260,7 +230,7 @@ final class Composition {
     }
 
     private func unitIndex(forDisplayIndex index: Int) -> Int {
-        let relative = index - prefixText.count
+        let relative = index
         guard relative >= 0, !candidates.isEmpty else { return relative }
         let mapping = sentenceMapping
         guard mapping.segments.contains(where: { $0.displayIndex == index }) else {
@@ -272,13 +242,12 @@ final class Composition {
     }
 
     /// The display-character index where segment `segmentIndex` of the top
-    /// candidate begins (relative to the sentence preview, offset by the
-    /// committed prefix). A segment can span several characters, so this is not
+    /// candidate begins. A segment can span several characters, so this is not
     /// the segment index itself.
     private func displayIndex(forSegment segmentIndex: Int) -> Int {
         let ranges = sentenceMapping.unitRanges
         guard ranges.indices.contains(segmentIndex) else {
-            return prefixText.count + segmentIndex
+            return segmentIndex
         }
         return ranges[segmentIndex].lowerBound
     }
@@ -441,18 +410,9 @@ final class Composition {
         anchorSegments.removeAll { $0.sourceKeyRange.upperBound > keyOffset }
     }
 
-    func restore(raw: String, committed: String) {
-        guard !raw.isEmpty || !committed.isEmpty else { return }
+    func restore(raw: String) {
+        guard !raw.isEmpty else { return }
         self.raw = raw
-        self.committed = committed
-        if !committed.isEmpty {
-            prefixSegments = [CompositionSegment(
-                sourceKeyRange: 0..<0,
-                syllableRange: 0..<0,
-                text: committed,
-                tokens: []
-            )]
-        }
         cursor = raw.count
         refresh()
     }
@@ -493,9 +453,6 @@ final class Composition {
 
     func delete() {
         guard !raw.isEmpty else {
-            committed = ""
-            committedTokens = []
-            prefixSegments = []
             anchorSegments = []
             return
         }
@@ -510,10 +467,8 @@ final class Composition {
     func select(_ index: Int) -> String? {
         guard candidates.indices.contains(index) else { return nil }
         let candidate = candidates[index]
-        // Engine re-decode (native sp index): the choice lands as anchors and
-        // the input stays editable; it only commits when it covers the last
-        // key (契约 11a/11b). Other schemes keep the legacy prefix commit.
-        guard supportsEngineAnchors else { return commitCandidateAsPrefix(candidate) }
+        // A selection pins its span as anchors and keeps the input editable;
+        // it commits to the host only when it covers the last key (契约 11a/11b).
         if rawConsumption(of: candidate) >= raw.count {
             return commitSentence(candidate.text, tokens: candidate.tokens)
         }
@@ -525,44 +480,11 @@ final class Composition {
         return nil
     }
 
-    /// Legacy path (full pinyin / non-native / re-decode off): commit the
-    /// candidate as a prefix, consume its keys off `raw`, decode the rest.
-    private func commitCandidateAsPrefix(_ candidate: Candidate) -> String? {
-        let consumed = rawConsumption(of: candidate)
-        let segments = max(1, segmentCharCounts(candidate).count)
-        let sourceKeys = String(raw.prefix(min(consumed, raw.count)))
-        appendPrefixSegment(text: candidate.text, keyCount: consumed,
-                            syllableCount: segments, tokens: candidate.tokens,
-                            sourceKeys: sourceKeys)
-        raw.removeFirst(min(consumed, raw.count))
-        cursor = max(0, cursor - consumed)
-        refresh()
-        guard raw.isEmpty else { return nil }
-        let result = prefixText
-        publishPredictions(for: committedTokens)
-        clearComposition()
-        return result
-    }
-
-    private func appendPrefixSegment(text: String, keyCount: Int,
-                                     syllableCount: Int, tokens: [UInt32],
-                                     sourceKeys: String = "") {
-        guard keyCount > 0, syllableCount > 0 else { return }
-        let keyStart = consumedKeyCount
-        let syllableStart = consumedSyllableCount
-        prefixSegments.append(CompositionSegment(
-            sourceKeyRange: keyStart..<(keyStart + keyCount),
-            syllableRange: syllableStart..<(syllableStart + syllableCount),
-            text: text, tokens: tokens, sourceKeys: sourceKeys))
-        committed = prefixText
-        committedTokens = prefixSegments.flatMap(\.tokens)
-    }
-
     /// Commit a full sentence to the host and clear the composition.
     private func commitSentence(_ text: String, tokens: [UInt32]) -> String {
-        let result = prefixText + renderedText(text)
+        let result = renderedText(text)
         if anchorSegments.isEmpty {
-            publishPredictions(for: committedTokens + tokens)
+            publishPredictions(for: tokens)
         } else {
             predictionCandidates = []
         }
@@ -664,18 +586,9 @@ final class Composition {
                 }
                 if coveredKeys != replacementKeyCount {
                     // Replacement keys cross top-segment boundaries (English
-                    // "Bi" over the B|ie split). On the engine path anchor it
-                    // by key range and re-decode (契约 11a), committing only if
-                    // it reaches the last key (11b); otherwise fall back to the
-                    // legacy prefix commit.
-                    guard supportsEngineAnchors else {
-                        activeCharacterIndex = nil
-                        activeShowsKeys = false
-                        replacementCandidates = []
-                        guard relativeActive == 0 else { refresh(); return nil }
-                        anchorSegments = []
-                        return commitCandidateAsPrefix(replacement)
-                    }
+                    // "Bi" over the B|ie split): anchor it by key range and
+                    // re-decode (契约 11a), committing only if it reaches the
+                    // last key (11b).
                     let keyStart = rawLength(forSegments: relativeActive, of: top)
                     let keyEnd = keyStart + replacementKeyCount
                     autoAnchorPrefix(before: relativeActive, of: top)
@@ -802,14 +715,6 @@ final class Composition {
             }
             return
         }
-        // A tap inside the sequentially committed prefix re-opens that
-        // selection: restore its keys (and every later prefix segment's keys)
-        // into `raw`, then activate the first syllable of the reopened span.
-        if index < prefixText.count {
-            guard uncommitPrefix(containingCharacter: index) else { return }
-            activateCharacter(prefixText.count)
-            return
-        }
         let sentence = sentencePreview
         guard Array(sentence).indices.contains(index),
               let top = candidates.first else { return }
@@ -822,7 +727,7 @@ final class Composition {
         // above moves it into a syllable).
         cursor = raw.count
         let current = renderedText(top.text)
-        let displayRelativeIndex = index - prefixText.count
+        let displayRelativeIndex = index
         let fixedPrefix = String(Array(current).prefix(max(0, displayRelativeIndex)))
         let nextAnchor = anchorSegments
             .map(\.syllableRange.lowerBound)
@@ -841,42 +746,15 @@ final class Composition {
         ).filter { segmentCharCounts($0).count <= maximumSpan }
     }
 
-    /// Undo the committed prefix segment that renders character `charIndex`
-    /// (and every segment after it), pushing their literal keys back to the
-    /// front of `raw` so the user can choose again. Anchors are relative to
-    /// the raw decode that just changed, so they are cleared.
-    private func uncommitPrefix(containingCharacter charIndex: Int) -> Bool {
-        var cumulative = 0
-        var start: Int?
-        for (segmentIndex, segment) in prefixSegments.enumerated() {
-            let count = segment.text.count
-            if charIndex < cumulative + count { start = segmentIndex; break }
-            cumulative += count
-        }
-        guard let firstRemoved = start else { return false }
-        let restoredKeys = prefixSegments[firstRemoved...]
-            .map(\.sourceKeys).joined()
-        guard !restoredKeys.isEmpty else { return false }
-        prefixSegments.removeSubrange(firstRemoved...)
-        raw = restoredKeys + raw
-        cursor += restoredKeys.count
-        committed = prefixText
-        committedTokens = prefixSegments.flatMap(\.tokens)
-        anchorSegments = []
-        replacementCandidates = []
-        refresh()
-        return true
-    }
-
     func commitBestOrRaw() -> String? {
         // Space on a mobile keyboard commits the top *sentence* candidate.
         // Do not retain a decoder's partial-consumption tail here: this UI
         // does not yet expose segmented selection, and retaining it caused
         // the final pinyin letter to remain in composition.
         if let candidate = candidates.first {
-            let result = prefixText + renderedText(candidate.text)
+            let result = renderedText(candidate.text)
             if anchorSegments.isEmpty {
-                publishPredictions(for: committedTokens + candidate.tokens)
+                publishPredictions(for: candidate.tokens)
             } else {
                 predictionCandidates = []
             }
@@ -897,14 +775,12 @@ final class Composition {
         guard isComposing else { return nil }
         let result: String
         if !anchorSegments.isEmpty, let candidate = candidates.first {
-            // A second-row correction anchors decoded characters inside the
-            // sentence, so the user has committed to Chinese. Decode the
-            // remaining (non-anchored) syllables via the top candidate
-            // instead of emitting their literal keys; the literal escape
-            // hatch only applies when no anchor selection is active.
-            result = prefixText + renderedText(candidate.text)
+            // Corrections anchored decoded characters, so the user committed to
+            // Chinese: decode the non-anchored syllables via the top candidate
+            // instead of emitting their literal keys.
+            result = renderedText(candidate.text)
         } else {
-            result = prefixText + literalTextWithAnchors()
+            result = literalTextWithAnchors()
         }
         predictionCandidates = []
         clearComposition()
@@ -927,9 +803,6 @@ final class Composition {
 
     private func clearComposition() {
         raw = ""
-        committed = ""
-        committedTokens = []
-        prefixSegments = []
         anchorSegments = []
         cursor = 0
         candidates = []
@@ -940,8 +813,7 @@ final class Composition {
     }
 
     private func refresh() {
-        let context = Array(
-            ((hostContextTokens ?? contextTokens) + committedTokens).suffix(32))
+        let context = Array((hostContextTokens ?? contextTokens).suffix(32))
         let anchors = engineAnchors()
         usingEngineAnchors = anchors != nil
         candidates = decoder.decodeComposition(

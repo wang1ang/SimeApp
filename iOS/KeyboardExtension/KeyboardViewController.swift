@@ -79,9 +79,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
             }
             self.usesNativeDecoder = true
             let raw = self.composition.raw
-            let committed = self.composition.committed
             self.composition = Composition(decoder: decoder, inputScheme: self.keyboardScheme)
-            self.composition.restore(raw: raw, committed: committed)
+            self.composition.restore(raw: raw)
             self.render()
         }
     }

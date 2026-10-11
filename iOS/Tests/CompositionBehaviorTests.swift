@@ -56,52 +56,6 @@ private final class RecordingPinyinDecoder: PinyinDecoder {
 }
 
 final class CompositionCandidateSelectionTests: XCTestCase {
-    func testFullPinyinPartialCandidateConsumesOnlyItsSourceRange() {
-        let decoder = RecordingPinyinDecoder()
-        decoder.decodeResult = { pinyin in
-            switch pinyin {
-            case "nihao":
-                return [Candidate(text: "你", consumed: 2, tokens: [11], units: "ni")]
-            case "hao":
-                return [Candidate(text: "好", consumed: 3, tokens: [22], units: "hao")]
-            default:
-                return []
-            }
-        }
-        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
-
-        "nihao".forEach { composition.append(String($0)) }
-
-        XCTAssertNil(composition.select(0))
-        XCTAssertEqual(composition.committed, "你")
-        XCTAssertEqual(composition.raw, "hao")
-        XCTAssertEqual(composition.sentencePreview, "你好")
-    }
-
-    func testShuangpinSelectionUsesDecoderSourceSpans() {
-        let decoder = RecordingPinyinDecoder()
-        decoder.decodeResult = { raw in
-            switch raw {
-            case "xcgo":
-                return [Candidate(text: "小", consumed: 2, tokens: [31], units: "",
-                                  segmentKeys: [2], segmentChars: [1])]
-            case "go":
-                return [Candidate(text: "国", consumed: 2, tokens: [32], units: "",
-                                  segmentKeys: [2], segmentChars: [1])]
-            default:
-                return []
-            }
-        }
-        let composition = Composition(decoder: decoder, inputScheme: .microsoftShuangpin)
-
-        "xcgo".forEach { composition.append(String($0)) }
-
-        XCTAssertNil(composition.select(0))
-        XCTAssertEqual(composition.committed, "小")
-        XCTAssertEqual(composition.raw, "go")
-        XCTAssertEqual(composition.sentencePreview, "小国")
-    }
-
     func testActiveCorrectionLabelRetainsLiteralShuangpinKeys() {
         let decoder = RecordingPinyinDecoder()
         decoder.decodeResult = { raw in
@@ -453,30 +407,6 @@ final class CompositionCandidateSelectionTests: XCTestCase {
         XCTAssertEqual(composition.commitPreeditLiterally(), "它他")
     }
 
-    func testSelectingAllSegmentsUsesEveryFixedTokenForPrediction() {
-        let decoder = RecordingPinyinDecoder()
-        decoder.decodeResult = { pinyin in
-            switch pinyin {
-            case "nihao":
-                return [Candidate(text: "你", consumed: 2, tokens: [11], units: "ni")]
-            case "hao":
-                return [Candidate(text: "好", consumed: 3, tokens: [22], units: "hao")]
-            default:
-                return []
-            }
-        }
-        decoder.predictionResult = { _ in
-            [Candidate(text: "呀", consumed: 0, tokens: [33])]
-        }
-        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
-
-        "nihao".forEach { composition.append(String($0)) }
-        XCTAssertNil(composition.select(0))
-        XCTAssertEqual(composition.select(0), "你好")
-
-        XCTAssertEqual(decoder.predictionCalls.last?.context, [11, 22])
-        XCTAssertEqual(composition.displayCandidates.map(\.text), ["呀"])
-    }
 }
 
 final class CompositionContextTests: XCTestCase {
@@ -663,28 +593,6 @@ final class CompositionEditingTests: XCTestCase {
         XCTAssertFalse(composition.isComposing)
         XCTAssertEqual(composition.raw, "")
         XCTAssertEqual(composition.candidates.count, 0)
-    }
-
-    func testReturnCommitsSelectedPrefixAndRemainingPinyinLiterally() {
-        let decoder = RecordingPinyinDecoder()
-        decoder.decodeResult = { pinyin in
-            switch pinyin {
-            case "nihao":
-                return [Candidate(text: "你", consumed: 2, tokens: [1], units: "ni")]
-            case "hao":
-                return [Candidate(text: "好", consumed: 3, tokens: [2], units: "hao")]
-            default:
-                return []
-            }
-        }
-        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
-
-        "nihao".forEach { composition.append(String($0)) }
-        XCTAssertNil(composition.select(0))
-
-        XCTAssertEqual(composition.commitPreeditLiterally(), "你hao")
-        XCTAssertFalse(composition.isComposing)
-        XCTAssertTrue(composition.displayCandidates.isEmpty)
     }
 
     func testSelectingFinalMultiSyllableCorrectionCommitsImmediately() {
@@ -925,46 +833,5 @@ final class CompositionPreeditGroupingTests: XCTestCase {
 
         // 4 raw keys + 1 separator inserted after the first group.
         XCTAssertEqual(composition.selectionLocation, 5)
-    }
-}
-
-final class CompositionPrefixReselectionTests: XCTestCase {
-    func testTappingACommittedPrefixCharacterReopensItsSelection() {
-        let decoder = RecordingPinyinDecoder()
-        decoder.decodeResult = { pinyin in
-            switch pinyin {
-            case "nihao":
-                return [
-                    Candidate(text: "你好", consumed: 5, tokens: [1, 2],
-                              units: "ni'hao"),
-                    Candidate(text: "你", consumed: 2, tokens: [1], units: "ni")
-                ]
-            case "hao":
-                return [Candidate(text: "好", consumed: 3, tokens: [2],
-                                  units: "hao")]
-            default:
-                return []
-            }
-        }
-        decoder.correctionResult = [
-            Candidate(text: "尼", consumed: 0, tokens: [3], units: "ni")
-        ]
-        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
-
-        "nihao".forEach { composition.append(String($0)) }
-        // Sequentially commit the single-character "你"; the remaining "hao"
-        // keeps composing.
-        XCTAssertNil(composition.select(1))
-        XCTAssertEqual(composition.committed, "你")
-        XCTAssertEqual(composition.raw, "hao")
-
-        // Tapping the already-committed first-row "你" must restore its keys
-        // and re-open selection for that syllable instead of doing nothing.
-        composition.activateCharacter(0)
-
-        XCTAssertEqual(composition.raw, "nihao")
-        XCTAssertEqual(composition.committed, "")
-        XCTAssertEqual(composition.activeCharacterIndex, 0)
-        XCTAssertEqual(composition.displayCandidates.map(\.text), ["尼"])
     }
 }

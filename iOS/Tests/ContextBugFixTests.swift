@@ -37,28 +37,6 @@ private final class CtxRecordingDecoder: PinyinDecoder {
 final class ContextBugFixTests: XCTestCase {
 
     // BUG 2 fixed: a fixed prefix segment feeds the re-decode of the leftover.
-    func testFixedPrefixEntersLeftoverDecodeContext() {
-        let decoder = CtxRecordingDecoder()
-        decoder.decodeResult = { pinyin in
-            switch pinyin {
-            case "beijingdaxue":
-                return [Candidate(text: "北京", consumed: 7,
-                                  tokens: [100, 101], units: "bei'jing")]
-            case "daxue":
-                return [Candidate(text: "大学", consumed: 5,
-                                  tokens: [200, 201], units: "da'xue")]
-            default: return []
-            }
-        }
-        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
-        "beijingdaxue".forEach { composition.append(String($0)) }
-
-        XCTAssertNil(composition.select(0))
-        XCTAssertEqual(composition.raw, "daxue")
-        let leftover = decoder.decodeCalls.last { $0.pinyin == "daxue" }
-        XCTAssertEqual(leftover?.context, [100, 101])
-    }
-
     // BUG 3 fixed: consecutive association taps accumulate context.
     func testConsecutiveAssociationAccumulatesContext() {
         let decoder = CtxRecordingDecoder()
