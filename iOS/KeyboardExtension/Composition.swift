@@ -485,6 +485,18 @@ final class Composition {
         return result
     }
 
+    /// After a correction, activate the segment of the re-decoded sentence that
+    /// begins at raw key `key`, so the user keeps correcting left to right.
+    private func advanceToSegment(startingAtKey key: Int) {
+        guard let top = candidates.first else { cursor = raw.count; return }
+        var acc = 0
+        for (seg, k) in segmentRawLengths(top).enumerated() {
+            if acc == key { activateCharacter(displayIndex(forSegment: seg)); return }
+            acc += k
+        }
+        cursor = raw.count
+    }
+
     private func clearActiveSelection() {
         activeCharacterIndex = nil
         activeShowsKeys = false
@@ -608,6 +620,7 @@ final class Composition {
                         return commitSentence(candidates.first?.text ?? "",
                                               tokens: candidates.first?.tokens ?? [])
                     }
+                    advanceToSegment(startingAtKey: keyEnd)
                     return nil
                 }
             }

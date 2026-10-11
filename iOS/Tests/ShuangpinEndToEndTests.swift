@@ -107,15 +107,15 @@ final class ShuangpinEndToEndTests: XCTestCase {
     func testCorrectionBubbleEnglishReplacementCrossingBoundaryAnchors() throws {
         // Top "B撤销" segments as B|ie|xc. Tapping the leading "B" opens its
         // correction list offering "Bi". "Bi" is 2 keys and crosses the B|ie
-        // boundary; selecting it anchors "Bi" by key range (no prefix), clears
-        // the active state, and stays editable with the tail re-decoded.
+        // boundary; selecting it anchors "Bi" by key range (no prefix), stays
+        // editable with the tail re-decoded, and advances to the next segment.
         let c = try composition(for: "Biexc")
         c.activateCharacter(0)
         guard let bi = c.displayCandidates.firstIndex(where: { $0.text == "Bi" }) else {
             return XCTFail("B correction list should offer Bi; got: \(c.displayCandidates.map { $0.text })")
         }
         XCTAssertNil(c.selectDisplayed(bi))
-        XCTAssertNil(c.activeCharacterIndex)
+        XCTAssertNotNil(c.activeCharacterIndex)
         XCTAssertEqual(c.preedit, "Bi ex c")
         XCTAssertEqual(c.sentenceSegments.first?.text, "Bi")
         XCTAssertTrue(c.isComposing)
