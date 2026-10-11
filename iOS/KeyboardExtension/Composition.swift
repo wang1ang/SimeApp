@@ -442,9 +442,7 @@ final class Composition {
         raw.insert(contentsOf: letter, at: insertion)
         cursor += letter.count
         predictionCandidates = []
-        activeCharacterIndex = nil
-        activeShowsKeys = false
-        replacementCandidates = []
+        clearActiveSelection()
         refresh()
     }
 
@@ -470,9 +468,7 @@ final class Composition {
             return commitSentence(candidate.text, tokens: candidate.tokens)
         }
         anchorFrontSelection(candidate)
-        activeCharacterIndex = nil
-        activeShowsKeys = false
-        replacementCandidates = []
+        clearActiveSelection()
         refresh()
         return nil
     }
@@ -487,6 +483,16 @@ final class Composition {
         }
         clearComposition()
         return result
+    }
+
+    private func clearActiveSelection() {
+        activeCharacterIndex = nil
+        activeShowsKeys = false
+        replacementCandidates = []
+    }
+
+    private func sortAnchors() {
+        anchorSegments.sort { $0.syllableRange.lowerBound < $1.syllableRange.lowerBound }
     }
 
     /// Anchor a front-row candidate over its own key spans (per character for
@@ -513,7 +519,7 @@ final class Composition {
             charCursor = charEnd
             keyCursor = keyEnd
         }
-        anchorSegments.sort { $0.syllableRange.lowerBound < $1.syllableRange.lowerBound }
+        sortAnchors()
     }
 
     private func rawConsumption(of candidate: Candidate) -> Int {
@@ -595,10 +601,8 @@ final class Composition {
                         syllableRange: relativeActive..<(relativeActive + 1),
                         text: replacement.text,
                         tokens: replacement.tokens))
-                    anchorSegments.sort { $0.syllableRange.lowerBound < $1.syllableRange.lowerBound }
-                    activeCharacterIndex = nil
-                    activeShowsKeys = false
-                    replacementCandidates = []
+                    sortAnchors()
+                    clearActiveSelection()
                     refresh()
                     if keyEnd >= raw.count {
                         return commitSentence(candidates.first?.text ?? "",
@@ -646,12 +650,8 @@ final class Composition {
             // reading, so re-decoding under this anchor can't disturb the
             // characters the user already accepted on its left.
             autoAnchorLeftContext(before: relativeActive, of: top)
-            anchorSegments.sort {
-                $0.syllableRange.lowerBound < $1.syllableRange.lowerBound
-            }
-            activeCharacterIndex = nil
-            activeShowsKeys = false
-            replacementCandidates = []
+            sortAnchors()
+            clearActiveSelection()
             refresh()
 
             let next = selectedRange.upperBound
@@ -691,9 +691,7 @@ final class Composition {
     /// 关闭第一行选中（气泡消失时用）：取消高亮，恢复普通候选/联想。
     func deactivateCharacter() {
         guard activeCharacterIndex != nil else { return }
-        activeCharacterIndex = nil
-        activeShowsKeys = false
-        replacementCandidates = []
+        clearActiveSelection()
         displayGroups = []
     }
 
@@ -803,9 +801,7 @@ final class Composition {
         anchorSegments = []
         cursor = 0
         candidates = []
-        activeCharacterIndex = nil
-        activeShowsKeys = false
-        replacementCandidates = []
+        clearActiveSelection()
         displayGroups = []
     }
 
