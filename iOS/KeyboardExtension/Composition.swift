@@ -1,9 +1,9 @@
 import Foundation
 
 final class Composition {
-    /// One immutable selection in the composition source, aligned to the raw
-    /// keys and syllables it consumed. Prefix segments carry a whole selection
-    /// (possibly multi-syllable); correction anchors are one syllable each.
+    /// One correction anchor: pinned output text aligned to the raw keys and
+    /// syllable positions it covers. Usually one syllable; a multi-syllable
+    /// word anchor spans several.
     private struct CompositionSegment {
         let sourceKeyRange: Range<Int>
         let syllableRange: Range<Int>
@@ -70,9 +70,6 @@ final class Composition {
     private var groupedRaw: String {
         rawSyllableGroups.joined(separator: Self.syllableSeparator)
     }
-    // Ungrouped preedit for commit paths: separators are display-only and must
-    // never reach the host document.
-    private var rawPreedit: String { raw }
     var preedit: String { groupedRaw }
     /// The displayed preedit up to the composition cursor. Callers strip this
     /// from the host context so the marked, grouped pinyin never becomes model
@@ -527,7 +524,7 @@ final class Composition {
     /// Auto-anchor every segment before `segmentIndex` to the current top
     /// reading (segments already anchored are left as-is), so a correction
     /// keeps its left context fixed through the anchored re-decode.
-    private func autoAnchorPrefix(before segmentIndex: Int, of top: Candidate) {
+    private func autoAnchorLeftContext(before segmentIndex: Int, of top: Candidate) {
         guard segmentIndex > 0 else { return }
         let segChars = segmentCharCounts(top)
         guard segChars.count >= segmentIndex else { return }
@@ -591,7 +588,7 @@ final class Composition {
                     // last key (11b).
                     let keyStart = rawLength(forSegments: relativeActive, of: top)
                     let keyEnd = keyStart + replacementKeyCount
-                    autoAnchorPrefix(before: relativeActive, of: top)
+                    autoAnchorLeftContext(before: relativeActive, of: top)
                     anchorSegments.removeAll { $0.sourceKeyRange.overlaps(keyStart..<keyEnd) }
                     anchorSegments.append(CompositionSegment(
                         sourceKeyRange: keyStart..<keyEnd,
@@ -648,7 +645,7 @@ final class Composition {
             // Lock everything before the chosen position to the current top
             // reading, so re-decoding under this anchor can't disturb the
             // characters the user already accepted on its left.
-            autoAnchorPrefix(before: relativeActive, of: top)
+            autoAnchorLeftContext(before: relativeActive, of: top)
             anchorSegments.sort {
                 $0.syllableRange.lowerBound < $1.syllableRange.lowerBound
             }
@@ -762,7 +759,7 @@ final class Composition {
             return result
         }
         guard isComposing else { return nil }
-        let result = rawPreedit
+        let result = raw
         predictionCandidates = []
         clearComposition()
         return result
