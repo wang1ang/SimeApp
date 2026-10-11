@@ -632,26 +632,38 @@ final class Composition {
                 : rawLength(forSegments: relativeActive + span, of: top)
             guard keyEnd > keyStart else { return nil }
             let selectedRange = relativeActive..<(relativeActive + span)
-            // Anchor per segment: re-choosing a position just replaces that
-            // segment's anchor, leaving the rest locked.
+            // Anchor faithfully, one anchor per replacement segment
+            // (那|篇|paper): a Chinese segment carries its char + token, an
+            // English segment its literal letters. Re-choosing a position just
+            // replaces that segment's anchors, leaving the rest locked.
             anchorSegments.removeAll { $0.syllableRange.overlaps(selectedRange) }
             let chars = Array(replacement.text)
-            let tokensAligned = replacement.tokens.count == span
-            if chars.count == span {
+            let replSegChars = segmentCharCounts(replacement)
+            if replSegChars.count == span, replSegChars.reduce(0, +) == chars.count {
+                var charCursor = 0
+                var tokenCursor = 0
                 for offset in 0..<span {
                     let seg = relativeActive + offset
                     let start = rawLength(forSegments: seg, of: top)
                     let end = rawLength(forSegments: seg + 1, of: top)
+                    let n = replSegChars[offset]
+                    let text = String(chars[charCursor..<charCursor + n])
+                    charCursor += n
+                    let english = text.allSatisfy { $0.isASCII && $0.isLetter }
+                    var tokens: [UInt32] = []
+                    if !english, tokenCursor + n <= replacement.tokens.count {
+                        tokens = Array(replacement.tokens[tokenCursor..<tokenCursor + n])
+                        tokenCursor += n
+                    }
                     anchorSegments.append(CompositionSegment(
                         sourceKeyRange: start..<end,
                         syllableRange: seg..<(seg + 1),
-                        text: String(chars[offset]),
-                        tokens: tokensAligned ? [replacement.tokens[offset]] : []
-                    ))
+                        text: text,
+                        tokens: tokens))
                 }
             } else {
-                // A segment can produce several characters (多音节词): keep the
-                // whole span as one anchor rather than splitting per character.
+                // No usable per-segment breakdown (e.g. a stub candidate): keep
+                // the whole span as one anchor.
                 anchorSegments.append(CompositionSegment(
                     sourceKeyRange: keyStart..<keyEnd,
                     syllableRange: selectedRange,
@@ -667,15 +679,14 @@ final class Composition {
             clearActiveSelection()
             refresh()
 
-            let next = selectedRange.upperBound
-            if next < segmentCount {
-                activateCharacter(displayIndex(forSegment: next))
-                return nil
+            // Advance / commit by key position (robust across re-segmentation),
+            // same as the crossing branch.
+            if keyEnd >= raw.count {
+                return commitSentence(candidates.first?.text ?? top.text,
+                                      tokens: candidates.first?.tokens ?? [])
             }
-            // Reached the last segment: commit the re-decoded top (engine mode)
-            // / anchor-overlaid top (overlay mode).
-            return commitSentence(candidates.first?.text ?? top.text,
-                                  tokens: candidates.first?.tokens ?? [])
+            advanceToSegment(startingAtKey: keyEnd)
+            return nil
         }
         return select(index)
     }
@@ -851,8 +862,11 @@ final class Composition {
                 out.append(DecodeAnchor(a: a, b: b, english: true, token: 0,
                                         text: seg.text))
             } else {
-                guard let token = seg.tokens.first, token != 0 else { return nil }
-                out.append(DecodeAnchor(a: a, b: b, english: false, token: token))
+                // Match by character (text); the token is only an injection
+                // fallback, so a tokenless anchor still constrains the decode.
+                out.append(DecodeAnchor(a: a, b: b, english: false,
+                                        token: seg.tokens.first ?? 0,
+                                        text: seg.text))
             }
         }
         return out.isEmpty ? nil : out
@@ -931,3 +945,4 @@ final class Composition {
         return result
     }
 }
+

@@ -69,6 +69,19 @@ final class ShuangpinEndToEndTests: XCTestCase {
         XCTAssertEqual(c.activeCharacterIndex, 6)
     }
 
+    // 那篇paper: selecting the whole mixed candidate must commit it verbatim.
+    // Its English tail "paper" carries no token, so a lossy anchor re-decode
+    // used to drop it and commit only "那篇".
+    func testSelectingWholeMixedCandidateCommitsEnglishTail() throws {
+        let c = try composition(for: "napmpaper")
+        c.activateCharacter(0)
+        guard let idx = c.displayCandidates.firstIndex(where: { $0.text == "那篇paper" }) else {
+            throw XCTSkip("engine no longer offers 那篇paper; got: \(c.displayCandidates.map { $0.text })")
+        }
+        XCTAssertEqual(c.selectDisplayed(idx), "那篇paper")
+        XCTAssertFalse(c.isComposing)
+    }
+
     func testUppercaseEnglishIslandBetweenShuangpinSyllables() throws {
         let c = try composition(for: "zjlwAAba")
         XCTAssertEqual(c.preedit, "zj lw AA ba")
