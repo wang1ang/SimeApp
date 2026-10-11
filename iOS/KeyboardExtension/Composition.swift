@@ -672,14 +672,10 @@ final class Composition {
                 activateCharacter(displayIndex(forSegment: next))
                 return nil
             }
-            // A replacement can span multiple final segments. Commit the
-            // re-decoded top (engine mode) / anchor-overlaid top (overlay mode).
-            if selectedRange.upperBound >= segmentCount {
-                return commitSentence(candidates.first?.text ?? top.text,
-                                      tokens: candidates.first?.tokens ?? [])
-            }
-            cursor = raw.count
-            return nil
+            // Reached the last segment: commit the re-decoded top (engine mode)
+            // / anchor-overlaid top (overlay mode).
+            return commitSentence(candidates.first?.text ?? top.text,
+                                  tokens: candidates.first?.tokens ?? [])
         }
         return select(index)
     }
