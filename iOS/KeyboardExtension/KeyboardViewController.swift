@@ -225,7 +225,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     private func makeBottomRow() -> UIStackView {
         let row = UIStackView()
         row.axis = .horizontal
-        row.spacing = 8
+        row.spacing = 4
         row.distribution = .fill
         row.heightAnchor.constraint(equalToConstant: 43).isActive = true
 
@@ -234,6 +234,9 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
         let space = keyButton("space")
         let enter = keyButton("return")
         returnKeyButton = enter
+        let comma = keyButton("，")
+        let period = keyButton("。")
+        let question = keyButton("？")
         // Add every key to the row before activating cross-key width
         // constraints. Constraining against a sibling that is not yet in the
         // shared stack view has no common ancestor and aborts (crashes when
@@ -243,9 +246,18 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
             globe = inputModeButton()
             row.addArrangedSubview(globe!)
         }
-        [mode, space, enter].forEach { row.addArrangedSubview($0) }
-        mode.widthAnchor.constraint(equalTo: enter.widthAnchor).isActive = true
-        space.widthAnchor.constraint(equalTo: mode.widthAnchor, multiplier: 2.1).isActive = true
+        if keyboardPage == .letters {
+            [mode, comma, space, period, question, enter].forEach { row.addArrangedSubview($0) }
+            comma.widthAnchor.constraint(equalTo: mode.widthAnchor, multiplier: 0.65).isActive = true
+            space.widthAnchor.constraint(equalTo: mode.widthAnchor, multiplier: 2.1).isActive = true
+            period.widthAnchor.constraint(equalTo: mode.widthAnchor, multiplier: 0.65).isActive = true
+            question.widthAnchor.constraint(equalTo: mode.widthAnchor, multiplier: 0.65).isActive = true
+            enter.widthAnchor.constraint(equalTo: mode.widthAnchor, multiplier: 1.5).isActive = true
+        } else {
+            [mode, space, enter].forEach { row.addArrangedSubview($0) }
+            mode.widthAnchor.constraint(equalTo: enter.widthAnchor).isActive = true
+            space.widthAnchor.constraint(equalTo: mode.widthAnchor, multiplier: 2.1).isActive = true
+        }
         globe?.widthAnchor.constraint(equalTo: mode.widthAnchor, multiplier: 0.75).isActive = true
         return row
     }
@@ -267,6 +279,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
         }
         button.setTitleColor(.label, for: .normal)
         button.titleLabel?.font = .systemFont(ofSize: 18)
+        button.titleLabel?.adjustsFontSizeToFitWidth = title == "return"
+        button.titleLabel?.minimumScaleFactor = 0.75
         // Highlight Shift while a one-shot uppercase is armed.
         button.backgroundColor = (title == "⇧" && shifted)
             ? UIColor.label.withAlphaComponent(0.18) : .tertiarySystemBackground
