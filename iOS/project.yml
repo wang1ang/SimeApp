@@ -7,6 +7,7 @@ settings:
   base:
     SWIFT_VERSION: "5.0"
     DEVELOPMENT_TEAM: "8K3SQFBAJG"
+    CODE_SIGN_STYLE: Automatic
 schemes:
   Sime:
     build:
