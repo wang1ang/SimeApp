@@ -186,7 +186,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
         NSLayoutConstraint.activate([
             root.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 5),
             root.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -5),
-            root.topAnchor.constraint(equalTo: view.topAnchor, constant: -2),
+            root.topAnchor.constraint(equalTo: view.topAnchor, constant: -1),
             root.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         ])
 
@@ -210,6 +210,9 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
         schemeToggle.setContentHuggingPriority(.required, for: .horizontal)
         schemeToggle.setContentCompressionResistancePriority(.required, for: .horizontal)
         schemeToggle.setTitleTextAttributes([.font: UIFont.systemFont(ofSize: 13)], for: .normal)
+        // Cap the control to the candidate-row height so it is not clipped by
+        // the row's top (the control's intrinsic height exceeds 28pt).
+        schemeToggle.heightAnchor.constraint(equalToConstant: 26).isActive = true
         schemeToggle.addTarget(self, action: #selector(schemeToggleChanged), for: .valueChanged)
         candidateRow.addArrangedSubview(schemeToggle)
         root.addArrangedSubview(candidateRow)
