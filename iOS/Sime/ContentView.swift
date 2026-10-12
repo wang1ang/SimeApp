@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct ContentView: View {
+    @Environment(\.scenePhase) private var scenePhase
     @State private var scheme = InputSettings.scheme
     @State private var prediction = InputSettings.predictionEnabled
     @State private var reDecode = InputSettings.reDecodeOnCorrection
@@ -76,6 +77,14 @@ struct ContentView: View {
             }
             .scrollDismissesKeyboard(.interactively)
             .navigationTitle("乐言输入法")
+        }
+        .onChange(of: scenePhase) { phase in
+            // Pick up a scheme the keyboard may have switched (shared via the
+            // App Group) when the app opens or returns to the foreground.
+            guard phase == .active else { return }
+            scheme = InputSettings.scheme
+            prediction = InputSettings.predictionEnabled
+            reDecode = InputSettings.reDecodeOnCorrection
         }
     }
 }
