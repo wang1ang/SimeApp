@@ -272,12 +272,12 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
             space.widthAnchor.constraint(equalTo: mode.widthAnchor, multiplier: 2.1).isActive = true
             period.widthAnchor.constraint(equalTo: mode.widthAnchor, multiplier: 0.65).isActive = true
             question.widthAnchor.constraint(equalTo: mode.widthAnchor, multiplier: 0.65).isActive = true
-            enter.widthAnchor.constraint(equalTo: mode.widthAnchor, multiplier: 1.5).isActive = true
         } else {
             [mode, space, enter].forEach { row.addArrangedSubview($0) }
-            mode.widthAnchor.constraint(equalTo: enter.widthAnchor).isActive = true
             space.widthAnchor.constraint(equalTo: mode.widthAnchor, multiplier: 2.1).isActive = true
         }
+        // The return key's width is set by rebuildKeyboard, which aligns its
+        // left edge with the key above it.
         return row
     }
 
@@ -968,7 +968,16 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
                 makeRow(["⇧"] + Array(bottom).map(String.init) + ["delete"])
             )
         }
+        // The row just built (ending in delete/⌫) is the alignment reference:
+        // the return key's left edge lines up with the key left of ⌫ (m on the
+        // letters page) so the action key is aligned across all three pages.
+        let referenceRow = keyboardStack.arrangedSubviews.last as? UIStackView
         keyboardStack.addArrangedSubview(makeBottomRow())
+        if let referenceRow, referenceRow.arrangedSubviews.count >= 2,
+           let enter = returnKeyButton {
+            let target = referenceRow.arrangedSubviews[referenceRow.arrangedSubviews.count - 2]
+            enter.leadingAnchor.constraint(equalTo: target.leadingAnchor).isActive = true
+        }
     }
 
     private func render() {
