@@ -4,6 +4,14 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     private var composition = KeyboardViewController.makeComposition()
     private let sentenceScrollView = UIScrollView()
     private let sentenceBar = UIView()
+    // Candidate row container: scrollable candidates + a right-aligned
+    // 全拼/双拼 toggle shown only on the number/symbol pages (where the
+    // candidate area is otherwise empty).
+    private let candidateRow = UIStackView()
+    private let schemeToggle = UISegmentedControl(items: ["全拼", "双拼"])
+    // Bottom-row key that shows the current scheme (拼音/双拼) on non-letter
+    // pages; updated in place when the toggle switches schemes.
+    private weak var schemeModeKey: UIButton?
     // Tap gesture to pick a trailing whole-sentence candidate in row one.
     private let sentenceCandidateTap = UITapGestureRecognizer()
     private let preferredCandidateSwipe = UIPanGestureRecognizer()
@@ -88,6 +96,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     override func viewDidLoad() {
         super.viewDidLoad()
         usesNativeDecoder = composition.decoderIsNative
+        recordShuangpinScheme()
         setupView()
         displayedReturnKeyType = textDocumentProxy.returnKeyType
         render()
@@ -105,6 +114,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
             usesNativeDecoder = composition.decoderIsNative
             keyboardNeedsRebuild = true
         }
+        recordShuangpinScheme()
         composition.predictionEnabled = InputSettings.predictionEnabled
         composition.reDecodeOnCorrection = InputSettings.reDecodeOnCorrection
         refreshReturnKeyAppearance()
@@ -192,8 +202,18 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
         preferredCandidateSwipe.maximumNumberOfTouches = 1
         preferredCandidateSwipe.cancelsTouchesInView = true
         sentenceScrollView.addGestureRecognizer(preferredCandidateSwipe)
-        root.addArrangedSubview(sentenceScrollView)
-        root.setCustomSpacing(1, after: sentenceScrollView)
+        candidateRow.axis = .horizontal
+        candidateRow.spacing = 6
+        candidateRow.alignment = .center
+        candidateRow.addArrangedSubview(sentenceScrollView)
+        schemeToggle.selectedSegmentIndex = keyboardScheme.isShuangpin ? 1 : 0
+        schemeToggle.setContentHuggingPriority(.required, for: .horizontal)
+        schemeToggle.setContentCompressionResistancePriority(.required, for: .horizontal)
+        schemeToggle.setTitleTextAttributes([.font: UIFont.systemFont(ofSize: 13)], for: .normal)
+        schemeToggle.addTarget(self, action: #selector(schemeToggleChanged), for: .valueChanged)
+        candidateRow.addArrangedSubview(schemeToggle)
+        root.addArrangedSubview(candidateRow)
+        root.setCustomSpacing(1, after: candidateRow)
 
         keyboardStack.axis = .vertical
         keyboardStack.spacing = 5
@@ -231,6 +251,9 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
 
         // Mirrors the native Chinese keyboard's compact bottom row.
         let mode = keyButton(keyboardPage == .letters ? "123" : schemeLabel)
+        // Keep a handle to the scheme label key so the 全拼/双拼 toggle can
+        // refresh it without rebuilding the whole page.
+        schemeModeKey = keyboardPage == .letters ? nil : mode
         let space = keyButton("space")
         let enter = keyButton("return")
         returnKeyButton = enter
@@ -547,6 +570,51 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
             textDocumentProxy.insertText(suffix)
         }
         render()
+    }
+
+    private func recordShuangpinScheme() {
+        if keyboardScheme.isShuangpin { InputSettings.lastShuangpinScheme = keyboardScheme }
+    }
+
+    // Right-aligned candidate-row toggle: visible only on number/symbol pages;
+    // reflects whether the active scheme is full pinyin or a Shuangpin.
+    private func updateSchemeToggle() {
+        schemeToggle.isHidden = keyboardPage == .letters
+        let index = keyboardScheme.isShuangpin ? 1 : 0
+        if schemeToggle.selectedSegmentIndex != index {
+            schemeToggle.selectedSegmentIndex = index
+        }
+    }
+
+    @objc private func schemeToggleChanged() {
+        let target: InputScheme = schemeToggle.selectedSegmentIndex == 1
+            ? InputSettings.lastShuangpinScheme : .fullPinyin
+        applyScheme(target)
+    }
+
+    // Switch schemes from inside the keyboard, mirroring the app-side switch:
+    // commit any pending composition first (full/Shuangpin raw keys differ),
+    // then rebuild with a fresh Composition and load the matching engine.
+    private func applyScheme(_ scheme: InputScheme) {
+        guard scheme != keyboardScheme else { return }
+        if composition.isComposing { commitComposition() }
+        if scheme.isShuangpin { InputSettings.lastShuangpinScheme = scheme }
+        InputSettings.scheme = scheme
+        keyboardScheme = scheme
+        composition = Self.makeComposition(inputScheme: scheme)
+        usesNativeDecoder = composition.decoderIsNative
+        composition.predictionEnabled = InputSettings.predictionEnabled
+        composition.reDecodeOnCorrection = InputSettings.reDecodeOnCorrection
+        // The visible number/symbol page is scheme-independent except for the
+        // bottom-row scheme label; update it in place instead of tearing down
+        // and rebuilding every key (the letters page is rebuilt on entry).
+        if keyboardPage == .letters {
+            keyboardNeedsRebuild = true
+        } else {
+            schemeModeKey?.setTitle(schemeLabel, for: .normal)
+        }
+        render()
+        activateNativeDecoder()
     }
 
     /// While editing a syllable's pinyin (the edit cursor sits before the end
@@ -930,6 +998,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
             rebuildKeyboard()
             keyboardNeedsRebuild = false
         }
+        updateSchemeToggle()
         updateFinalKeyHighlights()
         // Leaving char-editing mode clears any tone filter.
         if composition.activeCharacterIndex == nil { selectedTone = nil }
