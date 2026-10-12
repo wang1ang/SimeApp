@@ -177,6 +177,18 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
         }
     }
 
+    // iOS 26 adds a glass "scroll edge effect" to UIScrollView that, over the
+    // keyboard's translucent background, overlays the short candidate strip and
+    // makes the candidates look like heavy frosted glass. Hide it on every edge.
+    private func disableScrollEdgeEffects(_ scrollView: UIScrollView) {
+        if #available(iOS 26.0, *) {
+            scrollView.topEdgeEffect.isHidden = true
+            scrollView.bottomEdgeEffect.isHidden = true
+            scrollView.leftEdgeEffect.isHidden = true
+            scrollView.rightEdgeEffect.isHidden = true
+        }
+    }
+
     private func setupView() {
         // Let the keyboard host's backdrop show through under a faint system tint.
         view.backgroundColor = UIColor.secondarySystemBackground.withAlphaComponent(0.05)
@@ -194,6 +206,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
         ])
 
         sentenceScrollView.showsHorizontalScrollIndicator = false
+        disableScrollEdgeEffects(sentenceScrollView)
         sentenceScrollView.addSubview(sentenceBar)
         sentenceScrollView.heightAnchor.constraint(equalToConstant: 28).isActive = true
         sentenceCandidateTap.addTarget(self, action: #selector(sentenceCandidateTapped(_:)))
@@ -843,6 +856,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
         bubble.layer.shadowOffset = CGSize(width: 0, height: 2)
 
         let scroll = UIScrollView()
+        disableScrollEdgeEffects(scroll)
         scroll.showsVerticalScrollIndicator = true
         let content = UIView()
         let contentTap = UITapGestureRecognizer(target: self, action: #selector(bubbleContentTapped(_:)))
