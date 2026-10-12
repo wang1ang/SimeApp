@@ -52,6 +52,16 @@ enum InputSettings {
         set { defaults.set(newValue.rawValue, forKey: "inputScheme") }
     }
 
+    /// The most recently used Shuangpin scheme, restored when the in-keyboard
+    /// 全拼/双拼 toggle flips back to 双拼 (which cannot name a specific one).
+    static var lastShuangpinScheme: InputScheme {
+        get {
+            let saved = InputScheme(rawValue: defaults.string(forKey: "lastShuangpinScheme") ?? "")
+            return (saved?.isShuangpin == true) ? saved! : .microsoftShuangpin
+        }
+        set { if newValue.isShuangpin { defaults.set(newValue.rawValue, forKey: "lastShuangpinScheme") } }
+    }
+
     /// Whether the empty-preedit association bar is shown after committing.
     static var predictionEnabled: Bool {
         get { defaults.object(forKey: "predictionEnabled") as? Bool ?? true }
