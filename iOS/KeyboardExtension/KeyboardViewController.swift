@@ -265,13 +265,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
         let question = keyButton("？")
         // Add every key to the row before activating cross-key width
         // constraints. Constraining against a sibling that is not yet in the
-        // shared stack view has no common ancestor and aborts (crashes when
-        // the globe key is present, e.g. on iPad).
-        var globe: UIButton?
-        if needsInputModeSwitchKey {
-            globe = inputModeButton()
-            row.addArrangedSubview(globe!)
-        }
+        // shared stack view has no common ancestor and aborts.
         if keyboardPage == .letters {
             [mode, comma, space, period, question, enter].forEach { row.addArrangedSubview($0) }
             comma.widthAnchor.constraint(equalTo: mode.widthAnchor, multiplier: 0.65).isActive = true
@@ -284,7 +278,6 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
             mode.widthAnchor.constraint(equalTo: enter.widthAnchor).isActive = true
             space.widthAnchor.constraint(equalTo: mode.widthAnchor, multiplier: 2.1).isActive = true
         }
-        globe?.widthAnchor.constraint(equalTo: mode.widthAnchor, multiplier: 0.75).isActive = true
         return row
     }
 
@@ -343,21 +336,6 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
             hint.trailingAnchor.constraint(equalTo: button.trailingAnchor, constant: -6),
             hint.bottomAnchor.constraint(equalTo: button.bottomAnchor, constant: -4),
         ])
-    }
-
-    private func inputModeButton() -> UIButton {
-        let button = KeyButton()
-        button.setImage(UIImage(systemName: "globe"), for: .normal)
-        button.tintColor = .label
-        button.backgroundColor = .tertiarySystemBackground
-        button.layer.cornerRadius = 10
-        button.layer.cornerCurve = .continuous
-        // UIInputViewController supplies Apple's input-mode picker here. It
-        // includes keyboard placement controls on devices that support them.
-        button.addTarget(self,
-                         action: #selector(handleInputModeList(from:with:)),
-                         for: .allTouchEvents)
-        return button
     }
 
     private func returnKeyTitle() -> String {
