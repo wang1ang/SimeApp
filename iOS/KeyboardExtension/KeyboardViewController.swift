@@ -12,9 +12,9 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     // Bottom-row key that shows the current scheme (拼音/双拼) on non-letter
     // pages; updated in place when the toggle switches schemes.
     private weak var schemeModeKey: UIButton?
-    // Letter-page bottom-row punctuation keys (，。？), width-anchored to a
-    // letter key by rebuildKeyboard.
-    private var letterPunctuationKeys: [UIButton] = []
+    // Bottom-row punctuation keys (，。？) on every page, width-anchored to a
+    // top-row key by rebuildKeyboard.
+    private var bottomPunctuationKeys: [UIButton] = []
     // Tap gesture to pick a trailing whole-sentence candidate in row one.
     private let sentenceCandidateTap = UITapGestureRecognizer()
     private let preferredCandidateSwipe = UIPanGestureRecognizer()
@@ -281,20 +281,20 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
         let question = keyButton("？")
         // Add every key to the row before activating cross-key width
         // constraints. Constraining against a sibling that is not yet in the
-        // shared stack view has no common ancestor and aborts.
-        if keyboardPage == .letters {
-            [mode, comma, space, period, question, enter].forEach { row.addArrangedSubview($0) }
-            space.widthAnchor.constraint(equalTo: mode.widthAnchor, multiplier: 2.1).isActive = true
-            // Punctuation keys match the letter-key width of the rows above;
-            // rebuildKeyboard anchors them once the reference row exists.
-            letterPunctuationKeys = [comma, period, question]
-        } else {
-            [mode, space, enter].forEach { row.addArrangedSubview($0) }
-            space.widthAnchor.constraint(equalTo: mode.widthAnchor, multiplier: 2.1).isActive = true
-            letterPunctuationKeys = []
-        }
-        // The return key's width is set by rebuildKeyboard, which aligns its
-        // left edge with the key above it.
+        // shared stack view has no common ancestor and aborts. The same
+        // 6-key layout is used on every page for a consistent look.
+        [mode, comma, space, period, question, enter].forEach { row.addArrangedSubview($0) }
+        space.widthAnchor.constraint(equalTo: mode.widthAnchor, multiplier: 2.1).isActive = true
+        // Punctuation keys match the letter-key width of the rows above;
+        // rebuildKeyboard anchors them once the reference row exists.
+        bottomPunctuationKeys = [comma, period, question]
+        // Return key width puts its left edge at the m-key column of the
+        // letters third row (9 keys, m at index 7, 4pt gaps):
+        //   m.left = (7L+28)/9  ->  width = L - m.left = (2/9)L - 28/9.
+        // Encoding it as a width (not a cross-row anchor to m) keeps the column
+        // identical on every page, independent of that page's third row.
+        enter.widthAnchor.constraint(equalTo: row.widthAnchor,
+                                     multiplier: 2.0 / 9.0, constant: -28.0 / 9.0).isActive = true
         return row
     }
 
@@ -950,12 +950,12 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
 
     private func rebuildKeyboard() {
         keyboardStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        var letterWidthReference: UIView?
+        var punctuationWidthReference: UIView?
         switch keyboardPage {
         case .numbers:
-            keyboardStack.addArrangedSubview(
-                makeRow(["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"])
-            )
+            let topRow = makeRow(["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"])
+            punctuationWidthReference = topRow.arrangedSubviews.first
+            keyboardStack.addArrangedSubview(topRow)
             keyboardStack.addArrangedSubview(
                 makeRow(["-", "/", "：", "；", "（", "）", "￥", "@", "“", "”"])
             )
@@ -963,9 +963,9 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
                 makeRow(["#+=", "。", "，", "、", "？", "！", ".", "⌫"])
             )
         case .symbols:
-            keyboardStack.addArrangedSubview(
-                makeRow(["【", "】", "｛", "｝", "#", "%", "^", "*", "+", "="])
-            )
+            let topRow = makeRow(["【", "】", "｛", "｝", "#", "%", "^", "*", "+", "="])
+            punctuationWidthReference = topRow.arrangedSubviews.first
+            keyboardStack.addArrangedSubview(topRow)
             keyboardStack.addArrangedSubview(
                 makeRow(["_", "—", "\\", "｜", "～", "《", "》", "$", "&", "·"])
             )
@@ -980,7 +980,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
                 : (shifted ? "ASDFGHJKL" : "asdfghjkl")
             let bottom = shifted ? "ZXCVBNM" : "zxcvbnm"
             let topRow = makeRow(Array(letters).map(String.init))
-            letterWidthReference = topRow.arrangedSubviews.first
+            punctuationWidthReference = topRow.arrangedSubviews.first
             keyboardStack.addArrangedSubview(topRow)
             keyboardStack.addArrangedSubview(
                 makeRow(Array(home).map(String.init), indented: !isDouble)
@@ -989,18 +989,9 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
                 makeRow(["⇧"] + Array(bottom).map(String.init) + ["delete"])
             )
         }
-        // The row just built (ending in delete/⌫) is the alignment reference:
-        // the return key's left edge lines up with the key left of ⌫ (m on the
-        // letters page) so the action key is aligned across all three pages.
-        let referenceRow = keyboardStack.arrangedSubviews.last as? UIStackView
         keyboardStack.addArrangedSubview(makeBottomRow())
-        if let referenceRow, referenceRow.arrangedSubviews.count >= 2,
-           let enter = returnKeyButton {
-            let target = referenceRow.arrangedSubviews[referenceRow.arrangedSubviews.count - 2]
-            enter.leadingAnchor.constraint(equalTo: target.leadingAnchor).isActive = true
-        }
-        if let reference = letterWidthReference {
-            letterPunctuationKeys.forEach {
+        if let reference = punctuationWidthReference {
+            bottomPunctuationKeys.forEach {
                 $0.widthAnchor.constraint(equalTo: reference.widthAnchor).isActive = true
             }
         }
