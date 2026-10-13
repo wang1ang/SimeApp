@@ -639,7 +639,36 @@ final class Composition {
             anchorSegments.removeAll { $0.syllableRange.overlaps(selectedRange) }
             let chars = Array(replacement.text)
             let replSegChars = segmentCharCounts(replacement)
-            if replSegChars.count == span, replSegChars.reduce(0, +) == chars.count {
+            let replSegKeys = replacement.segmentKeys
+            if !replSegKeys.isEmpty, replSegKeys.count == replSegChars.count,
+               replSegKeys.reduce(0, +) == keyEnd - keyStart,
+               replSegChars.reduce(0, +) == chars.count {
+                // The replacement carries its own per-syllable spans, so anchor
+                // one syllable per span over its own key sub-range. This keeps a
+                // re-segmentation (现 → 西|安 across a single tapped segment) as
+                // separate display cells instead of one glued block.
+                var keyCursor = keyStart
+                var charCursor = 0
+                var tokenCursor = 0
+                for i in replSegKeys.indices {
+                    let kEnd = keyCursor + replSegKeys[i]
+                    let n = replSegChars[i]
+                    let text = String(chars[charCursor..<charCursor + n])
+                    charCursor += n
+                    let english = text.allSatisfy { $0.isASCII && $0.isLetter }
+                    var tokens: [UInt32] = []
+                    if !english, tokenCursor + n <= replacement.tokens.count {
+                        tokens = Array(replacement.tokens[tokenCursor..<tokenCursor + n])
+                        tokenCursor += n
+                    }
+                    anchorSegments.append(CompositionSegment(
+                        sourceKeyRange: keyCursor..<kEnd,
+                        syllableRange: (relativeActive + i)..<(relativeActive + i + 1),
+                        text: text,
+                        tokens: tokens))
+                    keyCursor = kEnd
+                }
+            } else if replSegChars.count == span, replSegChars.reduce(0, +) == chars.count {
                 var charCursor = 0
                 var tokenCursor = 0
                 for offset in 0..<span {

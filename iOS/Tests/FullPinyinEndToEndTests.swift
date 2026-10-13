@@ -61,6 +61,28 @@ final class FullPinyinEndToEndTests: XCTestCase {
         XCTAssertFalse(composition.isComposing)
     }
 
+    func testReSegmentedCorrectionKeepsSeparateCells() throws {
+        // xianshi tops as 现|实. Re-choosing 现 as 西安 (one tapped segment → two
+        // syllables) must keep 西 and 安 as separate display cells, not one
+        // glued “西安” block, so the preview reads 西 安 市.
+        let bundle = Bundle(for: Self.self)
+        guard let decoder = NativePinyinDecoder(bundle: bundle) else { throw XCTSkip() }
+        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
+        "xianshi".forEach { composition.append(String($0)) }
+        guard composition.sentenceSegments.count >= 2 else {
+            throw XCTSkip("expected a two-segment top; got: \(composition.sentencePreview)")
+        }
+        composition.activateCharacter(0)
+        guard let index = composition.displayCandidates.firstIndex(where: { $0.text == "西安" }) else {
+            return XCTFail("correction should offer 西安; got: \(composition.displayCandidates.map { $0.text })")
+        }
+        XCTAssertNil(composition.selectDisplayed(index))   // not final, advances
+        // 西 and 安 must be separate touch cells (not a glued 西安); the third
+        // cell is whatever shi decodes to under the anchor.
+        XCTAssertEqual(Array(composition.sentenceSegments.map(\.text).prefix(2)), ["西", "安"])
+        XCTAssertGreaterThanOrEqual(composition.sentenceSegments.count, 3)
+    }
+
     func testLaterSegmentCorrectionOffersEnglishSuffixWord() throws {
         // Tapping a later segment locks the confirmed prefix but re-decodes the
         // rest from raw keys, so an English suffix word survives: tapping 不 in
