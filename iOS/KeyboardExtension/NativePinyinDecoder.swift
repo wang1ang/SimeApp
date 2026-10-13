@@ -250,36 +250,30 @@ final class NativePinyinDecoder: PinyinDecoder {
         return Array(results.prefix(limit))
     }
 
-    /// Re-query the first and last source spans reported by the decoder path.
+    /// Re-query the first and last source spans of the decoder path, sliced
+    /// from the raw keys by the segment spans. Uniform across schemes now that
+    /// full pinyin also reports `segmentKeys`.
     private func endSyllables(of top: Candidate?, rawInput: String) -> [String] {
-        guard let top else { return [] }
-        if hasShuangpinIndex {
-            let keys = Array(rawInput)
-            let spans = top.segmentKeys
-            guard !spans.isEmpty else { return [] }
-            // Prefix sums give each segment's [start, end) in raw keys.
-            var starts: [Int] = []
-            var acc = 0
-            for span in spans { starts.append(acc); acc += span }
-            func slice(_ segment: Int) -> String? {
-                guard spans.indices.contains(segment) else { return nil }
-                let start = starts[segment]
-                let end = start + spans[segment]
-                guard start < end, end <= keys.count else { return nil }
-                return String(keys[start..<end])
-            }
-            var ends: [String] = []
-            if let first = slice(0) { ends.append(first) }
-            if spans.count > 1, let last = slice(spans.count - 1),
-               last != ends.first {
-                ends.append(last)
-            }
-            return ends
+        guard let top, !top.segmentKeys.isEmpty else { return [] }
+        let keys = Array(rawInput)
+        let spans = top.segmentKeys
+        // Prefix sums give each segment's [start, end) in raw keys.
+        var starts: [Int] = []
+        var acc = 0
+        for span in spans { starts.append(acc); acc += span }
+        func slice(_ segment: Int) -> String? {
+            guard spans.indices.contains(segment) else { return nil }
+            let start = starts[segment]
+            let end = start + spans[segment]
+            guard start < end, end <= keys.count else { return nil }
+            return String(keys[start..<end])
         }
-        let syllables = top.units.split(separator: "'").map(String.init)
         var ends: [String] = []
-        if let first = syllables.first { ends.append(first) }
-        if let last = syllables.last, last != syllables.first { ends.append(last) }
+        if let first = slice(0) { ends.append(first) }
+        if spans.count > 1, let last = slice(spans.count - 1),
+           last != ends.first {
+            ends.append(last)
+        }
         return ends
     }
 
