@@ -158,11 +158,9 @@ extension PinyinDecoder {
         fixedPrefix: String, rawKeyColumn: Int,
         limit: Int
     ) -> [Candidate] {
-        // Shuangpin must have its index bound; full pinyin uses the full-pinyin
-        // engine. Both feed raw keys plus the raw-key column of the tapped
-        // segment: the engine cuts the locked prefix at that column and
-        // re-decodes the rest, so an English suffix word or a re-segmentation
-        // survives and per-segment spans come back the same way for both.
+        // Full pinyin and Shuangpin both feed raw keys + the tapped segment's
+        // raw-key column; the engine cuts the locked prefix there and re-decodes
+        // the rest. Shuangpin needs its index bound.
         if scheme.shuangpinIndexName != nil, !usesIndex(for: scheme) {
             return []
         }

@@ -619,13 +619,19 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     /// of the composition), space/return just return to the whole-sentence
     /// preview instead of committing. Plain selection (cursor at the end) is
     /// left untouched. Returns whether it handled the key.
-    private func exitPinyinEditing() -> Bool {
-        guard composition.isComposing,
-              composition.cursor < composition.raw.count else { return false }
-        composition.deactivateCharacter()
+    /// Leave the active first-row state: drop bubble/highlight, cursor to the
+    /// end, re-render the sentence preview. Single exit path for every caller.
+    private func cancelActiveSelection() {
+        dismissCandidateBubble()
         composition.moveCursor(to: composition.raw.count)
         updateMarkedText()
         render()
+    }
+
+    private func exitPinyinEditing() -> Bool {
+        guard composition.isComposing,
+              composition.cursor < composition.raw.count else { return false }
+        cancelActiveSelection()
         return true
     }
 
@@ -744,13 +750,16 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
             selectCandidate(at: label.tag)
             return
         }
-        guard candidateBubble != nil,
-              !sentenceBar.subviews.contains(where: { subview in
-                  guard let button = subview as? UIButton else { return false }
-                  return button.frame.contains(point)
-              }) else { return }
-        dismissCandidateBubble()
-        render()
+        // Blank spot in the candidate row: cancel whatever is active (bubble
+        // or pinyin editing) through the one exit path.
+        let onButton = sentenceBar.subviews.contains { subview in
+            guard let button = subview as? UIButton else { return false }
+            return button.frame.contains(point)
+        }
+        guard !onButton else { return }
+        if composition.activeCharacterIndex != nil {
+            cancelActiveSelection()
+        }
     }
 
     // Active char's candidates paired with their original `displayCandidates`

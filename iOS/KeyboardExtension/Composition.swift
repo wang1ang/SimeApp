@@ -643,10 +643,8 @@ final class Composition {
             if !replSegKeys.isEmpty, replSegKeys.count == replSegChars.count,
                replSegKeys.reduce(0, +) == keyEnd - keyStart,
                replSegChars.reduce(0, +) == chars.count {
-                // The replacement carries its own per-syllable spans, so anchor
-                // one syllable per span over its own key sub-range. This keeps a
-                // re-segmentation (现 → 西|安 across a single tapped segment) as
-                // separate display cells instead of one glued block.
+                // One anchor per pick syllable over its own key sub-range, so
+                // a re-segmentation (现 → 西|安) stays separate cells.
                 var keyCursor = keyStart
                 var charCursor = 0
                 var tokenCursor = 0
@@ -778,10 +776,8 @@ final class Composition {
             .filter { $0 > relativeIndex }
             .min() ?? segmentCount
         let anchorColumn = rawLength(forSegments: relativeIndex, of: top)
-        // Bound candidates by the raw-key span available from the tapped segment
-        // to the next anchor, not by segment count: a pick that re-splits the
-        // same keys into more syllables (xian → 西安, or "bug" over bu|g) must
-        // survive. Spans are the decoder's own (same path as Shuangpin).
+        // Bound by raw-key span to the next anchor, not segment count, so a
+        // re-split of the same keys (xian → 西安) survives.
         let maximumKeys = max(1, rawLength(forSegments: nextAnchor, of: top) - anchorColumn)
         replacementCandidates = decoder.correctionCandidatesForComposition(
             raw: raw,
