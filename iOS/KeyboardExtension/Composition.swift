@@ -591,7 +591,12 @@ final class Composition {
             let topKeyLengths = segmentRawLengths(top)
             let replacementKeyCount = segmentRawLengths(replacement).reduce(0, +)
             var span = max(1, segmentCharCounts(replacement).count)
-            if !replacement.segmentKeys.isEmpty, replacementKeyCount > 0 {
+            // Map the replacement's keys onto TOP segments, not its own segment
+            // count, so a first-segment re-split (xian → 西安) lands on the single
+            // tapped segment. Full pinyin only has raw-start-aligned keys at the
+            // first segment; later segments keep the segment-count path.
+            if replacementKeyCount > 0,
+               !replacement.segmentKeys.isEmpty || relativeActive == 0 {
                 var coveredKeys = 0
                 span = 0
                 while relativeActive + span < segmentCount,
@@ -748,8 +753,14 @@ final class Composition {
             .map(\.syllableRange.lowerBound)
             .filter { $0 > relativeIndex }
             .min() ?? segmentCount
-        let maximumSpan = max(1, nextAnchor - relativeIndex)
         let anchorColumn = rawLength(forSegments: relativeIndex, of: top)
+        // At the first segment the replacement's units align with `raw` from
+        // offset 0, so bound by raw-key span instead of segment count: a pick
+        // that re-splits the same keys into more syllables (xian → 西安) stays.
+        // Later segments keep the segment-count bound (their keys are not
+        // raw-start-aligned, so key sums would be wrong).
+        let maximumKeys = max(1, rawLength(forSegments: nextAnchor, of: top) - anchorColumn)
+        let maximumSpan = max(1, nextAnchor - relativeIndex)
         replacementCandidates = decoder.correctionCandidatesForComposition(
             raw: raw,
             top: top,
@@ -758,7 +769,13 @@ final class Composition {
             prefixSegment: relativeIndex,
             rawKeyColumn: anchorColumn,
             limit: 60
-        ).filter { segmentCharCounts($0).count <= maximumSpan }
+        ).filter { candidate in
+            guard relativeIndex == 0 else {
+                return segmentCharCounts(candidate).count <= maximumSpan
+            }
+            let keys = segmentRawLengths(candidate).reduce(0, +)
+            return keys == 0 || keys <= maximumKeys
+        }
     }
 
     func commitBestOrRaw() -> String? {

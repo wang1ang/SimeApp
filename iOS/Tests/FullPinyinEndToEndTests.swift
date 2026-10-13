@@ -33,6 +33,34 @@ final class FullPinyinEndToEndTests: XCTestCase {
         XCTAssertEqual(composition.select(index), "fix一下")
     }
 
+    func testFirstSegmentCorrectionOffersEnglishWord() throws {
+        // Tapping the first segment feeds raw keys (not segmented units) so the
+        // engine's English dictionary path survives: "fuck" must appear in the
+        // correction bubble, not only in the main candidate bar.
+        let bundle = Bundle(for: Self.self)
+        guard let decoder = NativePinyinDecoder(bundle: bundle) else { throw XCTSkip() }
+        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
+        "fuck".forEach { composition.append(String($0)) }
+        composition.activateCharacter(0)
+        XCTAssertTrue(composition.displayCandidates.contains { $0.text == "fuck" },
+                      "first-segment correction should offer fuck; got: \(composition.displayCandidates.map { $0.text })")
+    }
+
+    func testFirstSegmentCorrectionOffersReSegmentedWord() throws {
+        // xian reads as one syllable (线) at the top, but the first-segment
+        // bubble must still offer the re-split two-syllable word 西安.
+        let bundle = Bundle(for: Self.self)
+        guard let decoder = NativePinyinDecoder(bundle: bundle) else { throw XCTSkip() }
+        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
+        "xian".forEach { composition.append(String($0)) }
+        composition.activateCharacter(0)
+        guard let index = composition.displayCandidates.firstIndex(where: { $0.text == "西安" }) else {
+            return XCTFail("first-segment correction should offer 西安; got: \(composition.displayCandidates.map { $0.text })")
+        }
+        XCTAssertEqual(composition.selectDisplayed(index), "西安")
+        XCTAssertFalse(composition.isComposing)
+    }
+
     func testFullPinyinMixedLowercaseEnglishAndChinese() throws {
         let bundle = Bundle(for: Self.self)
         guard let decoder = NativePinyinDecoder(bundle: bundle) else { throw XCTSkip() }

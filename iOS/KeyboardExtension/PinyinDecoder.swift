@@ -164,6 +164,19 @@ extension PinyinDecoder {
                 raw, fixedPrefix: fixedPrefix, prefixSyllables: rawKeyColumn,
                 limit: limit, expansion: true)
         }
+        // Full pinyin locates the correction column by counting `'` in the
+        // input `units`, so later segments must keep the segmented units.
+        // The first segment has nothing locked (prefixSegment==0, empty
+        // fixed prefix): feeding `units` there splits the keys into pinyin
+        // syllables (fu'c'k) and kills the English whole-word path, so a
+        // literal like "fuck" never appears. Feed `raw` instead — with no
+        // prefix to align it yields the same Chinese candidates plus the
+        // English dictionary words.
+        if fixedPrefix.isEmpty, prefixSegment == 0 {
+            return correctionCandidates(
+                raw, fixedPrefix: "", prefixSyllables: 0, limit: limit,
+                expansion: true)
+        }
         return correctionCandidates(
             top.units, fixedPrefix: fixedPrefix,
             prefixSyllables: prefixSegment, limit: limit, expansion: true)
