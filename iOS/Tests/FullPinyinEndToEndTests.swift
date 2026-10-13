@@ -34,9 +34,9 @@ final class FullPinyinEndToEndTests: XCTestCase {
     }
 
     func testFirstSegmentCorrectionOffersEnglishWord() throws {
-        // Tapping the first segment feeds raw keys (not segmented units) so the
-        // engine's English dictionary path survives: "fuck" must appear in the
-        // correction bubble, not only in the main candidate bar.
+        // Tapping the first segment feeds raw keys, so the engine's English
+        // dictionary path survives: "fuck" appears in the correction bubble,
+        // not only in the main candidate bar.
         let bundle = Bundle(for: Self.self)
         guard let decoder = NativePinyinDecoder(bundle: bundle) else { throw XCTSkip() }
         let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
@@ -47,8 +47,8 @@ final class FullPinyinEndToEndTests: XCTestCase {
     }
 
     func testFirstSegmentCorrectionOffersReSegmentedWord() throws {
-        // xian reads as one syllable (线) at the top, but the first-segment
-        // bubble must still offer the re-split two-syllable word 西安.
+        // xian reads as one syllable (线) at the top; the first-segment bubble
+        // must still offer the re-split two-syllable word 西安 and commit it.
         let bundle = Bundle(for: Self.self)
         guard let decoder = NativePinyinDecoder(bundle: bundle) else { throw XCTSkip() }
         let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
@@ -58,6 +58,27 @@ final class FullPinyinEndToEndTests: XCTestCase {
             return XCTFail("first-segment correction should offer 西安; got: \(composition.displayCandidates.map { $0.text })")
         }
         XCTAssertEqual(composition.selectDisplayed(index), "西安")
+        XCTAssertFalse(composition.isComposing)
+    }
+
+    func testLaterSegmentCorrectionOffersEnglishSuffixWord() throws {
+        // Tapping a later segment locks the confirmed prefix but re-decodes the
+        // rest from raw keys, so an English suffix word survives: tapping 不 in
+        // fix这个不过 (fixzhegebug) offers "bug" and commits fix这个bug.
+        let bundle = Bundle(for: Self.self)
+        guard let decoder = NativePinyinDecoder(bundle: bundle) else { throw XCTSkip() }
+        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
+        "fixzhegebug".forEach { composition.append(String($0)) }
+        guard composition.candidates.first?.text == "fix这个不过",
+              let tap = composition.sentencePreview.firstIndex(of: "不") else {
+            throw XCTSkip("top candidate is not fix这个不过; got: \(composition.sentencePreview)")
+        }
+        composition.activateCharacter(composition.sentencePreview.distance(
+            from: composition.sentencePreview.startIndex, to: tap))
+        guard let index = composition.displayCandidates.firstIndex(where: { $0.text == "bug" }) else {
+            return XCTFail("later-segment correction should offer bug; got: \(composition.displayCandidates.map { $0.text })")
+        }
+        XCTAssertEqual(composition.selectDisplayed(index), "fix这个bug")
         XCTAssertFalse(composition.isComposing)
     }
 

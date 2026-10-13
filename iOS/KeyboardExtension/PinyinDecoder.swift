@@ -164,21 +164,19 @@ extension PinyinDecoder {
                 raw, fixedPrefix: fixedPrefix, prefixSyllables: rawKeyColumn,
                 limit: limit, expansion: true)
         }
-        // Full pinyin locates the correction column by counting `'` in the
-        // input `units`, so later segments must keep the segmented units.
-        // The first segment has nothing locked (prefixSegment==0, empty
-        // fixed prefix): feeding `units` there splits the keys into pinyin
-        // syllables (fu'c'k) and kills the English whole-word path, so a
-        // literal like "fuck" never appears. Feed `raw` instead — with no
-        // prefix to align it yields the same Chinese candidates plus the
-        // English dictionary words.
-        if fixedPrefix.isEmpty, prefixSegment == 0 {
-            return correctionCandidates(
-                raw, fixedPrefix: "", prefixSyllables: 0, limit: limit,
-                expansion: true)
-        }
+        // Lock the confirmed prefix with the top reading's apostrophe-split
+        // units (the engine finds the correction column by counting `'`), but
+        // feed the keys from the tapped segment onward as contiguous raw. That
+        // re-opens the English whole-word path and free re-segmentation for the
+        // suffix (tapping 不 in fix这个bug offers "bug", not just bu+g). A
+        // single-syllable suffix is identical to feeding units; the first
+        // segment degenerates to raw.
+        let prefixUnits = top.units.split(separator: "'").prefix(prefixSegment)
+            .joined(separator: "'")
+        let rawSuffix = String(Array(raw).dropFirst(rawKeyColumn))
+        let hybrid = prefixUnits.isEmpty ? rawSuffix : prefixUnits + "'" + rawSuffix
         return correctionCandidates(
-            top.units, fixedPrefix: fixedPrefix,
+            hybrid, fixedPrefix: fixedPrefix,
             prefixSyllables: prefixSegment, limit: limit, expansion: true)
     }
 

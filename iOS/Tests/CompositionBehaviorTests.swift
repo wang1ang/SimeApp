@@ -377,33 +377,6 @@ final class CompositionCandidateSelectionTests: XCTestCase {
         XCTAssertEqual(composition.selectionLocation, 6)
     }
 
-    func testFirstSegmentCorrectionKeepsReSegmentedWord() {
-        // Top reads the keys as one syllable (xian → 线). Tapping the first
-        // segment must still offer a pick that re-splits the same keys into
-        // more syllables (xi'an → 西安); the old segment-count bound dropped it.
-        let decoder = RecordingPinyinDecoder()
-        decoder.decodeResult = { pinyin in
-            pinyin == "xian"
-                ? [Candidate(text: "线", consumed: 4, tokens: [1], units: "xian")]
-                : []
-        }
-        decoder.correctionResultsByPrefix[0] = [
-            Candidate(text: "线", consumed: 4, tokens: [1], units: "xian"),
-            Candidate(text: "西安", consumed: 4, tokens: [2, 3], units: "xi'an")
-        ]
-        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
-        "xian".forEach { composition.append(String($0)) }
-
-        composition.activateCharacter(0)
-
-        XCTAssertTrue(composition.displayCandidates.contains { $0.text == "西安" })
-        guard let index = composition.displayCandidates.firstIndex(where: { $0.text == "西安" }) else {
-            return XCTFail("西安 missing from first-segment correction")
-        }
-        XCTAssertEqual(composition.selectDisplayed(index), "西安")
-        XCTAssertFalse(composition.isComposing)
-    }
-
     func testMixedEnglishFinalCorrectionCommitsCorrectSentence() {
         let decoder = RecordingPinyinDecoder()
         decoder.decodeResult = { _ in
@@ -751,14 +724,11 @@ final class CompositionEditingTests: XCTestCase {
         ]
         let fullPinyin = Composition(decoder: decoder, inputScheme: .fullPinyin)
         "nihao".forEach { fullPinyin.append(String($0)) }
-        // First segment has nothing locked: full pinyin feeds raw so English
-        // whole-word candidates survive (segmented units would kill them).
+        // First segment locks nothing, so full pinyin feeds raw (hybrid with an
+        // empty prefix); a later segment keeps the apostrophe-locked prefix.
         fullPinyin.activateCharacter(0)
         XCTAssertEqual(decoder.decodeCalls.last?.pinyin, "nihao")
         XCTAssertEqual(decoder.correctionCalls.last?.pinyin, "nihao")
-        XCTAssertEqual(decoder.correctionCalls.last?.prefixSyllables, 0)
-        // A later segment keeps the segmented units so the engine can locate
-        // the correction column by its apostrophes.
         fullPinyin.activateCharacter(1)
         XCTAssertEqual(decoder.correctionCalls.last?.pinyin, "ni'hao")
     }
