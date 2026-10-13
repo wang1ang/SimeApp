@@ -154,30 +154,21 @@ extension PinyinDecoder {
     }
 
     func correctionCandidatesForComposition(
-        raw: String, top: Candidate, scheme: InputScheme,
-        fixedPrefix: String, prefixSegment: Int, rawKeyColumn: Int,
+        raw: String, scheme: InputScheme,
+        fixedPrefix: String, rawKeyColumn: Int,
         limit: Int
     ) -> [Candidate] {
-        if scheme.shuangpinIndexName != nil {
-            guard usesIndex(for: scheme) else { return [] }
-            return correctionCandidates(
-                raw, fixedPrefix: fixedPrefix, prefixSyllables: rawKeyColumn,
-                limit: limit, expansion: true)
+        // Shuangpin must have its index bound; full pinyin uses the full-pinyin
+        // engine. Both feed raw keys plus the raw-key column of the tapped
+        // segment: the engine cuts the locked prefix at that column and
+        // re-decodes the rest, so an English suffix word or a re-segmentation
+        // survives and per-segment spans come back the same way for both.
+        if scheme.shuangpinIndexName != nil, !usesIndex(for: scheme) {
+            return []
         }
-        // Lock the confirmed prefix with the top reading's apostrophe-split
-        // units (the engine finds the correction column by counting `'`), but
-        // feed the keys from the tapped segment onward as contiguous raw. That
-        // re-opens the English whole-word path and free re-segmentation for the
-        // suffix (tapping 不 in fix这个bug offers "bug", not just bu+g). A
-        // single-syllable suffix is identical to feeding units; the first
-        // segment degenerates to raw.
-        let prefixUnits = top.units.split(separator: "'").prefix(prefixSegment)
-            .joined(separator: "'")
-        let rawSuffix = String(Array(raw).dropFirst(rawKeyColumn))
-        let hybrid = prefixUnits.isEmpty ? rawSuffix : prefixUnits + "'" + rawSuffix
         return correctionCandidates(
-            hybrid, fixedPrefix: fixedPrefix,
-            prefixSyllables: prefixSegment, limit: limit, expansion: true)
+            raw, fixedPrefix: fixedPrefix, prefixSyllables: rawKeyColumn,
+            limit: limit, expansion: true)
     }
 
     func pendingShuangpinInitial(raw: String, cursor: Int, scheme: InputScheme,

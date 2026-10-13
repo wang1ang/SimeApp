@@ -756,10 +756,8 @@ final class Composition {
         let maximumKeys = max(1, rawLength(forSegments: nextAnchor, of: top) - anchorColumn)
         replacementCandidates = decoder.correctionCandidatesForComposition(
             raw: raw,
-            top: top,
             scheme: inputScheme,
             fixedPrefix: fixedPrefix,
-            prefixSegment: relativeIndex,
             rawKeyColumn: anchorColumn,
             limit: 60
         ).filter {

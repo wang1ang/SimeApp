@@ -362,7 +362,7 @@ final class CompositionCandidateSelectionTests: XCTestCase {
         decoder.decodeResult = { _ in
             [Candidate(text: "fix一下", consumed: 8, tokens: [], units: "fix'yi'xia")]
         }
-        decoder.correctionResultsByPrefix[1] = [
+        decoder.correctionResultsByPrefix[3] = [
             Candidate(text: "一", consumed: 2, tokens: [], units: "yi")
         ]
         let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
@@ -382,7 +382,7 @@ final class CompositionCandidateSelectionTests: XCTestCase {
         decoder.decodeResult = { _ in
             [Candidate(text: "fix一下", consumed: 8, tokens: [], units: "fix'yi'xia")]
         }
-        decoder.correctionResultsByPrefix[2] = [
+        decoder.correctionResultsByPrefix[5] = [
             Candidate(text: "塔", consumed: 0, tokens: [], units: "ta")
         ]
         let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
@@ -608,7 +608,7 @@ final class CompositionEditingTests: XCTestCase {
         "jiyixia".forEach { composition.append(String($0)) }
         decoder.correctionResultsByPrefix = [
             0: [Candidate(text: "记", consumed: 0, tokens: [4], units: "ji")],
-            1: [Candidate(text: "一下", consumed: 0, tokens: [5, 6], units: "yi'xia")]
+            2: [Candidate(text: "一下", consumed: 0, tokens: [5, 6], units: "yi'xia")]
         ]
         composition.activateCharacter(0)
         XCTAssertNil(composition.selectDisplayed(0))
@@ -724,13 +724,15 @@ final class CompositionEditingTests: XCTestCase {
         ]
         let fullPinyin = Composition(decoder: decoder, inputScheme: .fullPinyin)
         "nihao".forEach { fullPinyin.append(String($0)) }
-        // First segment locks nothing, so full pinyin feeds raw (hybrid with an
-        // empty prefix); a later segment keeps the apostrophe-locked prefix.
+        // Full pinyin now feeds raw keys plus the tapped segment's raw-key
+        // column, exactly like Shuangpin (no apostrophe-locked units).
         fullPinyin.activateCharacter(0)
         XCTAssertEqual(decoder.decodeCalls.last?.pinyin, "nihao")
         XCTAssertEqual(decoder.correctionCalls.last?.pinyin, "nihao")
+        XCTAssertEqual(decoder.correctionCalls.last?.prefixSyllables, 0)
         fullPinyin.activateCharacter(1)
-        XCTAssertEqual(decoder.correctionCalls.last?.pinyin, "ni'hao")
+        XCTAssertEqual(decoder.correctionCalls.last?.pinyin, "nihao")
+        XCTAssertEqual(decoder.correctionCalls.last?.prefixSyllables, 2)
     }
 
 
