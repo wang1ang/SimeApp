@@ -33,6 +33,15 @@ final class ShuangpinEndToEndTests: XCTestCase {
         XCTAssertFalse(c.isComposing)
     }
 
+    func testUppercaseLetterOffersEnglishCompletionsAfterItself() throws {
+        let b = try candidates(for: "B")
+        XCTAssertEqual(b.first, "B")
+        XCTAssertTrue(b.contains("BBC"), "B should offer BBC; got: \(b)")
+        let bbc = try candidates(for: "BBC")
+        XCTAssertEqual(bbc.first, "BBC")
+        XCTAssertFalse(bbc.contains("BBCNN"), "BBC must not complete inside the run; got: \(bbc)")
+    }
+
     func testEnglishCorrectionReplacesTheRemainingDecodedSpan() throws {
         let c = try composition(for: "veuilove") // zhe + shi + love
         XCTAssertEqual(c.candidates.first?.text, "这是裸着")
@@ -129,7 +138,7 @@ final class ShuangpinEndToEndTests: XCTestCase {
         }
         XCTAssertNil(c.selectDisplayed(bi))
         XCTAssertNotNil(c.activeCharacterIndex)
-        XCTAssertEqual(c.preedit, "Bi ex c")
+        XCTAssertEqual(c.preedit, "Bi exc") // tail completes to exchange
         XCTAssertEqual(c.sentenceSegments.first?.text, "Bi")
         XCTAssertTrue(c.isComposing)
     }
