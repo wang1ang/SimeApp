@@ -326,7 +326,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
             button.accessibilityValue = title
         }
         button.setTitleColor(.label, for: .normal)
-        // 按键类型微调字号：字母/数字 21、shift/退格 20、底排汉字与 #+= 14、其余 18。
+        // 按键字号：字母/数字 21、shift/退格 20、123 16、底排汉字与 #+= 14，其余 18。
         // 单个 ASCII 字母/数字分别只出现在字母行和数字页；汉字按 CJK 区判定（标点不算）。
         let isLetterKey = title.count == 1 && title.first.map { $0.isLetter && $0.isASCII } == true
         let isDigitKey = title.count == 1 && title.first.map { $0.isNumber && $0.isASCII } == true
@@ -336,6 +336,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
             keyFontSize = 21
         } else if title == "⇧" || title == "delete" {
             keyFontSize = 20
+        } else if title == "123" {
+            keyFontSize = 16
         } else if isHanKey || title == "#+=" {
             keyFontSize = 14
         } else {
