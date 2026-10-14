@@ -1001,3 +1001,13 @@ final class Composition {
     }
 }
 
+
+enum NumberPagePolicy {
+    /// Half-width `. - / * + =` stay on the number page only when they follow
+    /// a digit (decimals, dates, arithmetic); otherwise they end number entry.
+    static func keepsNumberPage(afterInserting punctuation: String,
+                                previous: Character?) -> Bool {
+        guard [".", "-", "/", "*", "+", "="].contains(punctuation), let previous else { return false }
+        return previous.isASCII && previous.isNumber
+    }
+}

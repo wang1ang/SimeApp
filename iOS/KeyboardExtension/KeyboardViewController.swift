@@ -467,6 +467,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
             composition.append(title)
             updateMarkedText()
             render()
+        case "*", "+", "=" where keyboardPage == .numbers:
+            insertPunctuation(title)
         case "，", "。", ";", "-", "/", "：", "；", "（", "）", "￥", "@", "“", "”", "、", "？", "！", ".":
             insertPunctuation(title)
         default:
@@ -547,8 +549,12 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
 
     private func insertPunctuation(_ punctuation: String) {
         let text = punctuation == ";" ? "；" : punctuation
+        // A pending composition commits ahead of the symbol and is never a digit.
+        let previous = composition.isComposing
+            ? nil : textDocumentProxy.documentContextBeforeInput?.last
         commitComposition(appending: text)
-        let keepsNumberPage = keyboardPage == .numbers && punctuation == "."
+        let keepsNumberPage = keyboardPage == .numbers
+            && NumberPagePolicy.keepsNumberPage(afterInserting: punctuation, previous: previous)
         if keyboardPage != .letters && !keepsNumberPage {
             keyboardPage = .letters
             shiftState = .off
@@ -991,7 +997,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
                 makeRow(["-", "/", "：", "；", "（", "）", "￥", "@", "“", "”"])
             )
             keyboardStack.addArrangedSubview(
-                makeRow(["#+=", "。", "，", "、", "？", "！", ".", "⌫"])
+                makeRow(["#+=", "*", "+", "=", "、", "！", ".", "⌫"])
             )
         case .symbols:
             let topRow = makeRow(["【", "】", "｛", "｝", "#", "%", "^", "*", "+", "="])

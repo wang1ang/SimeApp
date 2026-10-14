@@ -56,3 +56,20 @@ final class CalculatorTests: XCTestCase {
         XCTAssertNil(composition.calculatorSuggestion)
     }
 }
+
+final class NumberPagePolicyTests: XCTestCase {
+    func testHalfWidthNumericSymbolsStayOnlyAfterDigit() {
+        for symbol in [".", "-", "/", "*", "+", "="] {
+            XCTAssertTrue(NumberPagePolicy.keepsNumberPage(afterInserting: symbol, previous: "3"), symbol)
+            XCTAssertFalse(NumberPagePolicy.keepsNumberPage(afterInserting: symbol, previous: "你"), symbol)
+            XCTAssertFalse(NumberPagePolicy.keepsNumberPage(afterInserting: symbol, previous: "a"), symbol)
+            XCTAssertFalse(NumberPagePolicy.keepsNumberPage(afterInserting: symbol, previous: nil), symbol)
+        }
+    }
+
+    func testOtherPunctuationAlwaysLeaves() {
+        for symbol in ["，", "：", "（", "@", "；"] {
+            XCTAssertFalse(NumberPagePolicy.keepsNumberPage(afterInserting: symbol, previous: "3"), symbol)
+        }
+    }
+}
