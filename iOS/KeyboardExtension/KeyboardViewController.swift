@@ -1026,7 +1026,12 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
         var sentenceX: CGFloat = 8
         var confirmMaxX: CGFloat = 0
         if composition.isComposing {
-            let font = UIFont.preferredFont(forTextStyle: .body)
+            // 首选字号比其余候选大 2pt，但与备选基线（底端）对齐而非居中：
+            // 居中会让更大的首选显得偏下，向上提这段差值即可底端看齐。
+            let baseFont = UIFont.preferredFont(forTextStyle: .body)
+            let font = baseFont.withSize(baseFont.pointSize + 2)
+            let baselineLift = ((font.ascender - font.descender)
+                - (baseFont.ascender - baseFont.descender)) / 2
             for segment in composition.sentenceSegments {
                 let index = segment.displayIndex
                 let isActive = index == composition.activeCharacterIndex
@@ -1037,7 +1042,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
                 button.setTitleColor(isActive ? .systemBlue : .label, for: .normal)
                 let textWidth = (title as NSString).size(withAttributes: [.font: font]).width
                 let width = max(24, ceil(textWidth) + 4)
-                button.frame = CGRect(x: sentenceX, y: 0, width: width, height: 28)
+                button.frame = CGRect(x: sentenceX, y: -baselineLift, width: width, height: 28)
                 button.accessibilityValue = String(index)
                 button.addTarget(self, action: #selector(sentenceCharacterTapped(_:)), for: .touchUpInside)
                 sentenceBar.addSubview(button)
