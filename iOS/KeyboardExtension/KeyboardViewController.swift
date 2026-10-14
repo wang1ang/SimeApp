@@ -497,11 +497,6 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
         case .began:
             spaceCursorMode = true
             spaceLastTranslation = gesture.location(in: gesture.view).x
-            // Match the native keyboard's acknowledgement that the space bar
-            // has entered cursor-tracking mode.
-            let feedback = UIImpactFeedbackGenerator(style: .light)
-            feedback.prepare()
-            feedback.impactOccurred()
         case .changed:
             let position = gesture.location(in: gesture.view).x
             let delta = position - spaceLastTranslation
