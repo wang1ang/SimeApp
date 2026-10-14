@@ -125,6 +125,15 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
         activateNativeDecoder()
     }
 
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        // The host window's system-gesture gate recognizers delay touchesBegan
+        // near screen edges, so edge keys (q/p/a/l) only react ~1s later or on
+        // release. The recognizers still work; a recognized system gesture
+        // cancels the key touch instead.
+        view.window?.gestureRecognizers?.forEach { $0.delaysTouchesBegan = false }
+    }
+
     override func didReceiveMemoryWarning() {
         super.didReceiveMemoryWarning()
         // Shrink the engine's caches instead of risking a jetsam kill (which
