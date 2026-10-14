@@ -239,15 +239,20 @@ SimeResults sime_decode_str(const SimeHandle *h, const char *input, int num) {
 SimeResults sime_decode_correction(const SimeHandle *h, const char *input,
                                    const char *fixed_prefix,
                                    int prefix_syllables, int num,
-                                   bool expansion) {
+                                   bool expansion, const uint32_t *context,
+                                   int context_count) {
   return guard([&]() -> SimeResults {
     if (!h || !h->sime || !h->sime->Ready() || !input || !fixed_prefix ||
         prefix_syllables < 0 || num <= 0) {
       return empty_results();
     }
+    std::vector<sime::TokenID> ctx;
+    if (context && context_count > 0) {
+      ctx.assign(context, context + context_count);
+    }
     return to_c(h->sime->DecodeCorrection(
         input, fixed_prefix, static_cast<size_t>(prefix_syllables),
-        static_cast<size_t>(num), expansion));
+        static_cast<size_t>(num), expansion, ctx));
   }, empty_results());
 }
 

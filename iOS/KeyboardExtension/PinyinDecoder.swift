@@ -64,6 +64,9 @@ protocol PinyinDecoder {
     func correctionCandidates(_ pinyin: String, fixedPrefix: String,
                               prefixSyllables: Int, limit: Int,
                               expansion: Bool) -> [Candidate]
+    func correctionCandidates(_ pinyin: String, fixedPrefix: String,
+                              prefixSyllables: Int, limit: Int,
+                              expansion: Bool, context: [UInt32]) -> [Candidate]
     func tokenize(_ text: String) -> [UInt32]
     func syllableCandidates(_ pinyin: String) -> [Candidate]
     func predict(_ context: [UInt32], limit: Int) -> [Candidate]
@@ -112,6 +115,16 @@ extension PinyinDecoder {
                              prefixSyllables: prefixSyllables, limit: limit)
     }
 
+    // Context-aware correction; default drops context (decoders that ignore it
+    // behave as before). The native engine seeds its beam with it.
+    func correctionCandidates(_ pinyin: String, fixedPrefix: String,
+                              prefixSyllables: Int, limit: Int,
+                              expansion: Bool, context: [UInt32]) -> [Candidate] {
+        correctionCandidates(pinyin, fixedPrefix: fixedPrefix,
+                             prefixSyllables: prefixSyllables, limit: limit,
+                             expansion: expansion)
+    }
+
     func tokenize(_ text: String) -> [UInt32] { [] }
 
     func syllableCandidates(_ pinyin: String) -> [Candidate] {
@@ -155,18 +168,19 @@ extension PinyinDecoder {
 
     func correctionCandidatesForComposition(
         raw: String, scheme: InputScheme,
-        fixedPrefix: String, rawKeyColumn: Int,
+        fixedPrefix: String, rawKeyColumn: Int, context: [UInt32],
         limit: Int
     ) -> [Candidate] {
         // Full pinyin and Shuangpin both feed raw keys + the tapped segment's
         // raw-key column; the engine cuts the locked prefix there and re-decodes
-        // the rest. Shuangpin needs its index bound.
+        // the rest, seeded with the host context so re-selection reproduces the
+        // same segmentation the main decode did. Shuangpin needs its index bound.
         if scheme.shuangpinIndexName != nil, !usesIndex(for: scheme) {
             return []
         }
         return correctionCandidates(
             raw, fixedPrefix: fixedPrefix, prefixSyllables: rawKeyColumn,
-            limit: limit, expansion: true)
+            limit: limit, expansion: true, context: context)
     }
 
     func pendingShuangpinInitial(raw: String, cursor: Int, scheme: InputScheme,

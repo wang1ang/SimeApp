@@ -122,11 +122,21 @@ final class NativePinyinDecoder: PinyinDecoder {
     func correctionCandidates(_ pinyin: String, fixedPrefix: String,
                               prefixSyllables: Int, limit: Int,
                               expansion: Bool) -> [Candidate] {
+        correctionCandidates(pinyin, fixedPrefix: fixedPrefix,
+                             prefixSyllables: prefixSyllables, limit: limit,
+                             expansion: expansion, context: [])
+    }
+
+    func correctionCandidates(_ pinyin: String, fixedPrefix: String,
+                              prefixSyllables: Int, limit: Int,
+                              expansion: Bool, context: [UInt32]) -> [Candidate] {
         guard let handle, !pinyin.isEmpty, prefixSyllables >= 0, limit > 0 else { return [] }
-        var results = sime_decode_correction(
-            handle, pinyin, fixedPrefix, Int32(prefixSyllables), Int32(limit),
-            expansion
-        )
+        var results = context.withUnsafeBufferPointer { ctx in
+            sime_decode_correction(
+                handle, pinyin, fixedPrefix, Int32(prefixSyllables), Int32(limit),
+                expansion, context.isEmpty ? nil : ctx.baseAddress, Int32(context.count)
+            )
+        }
         defer { sime_free_results(&results) }
         return unpack(results)
     }

@@ -809,6 +809,7 @@ final class Composition {
             scheme: inputScheme,
             fixedPrefix: fixedPrefix,
             rawKeyColumn: anchorColumn,
+            context: Array((hostContextTokens ?? contextTokens).suffix(32)),
             limit: 60
         ).filter {
             let keys = segmentRawLengths($0).reduce(0, +)

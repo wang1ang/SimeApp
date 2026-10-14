@@ -110,6 +110,28 @@ final class FullPinyinEndToEndTests: XCTestCase {
         XCTAssertEqual(word.segmentKeys, [1, 1, 1, 1, 1, 1])
     }
 
+    func testLastSegmentCorrectionUsesHostContext() throws {
+        // After 你, "ganshan" tops as 干啥呢 (gan'sha'n). Tapping the last char 呢
+        // must re-choose from the "n" tail — the correction decode is seeded with
+        // the host context so that segmentation exists; otherwise it collapses
+        // to 甘陕 and the bubble falls back to the whole-sentence list.
+        let bundle = Bundle(for: Self.self)
+        guard let decoder = NativePinyinDecoder(bundle: bundle) else { throw XCTSkip() }
+        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
+        composition.updateHostContext(from: "你")
+        "ganshan".forEach { composition.append(String($0)) }
+        guard composition.candidates.first?.text == "干啥呢" else {
+            throw XCTSkip("top is not 干啥呢; got: \(composition.sentencePreview)")
+        }
+        composition.activateCharacter(2)   // 呢
+        let bubble = composition.displayCandidates.map(\.text)
+        XCTAssertTrue(bubble.contains("呢"), "tail correction should offer 呢; got: \(bubble)")
+        XCTAssertFalse(bubble.contains("干啥呢"), "bubble must expand from the tail, not the head; got: \(bubble)")
+        // The tail is a lone initial "n": the bubble should list many n-initial
+        // alternatives, not just the single top reading.
+        XCTAssertGreaterThan(bubble.count, 5, "tail correction should list many n-initial choices; got: \(bubble)")
+    }
+
     func testLaterSegmentCorrectionOffersEnglishSuffixWord() throws {
         // Tapping a later segment locks the confirmed prefix but re-decodes the
         // rest from raw keys, so an English suffix word survives: tapping 不 in

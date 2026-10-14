@@ -91,7 +91,8 @@ SimeResults sime_decode_str(const SimeHandle *h, const char *input, int num);
 SimeResults sime_decode_correction(const SimeHandle *h, const char *input,
                                    const char *fixed_prefix,
                                    int prefix_syllables, int num,
-                                   bool expansion);
+                                   bool expansion, const uint32_t *context,
+                                   int context_count);
 
 // Prediction: given LM context token IDs, return likely next words.
 SimeResults sime_next_tokens(const SimeHandle *h, const uint32_t *tokens,
