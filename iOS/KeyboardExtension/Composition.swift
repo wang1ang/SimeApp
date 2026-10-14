@@ -199,10 +199,6 @@ final class Composition {
         }
     }
 
-    var hasLiteralEnglishCandidate: Bool {
-        candidates.contains { $0.isEnglish }
-    }
-
     var displayCandidates: [Candidate] {
         if !replacementCandidates.isEmpty { return replacementCandidates }
         guard !isComposing else { return candidates }

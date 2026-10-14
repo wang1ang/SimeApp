@@ -418,24 +418,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
             if exitPinyinEditing() {
                 // Editing a syllable: return returns to the sentence preview.
             } else {
-                let literalEnglish = composition.hasLiteralEnglishCandidate
                 if let text = composition.commitPreeditLiterally() {
-                    // Notes can retain an underline when a literal English word
-                    // is committed through setMarkedText + unmarkText. Clear the
-                    // marked range first, then insert the text literally.
-                    if literalEnglish {
-                        // Hosts disagree on whether insertText replaces an
-                        // active marked range: Notes may retain its underline,
-                        // while Zhihu may duplicate the text. Clearing first
-                        // and deferring insertion lets both finish unmarking.
-                        textDocumentProxy.setMarkedText("", selectedRange: NSRange(location: 0, length: 0))
-                        textDocumentProxy.unmarkText()
-                        DispatchQueue.main.async { [weak self] in
-                            self?.textDocumentProxy.insertText(text)
-                        }
-                    } else {
-                        commit(text)
-                    }
+                    commit(text)
                     render()
                 } else {
                     textDocumentProxy.insertText("\n")
@@ -585,6 +569,18 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     }
 
     private func commit(_ text: String) {
+        // Notes keeps the underline when ASCII text is committed through
+        // setMarkedText + unmarkText, and Zhihu duplicates it if insertText
+        // replaces the marked range. Clearing first and deferring the insert
+        // lets both hosts finish unmarking.
+        if !text.isEmpty, text.allSatisfy(\.isASCII) {
+            textDocumentProxy.setMarkedText("", selectedRange: NSRange(location: 0, length: 0))
+            textDocumentProxy.unmarkText()
+            DispatchQueue.main.async { [weak self] in
+                self?.textDocumentProxy.insertText(text)
+            }
+            return
+        }
         textDocumentProxy.setMarkedText(text,
             selectedRange: NSRange(location: text.utf16.count, length: 0))
         textDocumentProxy.unmarkText()
