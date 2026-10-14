@@ -314,7 +314,22 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
             button.accessibilityValue = title
         }
         button.setTitleColor(.label, for: .normal)
-        button.titleLabel?.font = .systemFont(ofSize: 18)
+        // 按键类型微调字号：字母/数字 21、shift/退格 20、底排汉字与 #+= 14、其余 18。
+        // 单个 ASCII 字母/数字分别只出现在字母行和数字页；汉字按 CJK 区判定（标点不算）。
+        let isLetterKey = title.count == 1 && title.first.map { $0.isLetter && $0.isASCII } == true
+        let isDigitKey = title.count == 1 && title.first.map { $0.isNumber && $0.isASCII } == true
+        let isHanKey = displayedTitle.unicodeScalars.contains { (0x4E00...0x9FFF).contains($0.value) }
+        let keyFontSize: CGFloat
+        if isLetterKey || isDigitKey {
+            keyFontSize = 21
+        } else if title == "⇧" || title == "delete" {
+            keyFontSize = 20
+        } else if isHanKey || title == "#+=" {
+            keyFontSize = 14
+        } else {
+            keyFontSize = 18
+        }
+        button.titleLabel?.font = .systemFont(ofSize: keyFontSize)
         button.titleLabel?.adjustsFontSizeToFitWidth = title == "return"
         button.titleLabel?.minimumScaleFactor = 0.75
         // Highlight Shift while a one-shot uppercase is armed.
@@ -1025,24 +1040,24 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
         sentenceCandidateTap.isEnabled = composition.isComposing || !composition.displayCandidates.isEmpty
         var sentenceX: CGFloat = 8
         var confirmMaxX: CGFloat = 0
+        // 首选比其余候选大 2pt，并与备选底端对齐（向上提 baselineLift，避免居中显得偏下）。
+        // 确认键沿用同一字体与提升量。
+        let preferredBaseFont = UIFont.preferredFont(forTextStyle: .body)
+        let preferredFont = preferredBaseFont.withSize(preferredBaseFont.pointSize + 2)
+        let preferredBaselineLift = ((preferredFont.ascender - preferredFont.descender)
+            - (preferredBaseFont.ascender - preferredBaseFont.descender)) / 2
         if composition.isComposing {
-            // 首选字号比其余候选大 2pt，但与备选基线（底端）对齐而非居中：
-            // 居中会让更大的首选显得偏下，向上提这段差值即可底端看齐。
-            let baseFont = UIFont.preferredFont(forTextStyle: .body)
-            let font = baseFont.withSize(baseFont.pointSize + 2)
-            let baselineLift = ((font.ascender - font.descender)
-                - (baseFont.ascender - baseFont.descender)) / 2
             for segment in composition.sentenceSegments {
                 let index = segment.displayIndex
                 let isActive = index == composition.activeCharacterIndex
                 let title = isActive ? (composition.activeEnteredKeys ?? segment.text) : segment.text
                 let button = UIButton(type: .system)
                 button.setTitle(title, for: .normal)
-                button.titleLabel?.font = font
+                button.titleLabel?.font = preferredFont
                 button.setTitleColor(isActive ? .systemBlue : .label, for: .normal)
-                let textWidth = (title as NSString).size(withAttributes: [.font: font]).width
+                let textWidth = (title as NSString).size(withAttributes: [.font: preferredFont]).width
                 let width = max(24, ceil(textWidth) + 4)
-                button.frame = CGRect(x: sentenceX, y: -baselineLift, width: width, height: 28)
+                button.frame = CGRect(x: sentenceX, y: -preferredBaselineLift, width: width, height: 28)
                 button.accessibilityValue = String(index)
                 button.addTarget(self, action: #selector(sentenceCharacterTapped(_:)), for: .touchUpInside)
                 sentenceBar.addSubview(button)
@@ -1051,16 +1066,21 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
         }
         if composition.isComposing {
             let confirm = UIButton(type: .system)
-            let returnSymbol = UIImage.SymbolConfiguration(pointSize: 11)
-            confirm.setImage(UIImage(systemName: "return", withConfiguration: returnSymbol), for: .normal)
-            confirm.tintColor = .label
+            // 确认键走和首选相同的文本渲染路径：箭头作为文本附件放进标题（按原尺寸绘制、不被挤变形）。
+            let symConf = UIImage.SymbolConfiguration(pointSize: preferredFont.pointSize)
+            let att = NSTextAttachment()
+            att.image = UIImage(systemName: "arrow.up.circle.fill", withConfiguration: symConf)?
+                .withTintColor(.label, renderingMode: .alwaysOriginal)
+            let title = NSAttributedString(attachment: att)
+            confirm.setAttributedTitle(title, for: .normal)
             confirm.accessibilityIdentifier = "preferredSentenceConfirm"
-            confirm.frame = CGRect(x: sentenceX, y: 0, width: 24, height: 28)
+            let width = max(24, ceil(title.size().width) + 4)
+            confirm.frame = CGRect(x: sentenceX, y: -preferredBaselineLift, width: width, height: 28)
             preferredSentenceConfirmButton = confirm
             confirm.addTarget(self, action: #selector(confirmSentence), for: .touchUpInside)
             sentenceBar.addSubview(confirm)
-            confirmMaxX = sentenceX + 24
-            sentenceX += 38  // gap before trailing candidates
+            confirmMaxX = sentenceX + width
+            sentenceX += width + 14  // gap before trailing candidates
         }
         // Tone filters, only while the candidate bubble is expanded (not inline
         // after auto-advance, not in pinyin-edit mode).
