@@ -29,7 +29,7 @@ struct ContentView: View {
                         }
                     }
                     .onChange(of: scheme) { newValue in
-                        InputSettings.scheme = newValue
+                        InputSettings.setScheme(newValue, by: .app)
                     }
                     Text("当前：\(scheme.displayName)")
                         .font(.footnote)

@@ -694,6 +694,54 @@ final class CompositionEditingTests: XCTestCase {
         XCTAssertEqual(composition.commitPreeditLiterally(), "是语输入法吗")
     }
 
+    func testSchemeSwitchReinterpretsPendingKeysWithoutCommitting() {
+        let oldDecoder = RecordingPinyinDecoder()
+        oldDecoder.decodeResult = { _ in
+            [Candidate(text: "旧候选", consumed: 4, tokens: [1], units: "")]
+        }
+        let composition = Composition(decoder: oldDecoder, inputScheme: .microsoftShuangpin)
+        "xcgo".forEach { composition.append(String($0)) }
+
+        let newDecoder = RecordingPinyinDecoder()
+        newDecoder.shuangpinIndexName = nil
+        newDecoder.decodeResult = { _ in
+            [Candidate(text: "新候选", consumed: 4, tokens: [2], units: "")]
+        }
+        let switched = Composition(decoder: newDecoder, inputScheme: .fullPinyin)
+        switched.reinterpret(from: composition)
+
+        XCTAssertEqual(composition.raw, "xcgo")
+        XCTAssertEqual(switched.raw, "xcgo")
+        XCTAssertTrue(switched.isComposing)
+        XCTAssertEqual(switched.cursor, 4)
+        XCTAssertEqual(newDecoder.decodeCalls.first?.pinyin, "xcgo")
+        XCTAssertEqual(switched.sentencePreview, "新候选")
+    }
+
+    func testSchemeSwitchDropsCorrectionsTiedToOldSyllables() {
+        let oldDecoder = RecordingPinyinDecoder()
+        oldDecoder.decodeResult = { _ in
+            [Candidate(text: "及以下", consumed: 7, tokens: [1, 2, 3], units: "ji'yi'xia")]
+        }
+        oldDecoder.correctionResult = [
+            Candidate(text: "记", consumed: 0, tokens: [4], units: "ji")
+        ]
+        let composition = Composition(decoder: oldDecoder, inputScheme: .fullPinyin)
+        "jiyixia".forEach { composition.append(String($0)) }
+        composition.activateCharacter(0)
+        XCTAssertNil(composition.selectDisplayed(0))
+
+        let newDecoder = RecordingPinyinDecoder()
+        newDecoder.decodeResult = { _ in
+            [Candidate(text: "甲乙夏", consumed: 7, tokens: [5, 6, 7], units: "")]
+        }
+        let switched = Composition(decoder: newDecoder, inputScheme: .microsoftShuangpin)
+        switched.reinterpret(from: composition)
+
+        XCTAssertEqual(switched.raw, "jiyixia")
+        XCTAssertEqual(switched.sentencePreview, "甲乙夏")
+    }
+
     func testDecoderBindingKeepsFullPinyinAndShuangpinInputsDistinct() {
         let decoder = RecordingPinyinDecoder()
         decoder.decodeResult = { raw in

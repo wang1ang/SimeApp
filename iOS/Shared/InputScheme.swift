@@ -38,28 +38,77 @@ enum InputScheme: String, CaseIterable {
     }
 }
 
+/// Keyboard writes use local defaults because App Group writes do not persist
+/// without Full Access; reads choose the newest value across both stores.
+enum SettingsWriter {
+    case app
+    case keyboard
+}
+
+struct SchemeStore {
+    let shared: UserDefaults
+    let local: UserDefaults
+
+    private static let schemeKey = "inputScheme"
+    private static let lastShuangpinKey = "lastShuangpinScheme"
+
+    var scheme: InputScheme {
+        InputScheme(rawValue: newest(Self.schemeKey) ?? "") ?? .fullPinyin
+    }
+
+    var lastShuangpinScheme: InputScheme {
+        let saved = InputScheme(rawValue: newest(Self.lastShuangpinKey) ?? "")
+        return (saved?.isShuangpin == true) ? saved! : .microsoftShuangpin
+    }
+
+    func setScheme(_ scheme: InputScheme, by writer: SettingsWriter, at time: Date = Date()) {
+        write(scheme.rawValue, key: Self.schemeKey, by: writer, at: time)
+        if scheme.isShuangpin { setLastShuangpinScheme(scheme, by: writer, at: time) }
+    }
+
+    func setLastShuangpinScheme(_ scheme: InputScheme, by writer: SettingsWriter,
+                                at time: Date = Date()) {
+        guard scheme.isShuangpin else { return }
+        write(scheme.rawValue, key: Self.lastShuangpinKey, by: writer, at: time)
+    }
+
+    private func write(_ value: String, key: String, by writer: SettingsWriter, at time: Date) {
+        let defaults = writer == .app ? shared : local
+        defaults.set(value, forKey: key)
+        defaults.set(time.timeIntervalSince1970, forKey: key + ".updatedAt")
+    }
+
+    // Pre-migration shared values have no timestamp and remain valid until overwritten.
+    private func newest(_ key: String) -> String? {
+        let sharedValue = shared.string(forKey: key)
+        guard let localValue = local.string(forKey: key) else { return sharedValue }
+        guard sharedValue != nil else { return localValue }
+        let stamp = key + ".updatedAt"
+        return local.double(forKey: stamp) > shared.double(forKey: stamp) ? localValue : sharedValue
+    }
+}
+
 enum InputSettings {
     static let appGroup = "group.com.ismantic.sime"
     private static var defaults: UserDefaults {
         UserDefaults(suiteName: appGroup) ?? .standard
     }
+    private static var schemeStore: SchemeStore {
+        SchemeStore(shared: defaults, local: .standard)
+    }
 
-    static var scheme: InputScheme {
-        get {
-            InputScheme(rawValue: defaults.string(forKey: "inputScheme") ?? "")
-                ?? .fullPinyin
-        }
-        set { defaults.set(newValue.rawValue, forKey: "inputScheme") }
+    static var scheme: InputScheme { schemeStore.scheme }
+
+    static func setScheme(_ scheme: InputScheme, by writer: SettingsWriter) {
+        schemeStore.setScheme(scheme, by: writer)
     }
 
     /// The most recently used Shuangpin scheme, restored when the in-keyboard
     /// 全拼/双拼 toggle flips back to 双拼 (which cannot name a specific one).
-    static var lastShuangpinScheme: InputScheme {
-        get {
-            let saved = InputScheme(rawValue: defaults.string(forKey: "lastShuangpinScheme") ?? "")
-            return (saved?.isShuangpin == true) ? saved! : .microsoftShuangpin
-        }
-        set { if newValue.isShuangpin { defaults.set(newValue.rawValue, forKey: "lastShuangpinScheme") } }
+    static var lastShuangpinScheme: InputScheme { schemeStore.lastShuangpinScheme }
+
+    static func setLastShuangpinScheme(_ scheme: InputScheme, by writer: SettingsWriter) {
+        schemeStore.setLastShuangpinScheme(scheme, by: writer)
     }
 
     /// Whether the empty-preedit association bar is shown after committing.

@@ -601,7 +601,9 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     }
 
     private func recordShuangpinScheme() {
-        if keyboardScheme.isShuangpin { InputSettings.lastShuangpinScheme = keyboardScheme }
+        if keyboardScheme.isShuangpin {
+            InputSettings.setLastShuangpinScheme(keyboardScheme, by: .keyboard)
+        }
     }
 
     // Right-aligned candidate-row toggle: visible only on number/symbol pages;
@@ -620,19 +622,17 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
         applyScheme(target)
     }
 
-    // Switch schemes from inside the keyboard, mirroring the app-side switch:
-    // commit any pending composition first (full/Shuangpin raw keys differ),
-    // then rebuild with a fresh Composition and load the matching engine.
+    // Reinterpret the pending keys in the target scheme without committing them.
     private func applyScheme(_ scheme: InputScheme) {
         guard scheme != keyboardScheme else { return }
-        if composition.isComposing { commitComposition() }
-        if scheme.isShuangpin { InputSettings.lastShuangpinScheme = scheme }
-        InputSettings.scheme = scheme
+        dismissCandidateBubble()
+        let previous = composition
+        InputSettings.setScheme(scheme, by: .keyboard)
         keyboardScheme = scheme
         composition = Self.makeComposition(inputScheme: scheme)
+        composition.reinterpret(from: previous)
         usesNativeDecoder = composition.decoderIsNative
-        composition.predictionEnabled = InputSettings.predictionEnabled
-        composition.reDecodeOnCorrection = InputSettings.reDecodeOnCorrection
+        updateMarkedText()
         // The visible number/symbol page is scheme-independent except for the
         // bottom-row scheme label; update it in place instead of tearing down
         // and rebuilding every key (the letters page is rebuilt on entry).

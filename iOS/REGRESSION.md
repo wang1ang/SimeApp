@@ -15,7 +15,7 @@
 1. `iOS/project.yml` 是唯一 Xcode 工程源，不提交生成的 `iOS/Sime.xcodeproj/`。
 2. 键盘完全离线运行，不申请“完全访问”，不得上传或记录用户输入正文。
 3. 系统只安装一个“乐言输入法”扩展；宿主 App 名称为“乐言输入法”。
-4. 输入方案（全拼 / 微软双拼 / 小鹤双拼 / 自然码 / 搜狗双拼）通过 App Group 共享；方案切换时创建与新方案匹配的 Composition 状态。`Shared/InputScheme.swift` 为每种双拼选择预建 Sime index，原始按键由对应 index 解码。App 内通过 Picker 选择方案，系统键盘使用单一扩展和固定菜单名称。
+4. 输入方案经 App 页面与键盘两处选择；无完全访问时，键盘端切换仍须在重新部署后生效，App 与键盘先后切换的读写规则由 `Tests/InputSettingsTests.swift` 覆盖。App 内通过 Picker 选择方案，系统键盘使用单一扩展和固定菜单名称。
 5. 模型与 ncnn runtime 必须位于 Keyboard Extension 自身资源/链接范围内。
 6. ncnn XCFramework 是本地生成物，不提交；新环境用 `iOS/scripts/build-ncnn-xcframework.sh` 构建。
 
@@ -95,7 +95,7 @@
 41a. 点 `123` 切到数字/符号页不得立即上屏当前组合；组合保持 marked，直到真正插入数字或符号才上屏。若未插入任何字符就点“拼音”切回，组合应原样恢复。
 42. 中文/半角标点策略保持一致，成对引号状态跨切页保留。组合态输入标点时，组合文本与标点合并为一次上屏，顺序为组合文本后接标点；在备忘录及至少一个第三方输入框真机验证。
 43. 标点提交后退格撤销仍属于待实现行为。
-43a. 数字页与符号页的顶部候选区右侧显示「全拼/双拼」切换开关（`UISegmentedControl`，字母页隐藏）。选「全拼」切到 `fullPinyin`；选「双拼」切到**上次使用的双拼方案**（`InputSettings.lastShuangpinScheme`，无记录时默认微软双拼；App 内或开关切到任一双拼都会更新该记录）。开关只做全拼↔双拼二选一，不轮换四种双拼。按开关若正在组合，先按方案B把当前组合上屏再切；切换走与 App 侧一致的路径（写 `InputSettings.scheme`、重建 Composition、`keyboardNeedsRebuild` 重建键盘、异步换入对应 Native 引擎），并即时同步左下角「拼音/双拼」显示。当前无自动化覆盖，需真机回归。
+43a. 数字页与符号页的顶部候选区右侧显示「全拼/双拼」切换开关（`UISegmentedControl`，字母页隐藏）。选「全拼」切到 `fullPinyin`；选「双拼」切到**上次使用的双拼方案**（无记录时默认微软双拼）。开关只做全拼↔双拼二选一，不轮换四种双拼。组合中切换方案时，真机须确认宿主正文不上屏、marked text 留在输入框中，候选即时按目标方案更新；左下角「拼音/双拼」同步显示。原始按键重新解码、旧改选锚点清除由 `Tests/CompositionBehaviorTests.swift` 覆盖。
 
 ## 宿主正文上下文与联想
 

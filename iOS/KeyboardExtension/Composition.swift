@@ -422,6 +422,16 @@ final class Composition {
         refresh()
     }
 
+    /// Start a new scheme with the same keys and context; corrections from the
+    /// old scheme cannot be mapped to the new scheme's syllable boundaries.
+    func reinterpret(from previous: Composition) {
+        predictionEnabled = previous.predictionEnabled
+        reDecodeOnCorrection = previous.reDecodeOnCorrection
+        hostContextTokens = previous.hostContextTokens
+        contextTokens = previous.contextTokens
+        restore(raw: previous.raw)
+    }
+
     func moveCursor(to offset: Int) {
         cursor = min(max(0, offset), raw.count)
     }
