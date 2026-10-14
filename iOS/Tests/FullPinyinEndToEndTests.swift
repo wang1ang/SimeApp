@@ -83,6 +83,33 @@ final class FullPinyinEndToEndTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(composition.sentenceSegments.count, 3)
     }
 
+    func testAbbreviatedWordSplitsIntoPerCharSegments() throws {
+        // 简拼: dimiduzhdb → 低密度脂蛋白. The abbreviated word 脂蛋白 (zh/d/b) must
+        // report one key span per character, not one glued block.
+        let bundle = Bundle(for: Self.self)
+        guard let decoder = NativePinyinDecoder(bundle: bundle) else { throw XCTSkip() }
+        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
+        "dimiduzhdb".forEach { composition.append(String($0)) }
+        guard let word = composition.candidates.first(where: { $0.text == "低密度脂蛋白" }) else {
+            throw XCTSkip("低密度脂蛋白 not decoded; got: \(composition.candidates.first?.text ?? "nil")")
+        }
+        XCTAssertEqual(word.segmentChars, [1, 1, 1, 1, 1, 1])
+        XCTAssertEqual(word.segmentKeys, [2, 2, 2, 2, 1, 1])
+    }
+
+    func testFullyAbbreviatedWordSplitsIntoPerCharSegments() throws {
+        // Fully abbreviated 简拼: dmdzdb → 低密度脂蛋白, one key per character.
+        let bundle = Bundle(for: Self.self)
+        guard let decoder = NativePinyinDecoder(bundle: bundle) else { throw XCTSkip() }
+        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
+        "dmdzdb".forEach { composition.append(String($0)) }
+        guard let word = composition.candidates.first(where: { $0.text == "低密度脂蛋白" }) else {
+            throw XCTSkip("低密度脂蛋白 not decoded; got: \(composition.candidates.first?.text ?? "nil")")
+        }
+        XCTAssertEqual(word.segmentChars, [1, 1, 1, 1, 1, 1])
+        XCTAssertEqual(word.segmentKeys, [1, 1, 1, 1, 1, 1])
+    }
+
     func testLaterSegmentCorrectionOffersEnglishSuffixWord() throws {
         // Tapping a later segment locks the confirmed prefix but re-decodes the
         // rest from raw keys, so an English suffix word survives: tapping 不 in
