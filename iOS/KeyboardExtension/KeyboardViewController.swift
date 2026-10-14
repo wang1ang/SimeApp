@@ -1302,7 +1302,15 @@ final class KeyboardHitTestStackView: UIStackView {
     }
 }
 
-final class KeyButton: UIButton {
+final class KeyButton: UIButton, UIInputViewAudioFeedback {
+    // playInputClick only sounds when a visible input view (or the pressed
+    // responder) opts in; it then follows the system Keyboard Clicks setting.
+    var enableInputClicksWhenVisible: Bool { true }
+
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        super.touchesBegan(touches, with: event)
+        UIDevice.current.playInputClick()
+    }
     // Keep visual feedback in a non-interactive layer so the button's hit
     // geometry never changes during the press animation.
     private let feedbackView = UIView()
@@ -1449,4 +1457,9 @@ final class KeyButton: UIButton {
                                      bottom: -hitInset.bottom, right: -hitInset.right))
             .contains(point)
     }
+}
+
+// UIKit checks the visible input view for input-click opt-in.
+extension UIInputView: @retroactive UIInputViewAudioFeedback {
+    public var enableInputClicksWhenVisible: Bool { true }
 }
