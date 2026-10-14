@@ -155,6 +155,9 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
             refreshHostContext()
         }
         refreshReturnKeyAppearance()
+        if composition.updateCalculator(context: textDocumentProxy.documentContextBeforeInput) {
+            render()
+        }
     }
 
     private func refreshHostContext() {
@@ -1029,6 +1032,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
         // Pick up return-key label changes (host type or composing state)
         // before the rebuild check below so the bottom row reflects them.
         refreshReturnKeyAppearance()
+        composition.updateCalculator(context: textDocumentProxy.documentContextBeforeInput)
         if keyboardNeedsRebuild {
             rebuildKeyboard()
             keyboardNeedsRebuild = false

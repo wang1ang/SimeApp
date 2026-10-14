@@ -41,6 +41,7 @@ targets:
     sources:
       - path: Tests
       - path: KeyboardExtension/Composition.swift
+      - path: KeyboardExtension/Calculator.swift
       - path: KeyboardExtension/PinyinDecoder.swift
       - path: KeyboardExtension/NativePinyinDecoder.swift
       - path: Engine

@@ -23,6 +23,8 @@ final class Composition {
     private(set) var activeShowsKeys: Bool = false
     private var replacementCandidates: [Candidate] = []
     private var predictionCandidates: [Candidate] = []
+    /// Shown instead of association while the host text ends in arithmetic.
+    private(set) var calculatorSuggestion: CalculatorSuggestion?
     // Tokens derived from the host's text before the insertion point. They
     // supersede the local fallback whenever UIKit exposes that text.
     private var hostContextTokens: [UInt32]?
@@ -48,7 +50,10 @@ final class Composition {
     /// Refreshed by the keyboard from `InputSettings.predictionEnabled`.
     var predictionEnabled: Bool = InputSettings.predictionEnabled {
         didSet {
-            if !predictionEnabled { predictionCandidates = [] }
+            if !predictionEnabled {
+                predictionCandidates = []
+                calculatorSuggestion = nil
+            }
         }
     }
 
@@ -201,6 +206,9 @@ final class Composition {
     var displayCandidates: [Candidate] {
         if !replacementCandidates.isEmpty { return replacementCandidates }
         guard !isComposing else { return candidates }
+        if let calc = calculatorSuggestion {
+            return [Candidate(text: calc.display, consumed: 0, tokens: [])]
+        }
         // Association completions carry the full word (e.g. 狐狸) but their
         // leading `consumed` characters are already in the document, so the
         // bar must show only the part that will be inserted (狸) — never the
@@ -442,6 +450,7 @@ final class Composition {
         raw.insert(contentsOf: letter, at: insertion)
         cursor += letter.count
         predictionCandidates = []
+        calculatorSuggestion = nil
         clearActiveSelection()
         refresh()
     }
@@ -569,7 +578,23 @@ final class Composition {
         }
     }
 
+    /// Re-evaluates the host text before the cursor; returns whether the
+    /// suggestion changed so the caller can re-render.
+    @discardableResult
+    func updateCalculator(context: String?) -> Bool {
+        let next = isComposing || !predictionEnabled ? nil : context.flatMap(Calculator.suggestion(forContext:))
+        guard next != calculatorSuggestion else { return false }
+        calculatorSuggestion = next
+        if next != nil { predictionCandidates = [] }
+        return true
+    }
+
     func selectDisplayed(_ index: Int) -> String? {
+        if !isComposing, let calc = calculatorSuggestion {
+            guard index == 0 else { return nil }
+            calculatorSuggestion = nil
+            return calc.insert
+        }
         if !isComposing, predictionCandidates.indices.contains(index) {
             let prediction = predictionCandidates[index]
             // Association candidates carry the full word; `consumed` leading
