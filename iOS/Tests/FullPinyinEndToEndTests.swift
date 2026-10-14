@@ -247,4 +247,33 @@ final class FullPinyinEndToEndTests: XCTestCase {
             XCTAssertEqual(top, c.top, "\(c.pinyin) top candidate")
         }
     }
+
+    // Only pinyin decodes a letter, so an uppercase letter that the English
+    // dictionary only completes (BBC) or swallows into a prefix (Bf) stays a
+    // literal; a real English word still beats literal + abbreviations.
+    func testUppercaseLetterStaysLiteralWhereOnlyEnglishCovers() throws {
+        let lone = try candidates(for: "B")
+        XCTAssertEqual(lone.first, "B")
+        XCTAssertTrue(lone.contains("BBC"), "B should still offer BBC; got: \(lone)")
+
+        XCTAssertEqual(try candidates(for: "Bfangan").first, "B方案")
+        XCTAssertEqual(try candidates(for: "woshiBfangan").first, "我是B方案")
+
+        let tail = try candidates(for: "woxuanB").first ?? ""
+        XCTAssertTrue(tail.hasSuffix("B") && !tail.hasSuffix("BBC"),
+                      "woxuanB should end in a literal B; got: \(tail)")
+    }
+
+    func testLiteralLetterDoesNotDisplaceWordsOrAbbreviations() throws {
+        let cases: [(pinyin: String, top: String)] = [
+            ("woxihuanApple", "我喜欢Apple"),
+            ("Hello", "Hello"), ("hello", "hello"), ("iphone", "iphone"),
+            ("AI", "AI"), ("bj", "北京"), ("nihao", "你好")
+        ]
+        for c in cases {
+            XCTAssertEqual(try candidates(for: c.pinyin).first, c.top,
+                           "\(c.pinyin) top candidate")
+        }
+        XCTAssertNotEqual(try candidates(for: "b").first, "b")
+    }
 }
