@@ -42,6 +42,13 @@ final class ShuangpinEndToEndTests: XCTestCase {
         XCTAssertTrue(bbc.contains("BBCNN"), "BBC should also complete from inside the run; got: \(bbc)")
     }
 
+    func testAdjacentEnglishWordsStaySpacedInTopCandidateAndCommit() throws {
+        let c = try composition(for: "helloworld")
+        XCTAssertEqual(c.preedit, "hello world")
+        XCTAssertEqual(c.sentenceSegments.map(\.text), ["hello world"])
+        XCTAssertEqual(c.commitBestOrRaw(), "hello world")
+    }
+
     func testEnglishCorrectionReplacesTheRemainingDecodedSpan() throws {
         let c = try composition(for: "veuilove") // zhe + shi + love
         XCTAssertEqual(c.candidates.first?.text, "这是裸着")

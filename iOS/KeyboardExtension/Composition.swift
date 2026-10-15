@@ -176,21 +176,21 @@ final class Composition {
     }
 
     private var sentenceMapping: SentenceMapping {
-        SentenceMapping(text: sentencePreview,
-                        segmentChars: segmentCharCounts(candidates.first),
+        sentenceMapping(of: candidates.first)
+    }
+
+    private func sentenceMapping(of candidate: Candidate?) -> SentenceMapping {
+        SentenceMapping(text: renderedText(candidate?.text ?? ""),
+                        segmentChars: segmentCharCounts(candidate),
                         anchors: usingEngineAnchors ? anchorsAlignedToTop() : anchorSegments)
     }
 
-    /// The committed text matches the first row: adjacent English words keep
-    /// their spaces. Falls back to the plain text if the mapping drops any.
+    /// Commit what the first row shows, so adjacent English words keep their
+    /// spaces. Falls back to the plain text if the mapping drops any of it.
     private func committedText(of candidate: Candidate) -> String {
         let text = renderedText(candidate.text)
-        let anchors = candidate.text == candidates.first?.text
-            ? (usingEngineAnchors ? anchorsAlignedToTop() : anchorSegments) : []
-        let spaced = SentenceMapping(text: text,
-                                     segmentChars: segmentCharCounts(candidate),
-                                     anchors: anchors).segments.map(\.text).joined()
-        return spaced.filter { $0 != " " } == text.filter { $0 != " " } ? spaced : text
+        let shown = sentenceMapping(of: candidate).segments.map(\.text).joined()
+        return shown.filter { $0 != " " } == text ? shown : text
     }
 
     /// Re-map anchors onto the current top candidate's segmentation by their
