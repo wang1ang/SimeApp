@@ -906,8 +906,11 @@ final class Composition {
     func appendInsertedContext(_ text: String) {
         guard !text.isEmpty else { return }
         let token = decoder.contextToken(text)
-        if token == 0, contextTokens.last == 0 { return }
-        extendContext(base: contextTokens, with: [token])
+        if token != 0 || contextTokens.last != 0 {
+            extendContext(base: contextTokens, with: [token])
+        }
+        predictionCandidates = predictionEnabled
+            ? decoder.associate(contextTokens, limit: 9) : []
     }
 
     /// Space and newline never form a token, so they start a fresh context.

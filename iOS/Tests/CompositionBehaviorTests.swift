@@ -484,6 +484,27 @@ final class CompositionContextTests: XCTestCase {
         XCTAssertEqual(decoder.decodeCalls.last?.context, [11, 50])
     }
 
+    func testInsertedPunctuationRefreshesAssociation() {
+        let decoder = RecordingPinyinDecoder()
+        decoder.contextTokenText["，"] = 50
+        decoder.decodeResult = { pinyin in
+            [Candidate(text: "你", consumed: pinyin.count, tokens: [11], units: pinyin)]
+        }
+        decoder.predictionResult = { context in
+            context.last == 50
+                ? [Candidate(text: "我", consumed: 0, tokens: [12], units: "")]
+                : [Candidate(text: "好", consumed: 0, tokens: [13], units: "")]
+        }
+        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
+        composition.predictionEnabled = true
+
+        "ni".forEach { composition.append(String($0)) }
+        XCTAssertEqual(composition.commitBestOrRaw(), "你")
+        XCTAssertEqual(composition.displayCandidates.map(\.text), ["好"])
+        composition.appendInsertedContext("，")
+        XCTAssertEqual(composition.displayCandidates.map(\.text), ["我"])
+    }
+
     func testLocalCommitsSupersedeAStaleHostSnapshot() {
         let decoder = RecordingPinyinDecoder()
         decoder.tokenizedText["宿主文本"] = [90, 91]
