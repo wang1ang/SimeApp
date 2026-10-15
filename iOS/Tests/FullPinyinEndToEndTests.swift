@@ -93,6 +93,46 @@ final class FullPinyinEndToEndTests: XCTestCase {
         XCTAssertEqual(composition.commitBestOrRaw(), "hello world")
     }
 
+    func testAdjacentEnglishWordsStaySpacedInLaterCandidates() throws {
+        let bundle = Bundle(for: Self.self)
+        guard let decoder = NativePinyinDecoder(bundle: bundle) else { throw XCTSkip() }
+        let c = Composition(decoder: decoder, inputScheme: .fullPinyin)
+        "BigAss".forEach { c.append(String($0)) }
+        guard let index = c.candidates.firstIndex(where: { $0.text == "BigAss" }), index > 0 else {
+            throw XCTSkip("BigAss is no longer a later candidate; got: \(c.candidates.map(\.text))")
+        }
+        XCTAssertEqual(c.displayText(of: c.candidates[index]), "Big Ass")
+        XCTAssertEqual(c.select(index), "Big Ass")
+    }
+
+    func testPickedEnglishWordIsNotSpacedFromChineseAfterIt() throws {
+        let bundle = Bundle(for: Self.self)
+        guard let decoder = NativePinyinDecoder(bundle: bundle) else { throw XCTSkip() }
+        let c = Composition(decoder: decoder, inputScheme: .fullPinyin)
+        "bigass".forEach { c.append(String($0)) }
+        c.activateCharacter(0)
+        guard let big = c.displayCandidates.firstIndex(where: { $0.text == "big" }) else {
+            return XCTFail("bubble should offer big; got: \(c.displayCandidates.map(\.text))")
+        }
+        XCTAssertNil(c.selectDisplayed(big))
+        guard let top = c.candidates.first, top.text.hasPrefix("big"),
+              !(top.text.dropFirst(3).first?.isASCII ?? true) else {
+            throw XCTSkip("expected big followed by Chinese; got: \(c.candidates.first?.text ?? "")")
+        }
+        XCTAssertEqual(c.commitBestOrRaw(), top.text)
+    }
+
+    func testEditingKeysOfFirstEnglishWordKeepsTheNextWordShown() throws {
+        let bundle = Bundle(for: Self.self)
+        guard let decoder = NativePinyinDecoder(bundle: bundle) else { throw XCTSkip() }
+        let c = Composition(decoder: decoder, inputScheme: .fullPinyin)
+        "helloworld".forEach { c.append(String($0)) }
+        c.activateCharacter(0)
+        c.activateCharacter(0)   // second tap: pinyin editing of hello
+        XCTAssertEqual(c.activeEnteredKeys, "hello")
+        XCTAssertEqual(c.sentenceSegments.first.map(c.title(of:)), "hello world")
+    }
+
     func testAbbreviatedWordSplitsIntoPerCharSegments() throws {
         // 简拼: dimiduzhdb → 低密度脂蛋白. The abbreviated word 脂蛋白 (zh/d/b) must
         // report one key span per character, not one glued block.

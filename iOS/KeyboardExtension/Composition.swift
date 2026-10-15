@@ -97,13 +97,21 @@ final class Composition {
     }
 
     struct SentenceSegment {
-        let text: String
+        /// Adjacent English words share one touch target.
+        let words: [String]
         let displayIndex: Int
+        /// English follows English across a touch-target boundary (an anchor).
+        let spacedBefore: Bool
+        var text: String { words.joined(separator: " ") }
     }
 
     private struct SentenceMapping {
         let segments: [SentenceSegment]
         let unitRanges: [Range<Int>]
+        /// Every pair of adjacent English words is spaced, as in the marked text.
+        var spacedText: String {
+            segments.map { ($0.spacedBefore ? " " : "") + $0.text }.joined()
+        }
 
         init(text: String, segmentChars: [Int], anchors: [CompositionSegment] = []) {
             let chars = Array(text)
@@ -124,6 +132,14 @@ final class Composition {
                     chars[$0].isASCII && chars[$0].isLetter
                 }
             }
+            var endsEnglish = false
+            func append(_ words: [String], covering range: Range<Int>) {
+                let startsEnglish = isEnglish(range.prefix(1))
+                segments.append(SentenceSegment(
+                    words: words, displayIndex: range.lowerBound,
+                    spacedBefore: endsEnglish && startsEnglish))
+                endsEnglish = isEnglish(range.suffix(1))
+            }
             while unit < segmentChars.count && display < chars.count {
                 if let anchor = anchorsByStart[unit],
                    anchor.syllableRange.upperBound <= segmentChars.count {
@@ -135,8 +151,7 @@ final class Composition {
                             ranges[anchoredUnit] = range
                         }
                     }
-                    segments.append(SentenceSegment(
-                        text: String(chars[range]), displayIndex: start))
+                    append([String(chars[range])], covering: range)
                     display = end
                     unit = anchor.syllableRange.upperBound
                     continue
@@ -147,8 +162,7 @@ final class Composition {
                 display = range.upperBound
                 unit += 1
                 var words = [String(chars[range])]
-                // Keep adjacent ASCII decoder segments as one touch target,
-                // spaced like the marked text.
+                // Keep adjacent ASCII decoder segments as one touch target.
                 if isEnglish(range) {
                     while unit < segmentChars.count,
                           anchorsByStart[unit] == nil {
@@ -161,9 +175,7 @@ final class Composition {
                         words.append(String(chars[next]))
                     }
                 }
-                segments.append(SentenceSegment(
-                    text: words.joined(separator: " "),
-                    displayIndex: runStart))
+                append(words, covering: runStart..<display)
             }
             self.segments = segments
             self.unitRanges = ranges
@@ -173,6 +185,14 @@ final class Composition {
 
     var sentenceSegments: [SentenceSegment] {
         sentenceMapping.segments
+    }
+
+    /// In pinyin editing the tapped word shows its typed keys; the other words
+    /// of its touch target stay as they are.
+    func title(of segment: SentenceSegment) -> String {
+        guard segment.displayIndex == activeCharacterIndex,
+              let keys = activeEnteredKeys else { return segment.text }
+        return ([keys] + segment.words.dropFirst()).joined(separator: " ")
     }
 
     private var sentenceMapping: SentenceMapping {
@@ -185,12 +205,22 @@ final class Composition {
                         anchors: usingEngineAnchors ? anchorsAlignedToTop() : anchorSegments)
     }
 
-    /// Commit what the first row shows, so adjacent English words keep their
-    /// spaces. Falls back to the plain text if the mapping drops any of it.
+    /// A candidate as listed: adjacent English words spaced as in the first row.
+    func displayText(of candidate: Candidate) -> String {
+        spacedText(SentenceMapping(text: candidate.text,
+                                   segmentChars: segmentCharCounts(candidate)),
+                   plain: candidate.text)
+    }
+
+    /// Commit what the first row shows, anchors included.
     private func committedText(of candidate: Candidate) -> String {
-        let text = renderedText(candidate.text)
-        let shown = sentenceMapping(of: candidate).segments.map(\.text).joined()
-        return shown.filter { $0 != " " } == text ? shown : text
+        spacedText(sentenceMapping(of: candidate), plain: renderedText(candidate.text))
+    }
+
+    /// Falls back to the plain text if the mapping drops any of it.
+    private func spacedText(_ mapping: SentenceMapping, plain: String) -> String {
+        let shown = mapping.spacedText
+        return shown.filter { $0 != " " } == plain ? shown : plain
     }
 
     /// Re-map anchors onto the current top candidate's segmentation by their

@@ -49,6 +49,26 @@ final class ShuangpinEndToEndTests: XCTestCase {
         XCTAssertEqual(c.commitBestOrRaw(), "hello world")
     }
 
+    func testEnglishAfterAPickedEnglishWordStaysSpaced() throws {
+        let c = try composition(for: "bigass")
+        c.activateCharacter(0)
+        guard let big = c.displayCandidates.firstIndex(where: { $0.text == "big" }) else {
+            return XCTFail("bubble should offer big; got: \(c.displayCandidates.map(\.text))")
+        }
+        XCTAssertNil(c.selectDisplayed(big))
+        XCTAssertEqual(c.sentenceSegments.map(\.text), ["big", "ass"])
+        XCTAssertEqual(c.sentenceSegments.map(\.spacedBefore), [false, true])
+        XCTAssertEqual(c.commitBestOrRaw(), "big ass")
+    }
+
+    func testEditingKeysOfFirstEnglishWordKeepsTheNextWordShown() throws {
+        let c = try composition(for: "helloworld")
+        c.activateCharacter(0)
+        c.activateCharacter(0)   // second tap: pinyin editing of hello
+        XCTAssertEqual(c.activeEnteredKeys, "hello")
+        XCTAssertEqual(c.sentenceSegments.first.map(c.title(of:)), "hello world")
+    }
+
     func testEnglishCorrectionReplacesTheRemainingDecodedSpan() throws {
         let c = try composition(for: "veuilove") // zhe + shi + love
         XCTAssertEqual(c.candidates.first?.text, "这是裸着")

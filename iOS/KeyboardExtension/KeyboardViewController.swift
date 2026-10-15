@@ -914,7 +914,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
         var usedRowWidth: CGFloat = 0
         for item in items {
             let candidate = item.candidate
-            let textWidth = (candidate.text as NSString).size(withAttributes: [.font: font]).width
+            let text = composition.displayText(of: candidate)
+            let textWidth = (text as NSString).size(withAttributes: [.font: font]).width
             let width = min(max(ceil(textWidth) + 16, cellHeight), maxRowWidth)
             if x > 0 && x + width > maxRowWidth {
                 usedRowWidth = max(usedRowWidth, x - gap)
@@ -922,7 +923,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
                 y += cellHeight + gap
             }
             let label = UILabel(frame: CGRect(x: x, y: y, width: width, height: cellHeight))
-            label.text = candidate.text
+            label.text = text
             label.font = font
             label.textColor = .label
             label.textAlignment = .center
@@ -1059,10 +1060,12 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
         let preferredBaselineLift = ((preferredFont.ascender - preferredFont.descender)
             - (preferredBaseFont.ascender - preferredBaseFont.descender)) / 2
         if composition.isComposing {
+            let spaceWidth = (" " as NSString).size(withAttributes: [.font: preferredFont]).width
             for segment in composition.sentenceSegments {
+                if segment.spacedBefore { sentenceX += spaceWidth }
                 let index = segment.displayIndex
                 let isActive = index == composition.activeCharacterIndex
-                let title = isActive ? (composition.activeEnteredKeys ?? segment.text) : segment.text
+                let title = composition.title(of: segment)
                 let button = UIButton(type: .system)
                 button.setTitle(title, for: .normal)
                 button.titleLabel?.font = preferredFont
@@ -1129,12 +1132,13 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
             let font = UIFont.preferredFont(forTextStyle: .body)
             for item in activeDisplayCandidates() {
                 let label = UILabel()
-                label.text = item.candidate.text
+                let text = composition.displayText(of: item.candidate)
+                label.text = text
                 label.font = font
                 label.textColor = .label
                 label.textAlignment = .center
                 label.lineBreakMode = .byTruncatingTail
-                let textWidth = (item.candidate.text as NSString).size(withAttributes: [.font: font]).width
+                let textWidth = (text as NSString).size(withAttributes: [.font: font]).width
                 let width = max(ceil(textWidth) + 4, 24)
                 label.frame = CGRect(x: sentenceX, y: 0, width: width, height: 28)
                 label.tag = item.index
@@ -1147,13 +1151,14 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
             for index in candidates.indices.dropFirst() {
                 let candidate = candidates[index]
                 if !composition.matchesAnchors(candidate) { continue }
+                let text = composition.displayText(of: candidate)
                 let label = UILabel()
-                label.text = candidate.text
+                label.text = text
                 label.font = font
                 label.textColor = .label
                 label.textAlignment = .center
                 label.lineBreakMode = .byTruncatingTail
-                let textWidth = (candidate.text as NSString).size(withAttributes: [.font: font]).width
+                let textWidth = (text as NSString).size(withAttributes: [.font: font]).width
                 let width = max(ceil(textWidth) + 4, 24)
                 label.frame = CGRect(x: sentenceX, y: 0, width: width, height: 28)
                 label.tag = index
