@@ -434,6 +434,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     }
 
     @objc private func keyTapped(_ sender: UIButton) {
+        // A lost ⌫ touch-up must not leave the repeat deleting what's typed.
+        endDeleteRepeat()
         guard let title = sender.accessibilityValue ?? sender.currentTitle else { return }
         // Any keypress ends an open candidate bubble.
         dismissCandidateBubble()
@@ -547,6 +549,10 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
             guard let self, self.deleteRepeatGeneration == generation else { return }
             self.deleteRepeatTimer = Timer.scheduledTimer(withTimeInterval: 0.08, repeats: true) { [weak self] _ in
                 guard let self, self.deleteRepeatGeneration == generation else { return }
+                guard self.composition.isComposing || self.textDocumentProxy.hasText else {
+                    self.endDeleteRepeat()
+                    return
+                }
                 self.delete()
             }
             if let deleteRepeatTimer = self.deleteRepeatTimer {
@@ -1022,6 +1028,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     }
 
     private func rebuildKeyboard() {
+        // A removed ⌫ never receives its touch-up.
+        endDeleteRepeat()
         keyboardStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         var punctuationWidthReference: UIView?
         switch keyboardPage {
@@ -1484,8 +1492,9 @@ final class KeyButton: UIButton, UIInputViewAudioFeedback {
         let target = window.hitTest(endPoint, with: event) as? KeyButton
         if let target, target !== self, target.isEnabled {
             // The original button must not receive touch-up handling when the
-            // finger finishes on another key.
+            // finger finishes on another key, but it still ends (⌫ repeat).
             setHighlight(false, animated: false)
+            sendActions(for: .touchUpOutside)
             // Known limitation: drag release omits .touchDown, so sliding to delete has no effect.
             target.sendActions(for: .touchUpInside)
             target.setHighlight(false, animated: true)
