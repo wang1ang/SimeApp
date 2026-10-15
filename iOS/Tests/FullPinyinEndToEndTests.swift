@@ -83,6 +83,16 @@ final class FullPinyinEndToEndTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(composition.sentenceSegments.count, 3)
     }
 
+    func testAdjacentEnglishWordsStaySpacedInTopCandidateAndCommit() throws {
+        let bundle = Bundle(for: Self.self)
+        guard let decoder = NativePinyinDecoder(bundle: bundle) else { throw XCTSkip() }
+        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
+        "helloworld".forEach { composition.append(String($0)) }
+        XCTAssertEqual(composition.preedit, "hello world")
+        XCTAssertEqual(composition.sentenceSegments.map(\.text), ["hello world"])
+        XCTAssertEqual(composition.commitBestOrRaw(), "hello world")
+    }
+
     func testAbbreviatedWordSplitsIntoPerCharSegments() throws {
         // 简拼: dimiduzhdb → 低密度脂蛋白. The abbreviated word 脂蛋白 (zh/d/b) must
         // report one key span per character, not one glued block.

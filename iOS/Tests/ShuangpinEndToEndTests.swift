@@ -39,7 +39,7 @@ final class ShuangpinEndToEndTests: XCTestCase {
         XCTAssertTrue(b.contains("BBC"), "B should offer BBC; got: \(b)")
         let bbc = try candidates(for: "BBC")
         XCTAssertEqual(bbc.first, "BBC")
-        XCTAssertFalse(bbc.contains("BBCNN"), "BBC must not complete inside the run; got: \(bbc)")
+        XCTAssertTrue(bbc.contains("BBCNN"), "BBC should also complete from inside the run; got: \(bbc)")
     }
 
     func testEnglishCorrectionReplacesTheRemainingDecodedSpan() throws {

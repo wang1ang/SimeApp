@@ -22,8 +22,8 @@
 ### 2. 英文补全
 
 - 从任何一列都可以往后补英文词（`B` → `BBC`）。
-- 以前有个例外：不从大写串中间开始（`InsideUppercaseRun`）。现在已临时去掉，见
-  “待定”。
+- 大写串中间也可以开始补全：`BBC` 会出 `BBCNN`、`BBCEO`（`BB` + `C` 开头的补全），
+  `NTP` 会出 `NTPC`、`NTPark`。以前的例外 `InsideUppercaseRun` 已去掉。
 
 ### 3. 分层过滤（打全了就不要缩写）
 
@@ -73,11 +73,6 @@
 
 ## 待定
 
-- **`InsideUppercaseRun` 已在代码里临时去掉**（规则越简单越好）。去掉后 `BBC` 会出
-  `BBCNN`、`BBCEO`（`BB` + `C` 开头的补全），`NTP` 会出 `NTPC`、`NTPark`。
-  下面两处契约因此失败，等你决定是删掉这两条断言，还是恢复这条约束：
-  - engine `tests/correction_test.cc:102`（双拼 `BBC` 不出 `BBCNN`）
-  - iOS `ShuangpinEndToEndTests.swift:42`（`testUppercaseLetterOffersEnglishCompletionsAfterItself`）
 - 切开后的 `P` 目前只出原样，不从 `P` 开始补全（如 `PDF`）。
 
 ## 已知问题
@@ -103,9 +98,9 @@
 | 只有拼音边才算“解出”，补原样扣 `LiteralPenalty` | `662f884` | 删除；常量保留给大写串用 |
 | 分层过滤时原样字母不参与过滤（全拼、双拼各一处） | `684bd5e`、`f497948` | 删除；改为过滤后再加大写串边，效果相同 |
 | 相邻原样字母合成一段（为 `AA`，在 `ExtractUnits`/`ExtractSegments`） | `662f884` | 删除；一串大写本来就是一条边 |
-| 补全不从大写串中间开始（`InsideUppercaseRun`） | `b00a7ff`（Sime） | 临时去掉，见“待定” |
+| 补全不从大写串中间开始（`InsideUppercaseRun`） | `b00a7ff`（Sime） | 删除；`BBC` 改为要出 `BBCNN`（两处测试同步反转） |
 
 ## 验证
 
 已有测试和 `REGRESSION.md` 未改动，以它们为准。去掉 `InsideUppercaseRun` 之前：engine
-`correction_test` 通过，iOS 132 个测试全部通过。去掉之后：只有“待定”里那两处失败。
+`correction_test` 通过，iOS 132 个测试全部通过。去掉之后，按确认把 `BBC` 不出 `BBCNN` 的两条断言反转为要出。

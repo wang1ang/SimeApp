@@ -146,7 +146,9 @@ final class Composition {
                 ranges[unit] = range
                 display = range.upperBound
                 unit += 1
-                // Keep adjacent ASCII decoder segments as one touch target.
+                var words = [String(chars[range])]
+                // Keep adjacent ASCII decoder segments as one touch target,
+                // spaced like the marked text.
                 if isEnglish(range) {
                     while unit < segmentChars.count,
                           anchorsByStart[unit] == nil {
@@ -156,10 +158,11 @@ final class Composition {
                         range = next
                         display = next.upperBound
                         unit += 1
+                        words.append(String(chars[next]))
                     }
                 }
                 segments.append(SentenceSegment(
-                    text: String(chars[runStart..<display]),
+                    text: words.joined(separator: " "),
                     displayIndex: runStart))
             }
             self.segments = segments
@@ -176,6 +179,18 @@ final class Composition {
         SentenceMapping(text: sentencePreview,
                         segmentChars: segmentCharCounts(candidates.first),
                         anchors: usingEngineAnchors ? anchorsAlignedToTop() : anchorSegments)
+    }
+
+    /// The committed text matches the first row: adjacent English words keep
+    /// their spaces. Falls back to the plain text if the mapping drops any.
+    private func committedText(of candidate: Candidate) -> String {
+        let text = renderedText(candidate.text)
+        let anchors = candidate.text == candidates.first?.text
+            ? (usingEngineAnchors ? anchorsAlignedToTop() : anchorSegments) : []
+        let spaced = SentenceMapping(text: text,
+                                     segmentChars: segmentCharCounts(candidate),
+                                     anchors: anchors).segments.map(\.text).joined()
+        return spaced.filter { $0 != " " } == text.filter { $0 != " " } ? spaced : text
     }
 
     /// Re-map anchors onto the current top candidate's segmentation by their
@@ -480,7 +495,7 @@ final class Composition {
         // A selection pins its span as anchors and keeps the input editable;
         // it commits to the host only when it covers the last key (契约 11a/11b).
         if rawConsumption(of: candidate) >= raw.count {
-            return commitSentence(candidate.text, tokens: candidate.tokens)
+            return commitSentence(candidate)
         }
         anchorFrontSelection(candidate)
         clearActiveSelection()
@@ -489,10 +504,10 @@ final class Composition {
     }
 
     /// Commit a full sentence to the host and clear the composition.
-    private func commitSentence(_ text: String, tokens: [UInt32]) -> String {
-        let result = renderedText(text)
+    private func commitSentence(_ candidate: Candidate) -> String {
+        let result = committedText(of: candidate)
         if anchorSegments.isEmpty {
-            publishPredictions(for: tokens)
+            publishPredictions(for: candidate.tokens)
         } else {
             predictionCandidates = []
         }
@@ -648,8 +663,7 @@ final class Composition {
                     clearActiveSelection()
                     refresh()
                     if keyEnd >= raw.count {
-                        return commitSentence(candidates.first?.text ?? "",
-                                              tokens: candidates.first?.tokens ?? [])
+                        return commitSentence(candidates.first ?? replacement)
                     }
                     advanceToSegment(startingAtKey: keyEnd)
                     return nil
@@ -740,8 +754,7 @@ final class Composition {
             // Advance / commit by key position (robust across re-segmentation),
             // same as the crossing branch.
             if keyEnd >= raw.count {
-                return commitSentence(candidates.first?.text ?? top.text,
-                                      tokens: candidates.first?.tokens ?? [])
+                return commitSentence(candidates.first ?? top)
             }
             advanceToSegment(startingAtKey: keyEnd)
             return nil
@@ -829,7 +842,7 @@ final class Composition {
         // does not yet expose segmented selection, and retaining it caused
         // the final pinyin letter to remain in composition.
         if let candidate = candidates.first {
-            let result = renderedText(candidate.text)
+            let result = committedText(of: candidate)
             if anchorSegments.isEmpty {
                 publishPredictions(for: candidate.tokens)
             } else {
@@ -855,7 +868,7 @@ final class Composition {
             // Corrections anchored decoded characters, so the user committed to
             // Chinese: decode the non-anchored syllables via the top candidate
             // instead of emitting their literal keys.
-            result = renderedText(candidate.text)
+            result = committedText(of: candidate)
         } else {
             result = literalTextWithAnchors()
         }
