@@ -161,6 +161,10 @@ final class NativePinyinDecoder: PinyinDecoder {
         return token
     }
 
+    func tokenText(_ token: UInt32) -> String {
+        token == 0 ? "" : describeContext([token])
+    }
+
     func describeContext(_ context: [UInt32]) -> String {
         guard let handle, !context.isEmpty else { return "" }
         guard let text = context.withUnsafeBufferPointer({ buffer in

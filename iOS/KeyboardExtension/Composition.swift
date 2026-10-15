@@ -910,6 +910,20 @@ final class Composition {
             ? decoder.associate(contextTokens, limit: 9) : []
     }
 
+    /// Backspace outside composition removes the last character from the
+    /// context, re-matching what remains of a multi-character token.
+    func deleteContextBackward() {
+        guard let last = contextTokens.popLast() else { return }
+        hostContextTokens = nil
+        let text = decoder.tokenText(last)
+        if text.count > 1 {
+            let rest = decoder.contextToken(String(text.dropLast()))
+            if rest != 0 { contextTokens.append(rest) } else { contextTokens = [] }
+        }
+        predictionCandidates = predictionEnabled && !contextTokens.isEmpty
+            ? decoder.associate(contextTokens, limit: 9) : []
+    }
+
     /// Space and newline never form a token, so they start a fresh context.
     func clearContext() {
         contextTokens = []

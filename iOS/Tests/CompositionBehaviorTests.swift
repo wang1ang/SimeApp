@@ -51,6 +51,9 @@ private final class RecordingPinyinDecoder: PinyinDecoder {
 
     var contextTokenText: [String: UInt32] = [:]
     func contextToken(_ text: String) -> UInt32 { contextTokenText[text] ?? 0 }
+    func tokenText(_ token: UInt32) -> String {
+        contextTokenText.first { $0.value == token }?.key ?? ""
+    }
 
     func predict(_ context: [UInt32], limit: Int) -> [Candidate] {
         predictionCalls.append((context, limit))
@@ -601,6 +604,38 @@ final class CompositionContextTests: XCTestCase {
         composition.appendInsertedContext("3")
         composition.append("h")
 
+        XCTAssertEqual(decoder.decodeCalls.last?.context, [])
+    }
+
+    func testBackspaceRemovesContextCharacterByCharacter() {
+        let decoder = RecordingPinyinDecoder()
+        decoder.tokenizedText["宿主你好"] = [90, 20]
+        decoder.contextTokenText = ["宿主": 90, "你好": 20, "你": 11, "，": 50]
+        decoder.decodeResult = { pinyin in
+            [Candidate(text: "我", consumed: pinyin.count, tokens: [12], units: pinyin)]
+        }
+        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
+
+        composition.updateHostContext(from: "宿主你好")
+        composition.appendInsertedContext("，")
+        composition.deleteContextBackward()
+        composition.append("w")
+        XCTAssertEqual(decoder.decodeCalls.last?.context, [90, 20])
+        composition.cancel()
+
+        composition.deleteContextBackward()
+        composition.append("w")
+        XCTAssertEqual(decoder.decodeCalls.last?.context, [90, 11])
+        composition.cancel()
+
+        composition.deleteContextBackward()
+        composition.append("w")
+        XCTAssertEqual(decoder.decodeCalls.last?.context, [90])
+        composition.cancel()
+
+        // 宿 alone has no token here, so the rest is a break.
+        composition.deleteContextBackward()
+        composition.append("w")
         XCTAssertEqual(decoder.decodeCalls.last?.context, [])
     }
 

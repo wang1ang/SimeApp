@@ -589,6 +589,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
             render()
         } else {
             textDocumentProxy.deleteBackward()
+            composition.deleteContextBackward()
+            render()
         }
     }
 
