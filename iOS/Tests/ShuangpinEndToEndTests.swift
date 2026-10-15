@@ -337,6 +337,15 @@ final class ShuangpinEndToEndTests: XCTestCase {
         }
     }
 
+    // ym is no syllable; a single key can still expand as an initial, so the
+    // top sentence spans every key and each part stays tappable.
+    func testUndecodableColumnStillCoversEveryKey() throws {
+        let c = try composition(for: "olympic")
+        guard let top = c.candidates.first else { return XCTFail("olympic has no candidates") }
+        XCTAssertEqual(top.consumed, 7, "olympic top should cover all keys; got \(top.text)")
+        XCTAssertEqual(top.segmentKeys.reduce(0, +), 7)
+    }
+
     // rsyipxjc = rong(rs)+yi(yi)+pie(px)+jiao(jc). Each syllable is delimited,
     // so the engine must not re-segment the pie chunk into pi+e (容易被阿胶);
     // 撇 must be reachable.
