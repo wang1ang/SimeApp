@@ -3,6 +3,10 @@ import Foundation
 /// Offline decoder backed by the same C++ Sime core as Android and macOS.
 final class NativePinyinDecoder: PinyinDecoder {
     private var handle: OpaquePointer?
+    // The engine finds a context token by scanning the whole dict; symbol
+    // keys repeat, so remember each answer. Ids are dict-specific, so they
+    // can't be a hardcoded table.
+    private var contextTokenCache: [String: UInt32] = [:]
 
     // Loading the ~9MB GRU embedding, the two ncnn models, and touching the
     // mmap'd score tables costs hundreds of ms. Doing that on the main thread
@@ -151,7 +155,10 @@ final class NativePinyinDecoder: PinyinDecoder {
 
     func contextToken(_ text: String) -> UInt32 {
         guard let handle, !text.isEmpty else { return 0 }
-        return sime_context_token(handle, text)
+        if let token = contextTokenCache[text] { return token }
+        let token = sime_context_token(handle, text)
+        contextTokenCache[text] = token
+        return token
     }
 
     func describeContext(_ context: [UInt32]) -> String {
