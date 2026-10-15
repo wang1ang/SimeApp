@@ -44,6 +44,8 @@ targets:
       - path: KeyboardExtension/Calculator.swift
       - path: KeyboardExtension/PinyinDecoder.swift
       - path: KeyboardExtension/NativePinyinDecoder.swift
+      - path: KeyboardExtension/DeleteRepeat.swift
+      - path: KeyboardExtension/KeyButton.swift
       - path: Engine
       - path: ../require/Sime/src
         includes:
