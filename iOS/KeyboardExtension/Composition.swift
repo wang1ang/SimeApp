@@ -92,6 +92,10 @@ final class Composition {
     }
     var selectionLocation: Int { markedPrefix.utf16.count }
     var isComposing: Bool { !raw.isEmpty }
+    var languageModelContext: [UInt32] { Array((hostContextTokens ?? contextTokens).suffix(32)) }
+    var debugContextText: String {
+        decoder.describeContext(languageModelContext)
+    }
     var sentencePreview: String {
         renderedText(candidates.first?.text ?? "")
     }
@@ -459,7 +463,10 @@ final class Composition {
     }
 
     func updateHostContext(from text: String) {
-        let tokens = decoder.tokenize(text)
+        // Nothing before a space or newline can score, so skip tokenizing it.
+        let tail = text.split(omittingEmptySubsequences: false,
+                              whereSeparator: \.isWhitespace).last ?? ""
+        let tokens = tail.isEmpty ? [] : decoder.tokenize(String(tail))
         guard hostContextTokens != tokens else { return }
         hostContextTokens = tokens
         // Host is the authoritative baseline: replace the ledger, don't append.
@@ -510,11 +517,7 @@ final class Composition {
     /// Commit a full sentence to the host and clear the composition.
     private func commitSentence(_ candidate: Candidate) -> String {
         let result = committedText(of: candidate)
-        if anchorSegments.isEmpty {
-            publishPredictions(for: candidate.tokens)
-        } else {
-            predictionCandidates = []
-        }
+        recordSentenceCommit(candidate)
         clearComposition()
         return result
     }
@@ -847,17 +850,14 @@ final class Composition {
         // the final pinyin letter to remain in composition.
         if let candidate = candidates.first {
             let result = committedText(of: candidate)
-            if anchorSegments.isEmpty {
-                publishPredictions(for: candidate.tokens)
-            } else {
-                predictionCandidates = []
-            }
+            recordSentenceCommit(candidate)
             clearComposition()
             return result
         }
         guard isComposing else { return nil }
         let result = raw
         predictionCandidates = []
+        appendInsertedContext(result)
         clearComposition()
         return result
     }
@@ -873,17 +873,19 @@ final class Composition {
             // Chinese: decode the non-anchored syllables via the top candidate
             // instead of emitting their literal keys.
             result = committedText(of: candidate)
+            recordSentenceCommit(candidate)
         } else {
             result = literalTextWithAnchors()
+            predictionCandidates = []
+            appendInsertedContext(result)
         }
-        predictionCandidates = []
         clearComposition()
         return result
     }
 
     private func publishPredictions(for tokens: [UInt32],
                                     replacingLast: Bool = false) {
-        guard predictionEnabled, !tokens.isEmpty else {
+        guard !tokens.isEmpty else {
             predictionCandidates = []
             return
         }
@@ -891,8 +893,49 @@ final class Composition {
         var base = contextTokens
         // A completion subsumes the trailing context token (狐 → 狐狸); drop it.
         if replacingLast, !base.isEmpty { base.removeLast() }
-        contextTokens = Array((base + tokens).suffix(32))
+        extendContext(base: base, with: tokens)
+        guard predictionEnabled else {
+            predictionCandidates = []
+            return
+        }
         predictionCandidates = decoder.associate(contextTokens, limit: 9)
+    }
+
+    /// Text committed as one unit (a symbol, a digit, literal keys) enters the
+    /// context as a whole token; anything else is the one kind of break.
+    func appendInsertedContext(_ text: String) {
+        guard !text.isEmpty else { return }
+        let token = decoder.contextToken(text)
+        if token == 0, contextTokens.last == 0 { return }
+        extendContext(base: contextTokens, with: [token])
+    }
+
+    /// Space and newline never form a token, so they start a fresh context.
+    func clearContext() {
+        contextTokens = []
+        hostContextTokens = nil
+        predictionCandidates = []
+    }
+
+    // The decoder's tokens are the committed sentence, anchors included on the
+    // engine path; only the legacy overlay, whose tokens miss the anchors,
+    // needs re-segmenting.
+    private func recordSentenceCommit(_ candidate: Candidate) {
+        if anchorSegments.isEmpty || usingEngineAnchors {
+            publishPredictions(for: candidate.tokens)
+        } else {
+            predictionCandidates = []
+            extendContext(base: contextTokens,
+                          with: decoder.tokenize(renderedText(candidate.text)))
+        }
+    }
+
+    // The ledger started from the last host snapshot, so once the keyboard
+    // writes past that snapshot the ledger is the newer view until the host
+    // reports again.
+    private func extendContext(base: [UInt32], with tokens: [UInt32]) {
+        contextTokens = Array((base + tokens).suffix(32))
+        hostContextTokens = nil
     }
 
     private func clearComposition() {

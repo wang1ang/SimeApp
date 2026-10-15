@@ -53,6 +53,12 @@ void sime_reset_caches(const SimeHandle *h);
 // Segment already-written UTF-8 text for use as language-model context.
 SimeTokens sime_tokenize_text(const SimeHandle *h, const char *text);
 void sime_free_tokens(SimeTokens *tokens);
+// Context token for text committed as one unit; 0 when it is not one token.
+uint32_t sime_context_token(const SimeHandle *h, const char *text);
+// Join token IDs as readable text for diagnostics; free with sime_free_string.
+char *sime_tokens_to_text(const SimeHandle *h, const uint32_t *tokens,
+                          int count);
+void sime_free_string(char *text);
 
 // Decoding
 // decode_sentence: full Viterbi sentence decode; extra = number of N-best

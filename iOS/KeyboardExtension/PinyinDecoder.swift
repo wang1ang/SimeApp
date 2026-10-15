@@ -68,6 +68,9 @@ protocol PinyinDecoder {
                               prefixSyllables: Int, limit: Int,
                               expansion: Bool, context: [UInt32]) -> [Candidate]
     func tokenize(_ text: String) -> [UInt32]
+    /// Token for text committed as one unit; 0 (a context break) if none.
+    func contextToken(_ text: String) -> UInt32
+    func describeContext(_ tokens: [UInt32]) -> String
     func syllableCandidates(_ pinyin: String) -> [Candidate]
     func predict(_ context: [UInt32], limit: Int) -> [Candidate]
     /// Association (联想): next-word prediction merged with completion of
@@ -126,6 +129,8 @@ extension PinyinDecoder {
     }
 
     func tokenize(_ text: String) -> [UInt32] { [] }
+    func contextToken(_ text: String) -> UInt32 { 0 }
+    func describeContext(_ tokens: [UInt32]) -> String { "" }
 
     func syllableCandidates(_ pinyin: String) -> [Candidate] {
         exactCandidates(pinyin, limit: 60)

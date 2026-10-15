@@ -65,6 +65,9 @@ final class ShuangpinEndToEndTests: XCTestCase {
         XCTAssertEqual(c.sentenceSegments.map(\.text), ["big", "ass"])
         XCTAssertEqual(c.sentenceSegments.map(\.spacedBefore), [false, true])
         XCTAssertEqual(c.commitBestOrRaw(), "big ass")
+        // Commit-time spacing is presentation, not a context break.
+        let decoder = try XCTUnwrap(NativePinyinDecoder(bundle: Bundle(for: Self.self)))
+        XCTAssertEqual(c.languageModelContext, decoder.tokenize("big") + decoder.tokenize("ass"))
     }
 
     func testEditingKeysOfFirstEnglishWordKeepsTheNextWordShown() throws {

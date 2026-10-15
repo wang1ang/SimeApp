@@ -7,6 +7,7 @@
 #include <cstring>
 #include <filesystem>
 #include <memory>
+#include <string>
 #include <vector>
 
 // The C bridge is a strict noexcept boundary: no C++ exception may cross into
@@ -97,6 +98,28 @@ void sime_free_tokens(SimeTokens *tokens) {
   tokens->items = nullptr;
   tokens->count = 0;
 }
+
+uint32_t sime_context_token(const SimeHandle *h, const char *text) {
+  return guard([&]() -> uint32_t {
+    if (!h || !h->sime || !text) return 0;
+    return h->sime->ContextToken(text);
+  }, uint32_t{0});
+}
+
+char *sime_tokens_to_text(const SimeHandle *h, const uint32_t *tokens,
+                          int count) {
+  return guard([&]() -> char * {
+    if (!h || !h->sime || !tokens || count <= 0) return nullptr;
+    std::string text;
+    for (int i = 0; i < count; ++i) {
+      if (i > 0) text += " · ";
+      text += tokens[i] == 0 ? "|" : h->sime->TokenText(tokens[i]);
+    }
+    return strdup(text.c_str());
+  }, static_cast<char *>(nullptr));
+}
+
+void sime_free_string(char *text) { free(text); }
 
 static SimeResults to_c(const std::vector<sime::DecodeResult> &results) {
   if (results.empty()) return empty_results();

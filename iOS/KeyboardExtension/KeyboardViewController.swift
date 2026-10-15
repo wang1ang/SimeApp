@@ -53,6 +53,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     // Keep the action key instance stable while typing. Rebuilding the whole
     // keyboard when composition starts can cancel neighboring rapid taps.
     private weak var returnKeyButton: UIButton?
+    private weak var spaceContextHint: UILabel?
+    private let showContextOnSpaceKey = true
     // Whether the return key currently shows the composing “确定” label.
     private var displayedReturnComposing = false
     private var spaceCursorMode = false
@@ -154,6 +156,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
         if composition.isComposing {
             refreshHostContext()
         }
+        updateSpaceContextHint()
         refreshReturnKeyAppearance()
         if composition.updateCalculator(context: textDocumentProxy.documentContextBeforeInput) {
             render()
@@ -362,7 +365,11 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
                 gesture.minimumPressDuration = 0.25
                 gesture.cancelsTouchesInView = false
                 button.addGestureRecognizer(gesture)
-                addSchemeHint(to: button)
+                if showContextOnSpaceKey {
+                    addContextHint(to: button)
+                } else {
+                    addSchemeHint(to: button)
+                }
             }
             button.addTarget(self, action: #selector(keyTapped(_:)), for: .touchUpInside)
         }
@@ -382,6 +389,31 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
             hint.trailingAnchor.constraint(equalTo: button.trailingAnchor, constant: -6),
             hint.bottomAnchor.constraint(equalTo: button.bottomAnchor, constant: -4),
         ])
+    }
+
+    // Debug: shows the LM context in place of the scheme hint.
+    private func addContextHint(to button: UIButton) {
+        let hint = UILabel()
+        hint.font = .systemFont(ofSize: 8)
+        hint.textColor = .tertiaryLabel
+        hint.textAlignment = .center
+        hint.lineBreakMode = .byTruncatingHead
+        hint.translatesAutoresizingMaskIntoConstraints = false
+        button.addSubview(hint)
+        NSLayoutConstraint.activate([
+            hint.leadingAnchor.constraint(equalTo: button.leadingAnchor, constant: 5),
+            hint.trailingAnchor.constraint(equalTo: button.trailingAnchor, constant: -5),
+            hint.bottomAnchor.constraint(equalTo: button.bottomAnchor, constant: -3),
+        ])
+        spaceContextHint = hint
+        updateSpaceContextHint()
+    }
+
+    private func updateSpaceContextHint() {
+        guard showContextOnSpaceKey, let hint = spaceContextHint else { return }
+        let context = composition.debugContextText
+        hint.text = context.isEmpty ? "ctx: ∅" : context
+        hint.accessibilityLabel = "LM context: \(context.isEmpty ? "empty" : context)"
     }
 
     private func returnKeyTitle() -> String {
@@ -423,6 +455,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
                     render()
                 } else {
                     textDocumentProxy.insertText("\n")
+                    composition.clearContext()
                 }
             }
         case "⇧":
@@ -564,6 +597,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
             commit(text)
         } else {
             textDocumentProxy.insertText(" ")
+            composition.clearContext()
         }
         render()
     }
@@ -593,6 +627,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
         } else if !suffix.isEmpty {
             textDocumentProxy.insertText(suffix)
         }
+        if !suffix.isEmpty { composition.appendInsertedContext(suffix) }
         render()
     }
 
@@ -1044,6 +1079,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
         }
         updateSchemeToggle()
         updateFinalKeyHighlights()
+        updateSpaceContextHint()
         // Leaving char-editing mode clears any tone filter.
         if composition.activeCharacterIndex == nil { selectedTone = nil }
         preferredCandidateHighlight?.removeFromSuperview()

@@ -149,6 +149,20 @@ final class NativePinyinDecoder: PinyinDecoder {
         return (0..<Int(tokens.count)).map { items[$0] }
     }
 
+    func contextToken(_ text: String) -> UInt32 {
+        guard let handle, !text.isEmpty else { return 0 }
+        return sime_context_token(handle, text)
+    }
+
+    func describeContext(_ context: [UInt32]) -> String {
+        guard let handle, !context.isEmpty else { return "" }
+        guard let text = context.withUnsafeBufferPointer({ buffer in
+            sime_tokens_to_text(handle, buffer.baseAddress, Int32(context.count))
+        }) else { return "" }
+        defer { sime_free_string(text) }
+        return String(cString: text)
+    }
+
     func syllableCandidates(_ pinyin: String) -> [Candidate] {
         exactCandidates(pinyin, limit: 60)
     }
