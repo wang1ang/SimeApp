@@ -19,4 +19,34 @@ final class AnchorEndToEndTests: XCTestCase {
         XCTAssertEqual(composition.selectDisplayed(whole), "是与输入法")
         XCTAssertFalse(composition.isComposing)
     }
+
+    func testSelectingPartOfCapitalRunKeepsTheRest() throws {
+        let bundle = Bundle(for: Self.self)
+        guard let decoder = NativePinyinDecoder(bundle: bundle) else {
+            throw XCTSkip("sime.dict/sime.cnt not bundled into the test target")
+        }
+        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
+        "NTP".forEach { composition.append(String($0)) }
+        guard let nt = composition.candidates.firstIndex(where: { $0.text == "NT" }) else {
+            return XCTFail("NTP should offer NT; got: \(composition.candidates.map { $0.text })")
+        }
+        XCTAssertNil(composition.select(nt))
+        XCTAssertTrue(composition.isComposing)
+        XCTAssertEqual(composition.sentenceSegments.first?.text, "NT")
+        XCTAssertEqual(composition.candidates.first?.text, "NTP")
+    }
+
+    func testTappingRestOfCapitalRunOffersItsLetters() throws {
+        let bundle = Bundle(for: Self.self)
+        guard let decoder = NativePinyinDecoder(bundle: bundle) else {
+            throw XCTSkip("sime.dict/sime.cnt not bundled into the test target")
+        }
+        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
+        "NTP".forEach { composition.append(String($0)) }
+        let nt = try XCTUnwrap(composition.candidates.firstIndex(where: { $0.text == "NT" }))
+        XCTAssertNil(composition.select(nt))
+        composition.activateCharacter(2)
+        XCTAssertEqual(composition.displayCandidates.first?.text, "P",
+                       "tapping P after NT should list P; got: \(composition.displayCandidates.map { $0.text })")
+    }
 }

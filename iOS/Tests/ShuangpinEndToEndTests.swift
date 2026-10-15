@@ -143,6 +143,26 @@ final class ShuangpinEndToEndTests: XCTestCase {
         XCTAssertTrue(c.isComposing)
     }
 
+    func testSelectingPartOfCapitalRunKeepsTheRest() throws {
+        let c = try composition(for: "NTP")
+        guard let nt = c.candidates.firstIndex(where: { $0.text == "NT" }) else {
+            return XCTFail("NTP should offer NT; got: \(c.candidates.map { $0.text })")
+        }
+        XCTAssertNil(c.select(nt))
+        XCTAssertTrue(c.isComposing)
+        XCTAssertEqual(c.sentenceSegments.first?.text, "NT")
+        XCTAssertEqual(c.candidates.first?.text, "NTP")
+    }
+
+    func testTappingRestOfCapitalRunOffersItsLetters() throws {
+        let c = try composition(for: "NTP")
+        let nt = try XCTUnwrap(c.candidates.firstIndex(where: { $0.text == "NT" }))
+        XCTAssertNil(c.select(nt))
+        c.activateCharacter(2)
+        XCTAssertEqual(c.displayCandidates.first?.text, "P",
+                       "tapping P after NT should list P; got: \(c.displayCandidates.map { $0.text })")
+    }
+
     func testLeadingUppercaseRealignsRegardlessOfTheLetter() throws {
         // The realignment must not depend on which capital was typed: any
         // leading uppercase letter stays its own literal and the shuangpin
