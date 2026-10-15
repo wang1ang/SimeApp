@@ -631,6 +631,11 @@ final class Composition {
             let drop = min(prediction.consumed, prediction.text.count)
             let insert = String(prediction.text.dropFirst(drop))
             publishPredictions(for: prediction.tokens, replacingLast: drop > 0)
+            // A next English word is spaced off; the keyboard's own space,
+            // so it doesn't break the context.
+            if drop == 0, let first = insert.first, first.isASCII, first.isLetter {
+                return " " + insert
+            }
             return insert
         }
         if let active = activeCharacterIndex,

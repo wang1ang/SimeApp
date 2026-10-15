@@ -508,6 +508,36 @@ final class CompositionContextTests: XCTestCase {
         XCTAssertEqual(composition.displayCandidates.map(\.text), ["我"])
     }
 
+    func testEnglishNextWordAssociationIsSpacedOff() {
+        let decoder = RecordingPinyinDecoder()
+        decoder.decodeResult = { pinyin in
+            [Candidate(text: "hello", consumed: pinyin.count, tokens: [30], units: pinyin)]
+        }
+        decoder.predictionResult = { context in
+            context.last == 30
+                ? [Candidate(text: "world", consumed: 0, tokens: [31], units: ""),
+                   Candidate(text: "hellos", consumed: 5, tokens: [32], units: ""),
+                   Candidate(text: "大家好", consumed: 0, tokens: [33], units: "")]
+                : []
+        }
+        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
+        composition.predictionEnabled = true
+
+        func commitHello() {
+            "hello".forEach { composition.append(String($0)) }
+            _ = composition.commitBestOrRaw()
+        }
+        commitHello()
+        XCTAssertEqual(composition.selectDisplayed(0), " world")
+        XCTAssertEqual(composition.languageModelContext, [30, 31])
+        composition.clearContext()
+        commitHello()
+        XCTAssertEqual(composition.selectDisplayed(1), "s")
+        composition.clearContext()
+        commitHello()
+        XCTAssertEqual(composition.selectDisplayed(2), "大家好")
+    }
+
     func testLocalCommitsSupersedeAStaleHostSnapshot() {
         let decoder = RecordingPinyinDecoder()
         decoder.tokenizedText["宿主文本"] = [90, 91]
