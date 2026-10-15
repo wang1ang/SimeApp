@@ -97,12 +97,10 @@ final class Composition {
     }
 
     struct SentenceSegment {
-        /// Adjacent English words share one touch target.
-        let words: [String]
+        let text: String
         let displayIndex: Int
-        /// English follows English across a touch-target boundary (an anchor).
+        /// English follows English, so a space separates them.
         let spacedBefore: Bool
-        var text: String { words.joined(separator: " ") }
     }
 
     private struct SentenceMapping {
@@ -133,10 +131,10 @@ final class Composition {
                 }
             }
             var endsEnglish = false
-            func append(_ words: [String], covering range: Range<Int>) {
+            func append(_ range: Range<Int>) {
                 let startsEnglish = isEnglish(range.prefix(1))
                 segments.append(SentenceSegment(
-                    words: words, displayIndex: range.lowerBound,
+                    text: String(chars[range]), displayIndex: range.lowerBound,
                     spacedBefore: endsEnglish && startsEnglish))
                 endsEnglish = isEnglish(range.suffix(1))
             }
@@ -151,31 +149,16 @@ final class Composition {
                             ranges[anchoredUnit] = range
                         }
                     }
-                    append([String(chars[range])], covering: range)
+                    append(range)
                     display = end
                     unit = anchor.syllableRange.upperBound
                     continue
                 }
-                let runStart = display
-                var range = span(unit, from: display)
+                let range = span(unit, from: display)
                 ranges[unit] = range
                 display = range.upperBound
                 unit += 1
-                var words = [String(chars[range])]
-                // Keep adjacent ASCII decoder segments as one touch target.
-                if isEnglish(range) {
-                    while unit < segmentChars.count,
-                          anchorsByStart[unit] == nil {
-                        let next = span(unit, from: display)
-                        guard isEnglish(next) else { break }
-                        ranges[unit] = next
-                        range = next
-                        display = next.upperBound
-                        unit += 1
-                        words.append(String(chars[next]))
-                    }
-                }
-                append(words, covering: runStart..<display)
+                append(range)
             }
             self.segments = segments
             self.unitRanges = ranges
@@ -187,13 +170,6 @@ final class Composition {
         sentenceMapping.segments
     }
 
-    /// In pinyin editing the tapped word shows its typed keys; the other words
-    /// of its touch target stay as they are.
-    func title(of segment: SentenceSegment) -> String {
-        guard segment.displayIndex == activeCharacterIndex,
-              let keys = activeEnteredKeys else { return segment.text }
-        return ([keys] + segment.words.dropFirst()).joined(separator: " ")
-    }
 
     private var sentenceMapping: SentenceMapping {
         sentenceMapping(of: candidates.first)

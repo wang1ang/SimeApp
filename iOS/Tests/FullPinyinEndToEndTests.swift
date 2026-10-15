@@ -89,7 +89,7 @@ final class FullPinyinEndToEndTests: XCTestCase {
         let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
         "helloworld".forEach { composition.append(String($0)) }
         XCTAssertEqual(composition.preedit, "hello world")
-        XCTAssertEqual(composition.sentenceSegments.map(\.text), ["hello world"])
+        XCTAssertEqual(composition.sentenceSegments.map(\.text), ["hello", "world"])
         XCTAssertEqual(composition.commitBestOrRaw(), "hello world")
     }
 
@@ -130,7 +130,7 @@ final class FullPinyinEndToEndTests: XCTestCase {
         c.activateCharacter(0)
         c.activateCharacter(0)   // second tap: pinyin editing of hello
         XCTAssertEqual(c.activeEnteredKeys, "hello")
-        XCTAssertEqual(c.sentenceSegments.first.map(c.title(of:)), "hello world")
+        XCTAssertEqual(c.sentenceSegments.map(\.text), ["hello", "world"])
     }
 
     func testAbbreviatedWordSplitsIntoPerCharSegments() throws {

@@ -45,8 +45,14 @@ final class ShuangpinEndToEndTests: XCTestCase {
     func testAdjacentEnglishWordsStaySpacedInTopCandidateAndCommit() throws {
         let c = try composition(for: "helloworld")
         XCTAssertEqual(c.preedit, "hello world")
-        XCTAssertEqual(c.sentenceSegments.map(\.text), ["hello world"])
+        XCTAssertEqual(c.sentenceSegments.map(\.text), ["hello", "world"])
         XCTAssertEqual(c.commitBestOrRaw(), "hello world")
+    }
+
+    func testAdjacentEnglishWordsAreSeparateTouchTargets() throws {
+        let c = try composition(for: "applejuice")
+        XCTAssertEqual(c.sentenceSegments.map(\.text), ["apple", "juice"])
+        XCTAssertEqual(c.sentenceSegments.map(\.spacedBefore), [false, true])
     }
 
     func testEnglishAfterAPickedEnglishWordStaysSpaced() throws {
@@ -66,7 +72,7 @@ final class ShuangpinEndToEndTests: XCTestCase {
         c.activateCharacter(0)
         c.activateCharacter(0)   // second tap: pinyin editing of hello
         XCTAssertEqual(c.activeEnteredKeys, "hello")
-        XCTAssertEqual(c.sentenceSegments.first.map(c.title(of:)), "hello world")
+        XCTAssertEqual(c.sentenceSegments.map(\.text), ["hello", "world"])
     }
 
     func testEnglishCorrectionReplacesTheRemainingDecodedSpan() throws {

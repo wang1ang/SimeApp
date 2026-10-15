@@ -1065,7 +1065,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
                 if segment.spacedBefore { sentenceX += spaceWidth }
                 let index = segment.displayIndex
                 let isActive = index == composition.activeCharacterIndex
-                let title = composition.title(of: segment)
+                let title = isActive ? (composition.activeEnteredKeys ?? segment.text) : segment.text
                 let button = UIButton(type: .system)
                 button.setTitle(title, for: .normal)
                 button.titleLabel?.font = preferredFont
