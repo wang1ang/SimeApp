@@ -466,7 +466,7 @@ final class Composition {
         // Nothing before a space or newline can score, so skip tokenizing it.
         let tail = text.split(omittingEmptySubsequences: false,
                               whereSeparator: \.isWhitespace).last ?? ""
-        let tokens = tail.isEmpty ? [] : decoder.tokenize(String(tail))
+        let tokens = tail.isEmpty ? [] : Self.afterLastBreak(decoder.tokenize(String(tail)))
         guard hostContextTokens != tokens else { return }
         hostContextTokens = tokens
         // Host is the authoritative baseline: replace the ledger, don't append.
@@ -902,13 +902,10 @@ final class Composition {
     }
 
     /// Text committed as one unit (a symbol, a digit, literal keys) enters the
-    /// context as a whole token; anything else is the one kind of break.
+    /// context as a whole token; text with no token clears it.
     func appendInsertedContext(_ text: String) {
         guard !text.isEmpty else { return }
-        let token = decoder.contextToken(text)
-        if token != 0 || contextTokens.last != 0 {
-            extendContext(base: contextTokens, with: [token])
-        }
+        extendContext(base: contextTokens, with: [decoder.contextToken(text)])
         predictionCandidates = predictionEnabled
             ? decoder.associate(contextTokens, limit: 9) : []
     }
@@ -937,8 +934,15 @@ final class Composition {
     // writes past that snapshot the ledger is the newer view until the host
     // reports again.
     private func extendContext(base: [UInt32], with tokens: [UInt32]) {
-        contextTokens = Array((base + tokens).suffix(32))
+        contextTokens = Array(Self.afterLastBreak(base + tokens).suffix(32))
         hostContextTokens = nil
+    }
+
+    // Nothing before a NotToken break can score, so the context keeps only
+    // what follows it.
+    private static func afterLastBreak(_ tokens: [UInt32]) -> [UInt32] {
+        guard let last = tokens.lastIndex(of: 0) else { return tokens }
+        return Array(tokens[(last + 1)...])
     }
 
     private func clearComposition() {

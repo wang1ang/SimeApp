@@ -589,7 +589,7 @@ final class CompositionContextTests: XCTestCase {
         XCTAssertEqual(decoder.decodeCalls.last?.context, [11, 77])
     }
 
-    func testUnknownInsertionsLeaveOneContextBreak() {
+    func testUnknownInsertionClearsTheContext() {
         let decoder = RecordingPinyinDecoder()
         decoder.decodeResult = { pinyin in
             [Candidate(text: "你", consumed: pinyin.count, tokens: [11], units: pinyin)]
@@ -599,10 +599,23 @@ final class CompositionContextTests: XCTestCase {
         "ni".forEach { composition.append(String($0)) }
         XCTAssertEqual(composition.commitBestOrRaw(), "你")
         composition.appendInsertedContext("3")
-        composition.appendInsertedContext("4")
         composition.append("h")
 
-        XCTAssertEqual(decoder.decodeCalls.last?.context, [11, 0])
+        XCTAssertEqual(decoder.decodeCalls.last?.context, [])
+    }
+
+    func testHostContextKeepsOnlyTokensAfterTheLastBreak() {
+        let decoder = RecordingPinyinDecoder()
+        decoder.tokenizedText["你#好"] = [11, 0, 12]
+        decoder.decodeResult = { pinyin in
+            [Candidate(text: "你", consumed: pinyin.count, tokens: [11], units: pinyin)]
+        }
+        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
+
+        composition.updateHostContext(from: "你#好")
+        composition.append("h")
+
+        XCTAssertEqual(decoder.decodeCalls.last?.context, [12])
     }
 
     func testEquivalentHostTokensDoNotDecodeAgain() {
