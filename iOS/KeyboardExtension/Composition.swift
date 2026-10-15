@@ -165,11 +165,9 @@ final class Composition {
         }
     }
 
-
     var sentenceSegments: [SentenceSegment] {
         sentenceMapping.segments
     }
-
 
     private var sentenceMapping: SentenceMapping {
         sentenceMapping(of: candidates.first)
