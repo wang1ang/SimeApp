@@ -959,6 +959,51 @@ final class CompositionContextTests: XCTestCase {
         XCTAssertEqual(decoder.decodeCalls.last?.context, [40])
     }
 
+    func testEnglishAssociationAfterASpaceIsNotSpacedAgain() {
+        let decoder = RecordingPinyinDecoder()
+        decoder.contextTokenText = ["hello": 40, "world": 41]
+        for prefix in ["worl", "wor", "wo", "w"] {
+            decoder.completionResult[prefix] = [Candidate(text: "world", consumed: prefix.count, tokens: [41])]
+        }
+        decoder.decodeResult = { _ in
+            [Candidate(text: "helloworld", consumed: 10, tokens: [40, 41], units: "",
+                       segmentKeys: [5, 5], segmentChars: [5, 5])]
+        }
+        decoder.predictionResult = { context in
+            context == [40] ? [Candidate(text: "world", consumed: 0, tokens: [41])] : []
+        }
+        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
+        composition.predictionEnabled = true
+
+        "helloworld".forEach { composition.append(String($0)) }
+        XCTAssertEqual(composition.commitBestOrRaw(), "hello world")
+        (0..<5).forEach { _ in composition.deleteContextBackward() }
+
+        XCTAssertEqual(composition.selectDisplayed(0), "world")
+        XCTAssertEqual(composition.languageModelContext, [40, 41])
+        XCTAssertFalse(composition.updateHostContext(from: "hello world"))
+    }
+
+    func testSpacedEnglishAssociationAfterChineseStartsANewContext() {
+        let decoder = RecordingPinyinDecoder()
+        decoder.contextTokenText = ["你好": 11, "world": 41]
+        decoder.decodeResult = { pinyin in
+            [Candidate(text: "你好", consumed: pinyin.count, tokens: [11], units: pinyin)]
+        }
+        decoder.predictionResult = { context in
+            context == [11] ? [Candidate(text: "world", consumed: 0, tokens: [41])] : []
+        }
+        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
+        composition.predictionEnabled = true
+
+        "nihao".forEach { composition.append(String($0)) }
+        XCTAssertEqual(composition.commitBestOrRaw(), "你好")
+
+        XCTAssertEqual(composition.selectDisplayed(0), " world")
+        XCTAssertEqual(composition.languageModelContext, [41])
+        XCTAssertFalse(composition.updateHostContext(from: "你好 world"))
+    }
+
     func testHostEnglishIsMatchedAsWholeWords() {
         let decoder = RecordingPinyinDecoder()
         decoder.tokenizedText["我爱iPhone"] = [7, 50, 51, 52]

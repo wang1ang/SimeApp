@@ -719,13 +719,16 @@ final class Composition {
             // trailing token), so only the remainder is inserted.
             let drop = min(prediction.consumed, prediction.text.count)
             let insert = String(prediction.text.dropFirst(drop))
-            publishPredictions(for: prediction.tokens, replacingLast: drop > 0)
-            // A next English word is spaced off; the keyboard's own space,
-            // so it doesn't break the context.
-            if drop == 0, let first = insert.first, first.isASCII, first.isLetter {
-                return " " + insert
+            // A next English word is spaced off unless a space precedes it.
+            let spaced = drop == 0 && Self.isEnglishLetter(insert.first)
+                && contextFragment != " "
+            // Only English words share a context across a space.
+            if spaced, let last = contextTokens.last {
+                let text = decoder.tokenText(last)
+                if !text.isEmpty, !Self.isEnglishWord(text) { contextTokens = [] }
             }
-            return insert
+            publishPredictions(for: prediction.tokens, replacingLast: drop > 0)
+            return spaced ? " " + insert : insert
         }
         if let active = activeCharacterIndex,
            replacementCandidates.indices.contains(index),
