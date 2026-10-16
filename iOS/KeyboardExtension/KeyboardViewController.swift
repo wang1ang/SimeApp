@@ -55,7 +55,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     // keyboard when composition starts can cancel neighboring rapid taps.
     private weak var returnKeyButton: UIButton?
     private weak var spaceContextHint: UILabel?
-    private let showContextOnSpaceKey = true
+    private let showContextOnSpaceKey = false
     // Whether the return key currently shows the composing “确定” label.
     private var displayedReturnComposing = false
     private var spaceCursorMode = false
