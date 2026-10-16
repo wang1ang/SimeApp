@@ -916,14 +916,17 @@ final class Composition {
     }
 
     /// Backspace outside composition removes the last character from the
-    /// context, re-matching what remains of a multi-character token.
+    /// context. Only the shortened last token is re-segmented; earlier tokens
+    /// are already settled.
     func deleteContextBackward() {
         guard let last = contextTokens.popLast() else { return }
         hostContextTokens = nil
         let text = decoder.tokenText(last)
         if text.count > 1 {
-            let rest = decoder.contextToken(String(text.dropLast()))
-            if rest != 0 { contextTokens.append(rest) } else { contextTokens = [] }
+            let rest = String(text.dropLast())
+            let exact = decoder.contextToken(rest)
+            let tokens = exact != 0 ? [exact] : decoder.tokenize(rest)
+            contextTokens = tokens.isEmpty ? [] : Self.afterLastBreak(contextTokens + tokens)
         }
         predictionCandidates = predictionEnabled && !contextTokens.isEmpty
             ? decoder.associate(contextTokens, limit: 9) : []

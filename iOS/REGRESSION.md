@@ -105,7 +105,7 @@
 45. 宿主拒绝提供正文时，应回退到本键盘已有 token context。
 46. 分词器不能在切换键盘、首次输入或点击第一行时造成明显卡顿或扩展内存峰值。
 47. 分词器索引应延迟创建并有明确缓存/生命周期上限。
-48. 所有上屏内容都进入 context，丢弃前文只有一条规则：token 断开。解码上屏（含锚点）直接使用解码 tokens；标点、数字、符号和原样上屏的按键追加在已有 context 后，整段精确匹配为一个 token（引擎 `ContextToken`）；空格、换行没有 token，由键盘直接清空 context；非组合态退格从 context 末尾删一个字符，多字 token 剩余部分重新精确匹配（匹配不到即断开）；宿主文本由引擎 `Tokenize` 分词；无法匹配或语言模型打不了分的位置由引擎记为 `NotToken` 分隔，键盘在 App 层直接丢弃它及其之前的 context。断言由 `Tests/CompositionBehaviorTests.swift` 与引擎 `tests/correction_test.cc` 覆盖。
+48. 所有上屏内容都进入 context，丢弃前文只有一条规则：token 断开。解码上屏（含锚点）直接使用解码 tokens；标点、数字、符号和原样上屏的按键追加在已有 context 后，整段精确匹配为一个 token（引擎 `ContextToken`）；空格、换行没有 token，由键盘直接清空 context；非组合态退格从 context 末尾删一个字符，多字 token 剩余部分先精确匹配，匹配不到则只对这段剩余部分 `Tokenize`，之前的 token 不动；宿主文本由引擎 `Tokenize` 分词；无法匹配或语言模型打不了分的位置由引擎记为 `NotToken` 分隔，键盘在 App 层直接丢弃它及其之前的 context。断言由 `Tests/CompositionBehaviorTests.swift` 与引擎 `tests/correction_test.cc` 覆盖。
 49. context 上限最终应读取 `sime_context_size`，不能永久硬编码。
 50. 宿主正文对候选排序的实际影响需用真实模型和真机文本场景验证。
 50a. 联想（`NativePinyinDecoder.predict`）必须过滤纯标点/符号 token：n-gram 里几乎任何字最高频后继都是 `，。、！？`，不过滤会占满联想栏名额、把有用词挤掉，表现为“联想全错”。实现方式为多取候选（约 limit×6，上限 60）后剔除纯标点再取前 N。由 `Tests/PredictionTests.swift` 兑现。

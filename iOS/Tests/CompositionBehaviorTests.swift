@@ -669,6 +669,22 @@ final class CompositionContextTests: XCTestCase {
         XCTAssertEqual(decoder.decodeCalls.last?.context, [])
     }
 
+    func testBackspaceResegmentsOnlyTheShortenedLastToken() {
+        let decoder = RecordingPinyinDecoder()
+        decoder.tokenizedText["今天天气很好"] = [1, 2]
+        decoder.tokenizedText["天气很"] = [3, 4]
+        decoder.contextTokenText = ["今天": 1, "天气很好": 2, "天气": 3, "很": 4]
+        decoder.decodeResult = { pinyin in
+            [Candidate(text: "我", consumed: pinyin.count, tokens: [12], units: pinyin)]
+        }
+        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
+
+        composition.updateHostContext(from: "今天天气很好")
+        composition.deleteContextBackward()
+        composition.append("w")
+        XCTAssertEqual(decoder.decodeCalls.last?.context, [1, 3, 4])
+    }
+
     func testHostContextKeepsOnlyTokensAfterTheLastBreak() {
         let decoder = RecordingPinyinDecoder()
         decoder.tokenizedText["你#好"] = [11, 0, 12]
