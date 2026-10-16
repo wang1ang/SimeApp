@@ -510,9 +510,19 @@ final class Composition {
             return commitSentence(candidate)
         }
         anchorFrontSelection(candidate)
+        return settleAnchors(endingAt: consumed, fallback: candidate)
+    }
+
+    /// Re-decode under the updated anchors, then commit once they reach the
+    /// last key (11b) or move on to the next character.
+    private func settleAnchors(endingAt keyEnd: Int, fallback: Candidate) -> String? {
+        anchorSegments.sort { $0.syllableRange.lowerBound < $1.syllableRange.lowerBound }
         clearActiveSelection()
         refresh()
-        advanceToSegment(startingAtKey: consumed)
+        if keyEnd >= raw.count {
+            return commitSentence(candidates.first ?? fallback)
+        }
+        advanceToSegment(startingAtKey: keyEnd)
         return nil
     }
 
@@ -542,10 +552,6 @@ final class Composition {
         replacementCandidates = []
     }
 
-    private func sortAnchors() {
-        anchorSegments.sort { $0.syllableRange.lowerBound < $1.syllableRange.lowerBound }
-    }
-
     /// Anchor a front-row candidate over its own key spans (per character for
     /// Chinese, whole run for English) without consuming `raw`, so the choice
     /// is pinned but the whole input stays editable and re-decodes.
@@ -570,7 +576,6 @@ final class Composition {
             charCursor = charEnd
             keyCursor = keyEnd
         }
-        sortAnchors()
     }
 
     private func rawConsumption(of candidate: Candidate) -> Int {
@@ -673,14 +678,7 @@ final class Composition {
                         syllableRange: relativeActive..<(relativeActive + 1),
                         text: replacement.text,
                         tokens: replacement.tokens))
-                    sortAnchors()
-                    clearActiveSelection()
-                    refresh()
-                    if keyEnd >= raw.count {
-                        return commitSentence(candidates.first ?? replacement)
-                    }
-                    advanceToSegment(startingAtKey: keyEnd)
-                    return nil
+                    return settleAnchors(endingAt: keyEnd, fallback: replacement)
                 }
             }
             guard relativeActive + span <= segmentCount else { return nil }
@@ -761,17 +759,8 @@ final class Composition {
             // reading, so re-decoding under this anchor can't disturb the
             // characters the user already accepted on its left.
             autoAnchorLeftContext(before: relativeActive, of: top)
-            sortAnchors()
-            clearActiveSelection()
-            refresh()
-
-            // Advance / commit by key position (robust across re-segmentation),
-            // same as the crossing branch.
-            if keyEnd >= raw.count {
-                return commitSentence(candidates.first ?? top)
-            }
-            advanceToSegment(startingAtKey: keyEnd)
-            return nil
+            // By key position, robust across re-segmentation.
+            return settleAnchors(endingAt: keyEnd, fallback: top)
         }
         return select(index)
     }
@@ -795,7 +784,6 @@ final class Composition {
 
     /// 关闭第一行选中（气泡消失时用）：取消高亮，恢复普通候选/联想。
     func deactivateCharacter() {
-        guard activeCharacterIndex != nil else { return }
         clearActiveSelection()
     }
 
