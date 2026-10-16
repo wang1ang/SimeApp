@@ -49,4 +49,20 @@ final class AnchorEndToEndTests: XCTestCase {
         XCTAssertEqual(composition.displayCandidates.first?.text, "P",
                        "tapping P after NT should list P; got: \(composition.displayCandidates.map { $0.text })")
     }
+
+    func testSelectingAPartialSentenceCandidateAdvancesToTheNextCharacter() throws {
+        let bundle = Bundle(for: Self.self)
+        guard let decoder = NativePinyinDecoder(bundle: bundle) else {
+            throw XCTSkip("sime.dict/sime.cnt not bundled into the test target")
+        }
+        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
+        "tuoguanshi".forEach { composition.append(String($0)) }
+        let tuoguan = try XCTUnwrap(composition.displayCandidates.firstIndex { $0.text == "托管" },
+                                    "got: \(composition.displayCandidates.map(\.text))")
+
+        XCTAssertNil(composition.selectDisplayed(tuoguan))
+        XCTAssertEqual(composition.activeCharacterIndex, 2)
+        XCTAssertTrue(composition.displayCandidates.contains { $0.text == "式" },
+                      "got: \(composition.displayCandidates.map(\.text))")
+    }
 }

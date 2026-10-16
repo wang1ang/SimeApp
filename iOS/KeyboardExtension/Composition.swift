@@ -505,12 +505,14 @@ final class Composition {
         let candidate = candidates[index]
         // A selection pins its span as anchors and keeps the input editable;
         // it commits to the host only when it covers the last key (契约 11a/11b).
-        if rawConsumption(of: candidate) >= raw.count {
+        let consumed = rawConsumption(of: candidate)
+        if consumed >= raw.count {
             return commitSentence(candidate)
         }
         anchorFrontSelection(candidate)
         clearActiveSelection()
         refresh()
+        advanceToSegment(startingAtKey: consumed)
         return nil
     }
 
