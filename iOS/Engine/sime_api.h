@@ -111,6 +111,11 @@ SimeResults sime_next_tokens(const SimeHandle *h, const uint32_t *tokens,
 SimeResults sime_associate(const SimeHandle *h, const uint32_t *tokens,
                            int count, int num);
 
+// Completion of `prefix`, text that is not a token, scored after `context`.
+// Each result's `consumed` is the prefix's character length.
+SimeResults sime_complete(const SimeHandle *h, const char *prefix,
+                          const uint32_t *context, int context_count, int num);
+
 // Free results returned by any of the above.
 void sime_free_results(SimeResults *r);
 

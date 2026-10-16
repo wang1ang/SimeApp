@@ -301,6 +301,17 @@ SimeResults sime_associate(const SimeHandle *h, const uint32_t *tokens,
   }, empty_results());
 }
 
+SimeResults sime_complete(const SimeHandle *h, const char *prefix,
+                          const uint32_t *context, int context_count, int num) {
+  return guard([&]() -> SimeResults {
+    if (!h || !h->sime || !h->sime->Ready() || !prefix || num <= 0)
+      return empty_results();
+    std::vector<sime::TokenID> ctx;
+    if (context && context_count > 0) ctx.assign(context, context + context_count);
+    return to_c(h->sime->Complete(ctx, prefix, static_cast<size_t>(num)));
+  }, empty_results());
+}
+
 void sime_free_results(SimeResults *r) {
   if (!r || !r->items) return;
   for (int i = 0; i < r->count; ++i) {

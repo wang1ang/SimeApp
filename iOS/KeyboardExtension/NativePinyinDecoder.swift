@@ -216,6 +216,15 @@ final class NativePinyinDecoder: PinyinDecoder {
         return unpack(results)
     }
 
+    func complete(_ prefix: String, context: [UInt32], limit: Int) -> [Candidate] {
+        guard let handle, !prefix.isEmpty, limit > 0 else { return [] }
+        var results = context.withUnsafeBufferPointer { buffer in
+            sime_complete(handle, prefix, buffer.baseAddress, Int32(context.count), Int32(limit))
+        }
+        defer { sime_free_results(&results) }
+        return unpack(results)
+    }
+
     func decode(_ pinyin: String, context: [UInt32], limit: Int) -> [Candidate] {
         decode(pinyin, context: context, limit: limit, expansion: true)
     }

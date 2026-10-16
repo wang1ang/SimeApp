@@ -81,4 +81,19 @@ final class PredictionTests: XCTestCase {
             }
         }
     }
+
+    func testCompleteExtendsATextFragmentIntoWholeWords() throws {
+        let decoder = try decoder()
+        for (prefix, word) in [("iPhon", "iPhone"), ("hel", "help"), ("钵钵", "钵钵鸡")] {
+            let results = decoder.complete(prefix, context: [], limit: 9)
+            let completion = results.first { $0.text == word }
+            XCTAssertNotNil(completion, "\(prefix) did not complete to \(word): \(results.map(\.text))")
+            XCTAssertEqual(completion?.consumed, prefix.count)
+            XCTAssertTrue(results.allSatisfy { $0.text.hasPrefix(prefix) && $0.text != prefix })
+        }
+    }
+
+    func testCompleteFindsNothingForAFragmentNoWordExtends() throws {
+        XCTAssertTrue(try decoder().complete("qzxjv", context: [], limit: 9).isEmpty)
+    }
 }

@@ -80,6 +80,10 @@ protocol PinyinDecoder {
     /// next-word), so callers insert `text` with the first `consumed`
     /// characters dropped.
     func associate(_ context: [UInt32], limit: Int) -> [Candidate]
+    /// Words that strictly extend `prefix`, text not yet a token, scored
+    /// after `context`. `consumed` is the prefix length already in the
+    /// document.
+    func complete(_ prefix: String, context: [UInt32], limit: Int) -> [Candidate]
 }
 
 extension PinyinDecoder {
@@ -145,6 +149,8 @@ extension PinyinDecoder {
     func associate(_ context: [UInt32], limit: Int) -> [Candidate] {
         predict(context, limit: limit)
     }
+
+    func complete(_ prefix: String, context: [UInt32], limit: Int) -> [Candidate] { [] }
 
     private func usesIndex(for scheme: InputScheme) -> Bool {
         guard let requested = scheme.shuangpinIndexName else { return false }

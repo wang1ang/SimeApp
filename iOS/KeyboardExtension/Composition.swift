@@ -29,6 +29,9 @@ final class Composition {
     // supersede the local fallback whenever UIKit exposes that text.
     private var hostContextTokens: [UInt32]?
     private var contextTokens: [UInt32] = []
+    // Text a backspace left after `contextTokens` that is no token; it offers
+    // word completions until picked or settled.
+    private var contextFragment = ""
     // Sparse user corrections inside `raw`. There is no in-composition prefix:
     // a selection pins its span here and the whole input stays editable; the
     // only "prefix" is already-committed host text, carried as context.
@@ -448,6 +451,7 @@ final class Composition {
         reDecodeOnCorrection = previous.reDecodeOnCorrection
         hostContextTokens = previous.hostContextTokens
         contextTokens = previous.contextTokens
+        contextFragment = previous.contextFragment
         restore(raw: previous.raw)
     }
 
@@ -471,6 +475,7 @@ final class Composition {
         hostContextTokens = tokens
         // Host is the authoritative baseline: replace the ledger, don't append.
         contextTokens = tokens
+        contextFragment = ""
         if isComposing { refresh() }
     }
 
@@ -890,10 +895,7 @@ final class Composition {
             return
         }
         // Extend the running ledger so consecutive association taps accumulate.
-        var base = contextTokens
-        // A completion subsumes the trailing context token (狐 → 狐狸); drop it.
-        if replacingLast, !base.isEmpty { base.removeLast() }
-        extendContext(base: base, with: tokens)
+        extendContext(with: tokens, replacingLast: replacingLast)
         guard predictionEnabled else {
             predictionCandidates = []
             return
@@ -905,31 +907,62 @@ final class Composition {
     /// context as a whole token; text with no token clears it.
     func appendInsertedContext(_ text: String) {
         guard !text.isEmpty else { return }
-        extendContext(base: contextTokens, with: [decoder.contextToken(text)])
+        extendContext(with: [decoder.contextToken(text)])
         predictionCandidates = predictionEnabled
             ? decoder.associate(contextTokens, limit: 9) : []
     }
 
     /// Backspace outside composition removes the last character from the
-    /// context. Only the shortened last token is re-segmented; earlier tokens
-    /// are already settled.
+    /// context. A shortened token that is no longer a token becomes a
+    /// fragment offering word completions; earlier tokens stay settled.
     func deleteContextBackward() {
-        guard let last = contextTokens.popLast() else { return }
+        let text: String
+        if !contextFragment.isEmpty {
+            text = contextFragment
+        } else if let last = contextTokens.popLast() {
+            text = decoder.tokenText(last)
+        } else {
+            return
+        }
         hostContextTokens = nil
-        let text = decoder.tokenText(last)
-        if text.count > 1 {
-            let rest = String(text.dropLast())
-            let exact = decoder.contextToken(rest)
-            let tokens = exact != 0 ? [exact] : decoder.tokenize(rest)
-            contextTokens = tokens.isEmpty ? [] : Self.afterLastBreak(contextTokens + tokens)
+        contextFragment = String(text.dropLast())
+        if !contextFragment.isEmpty {
+            let exact = decoder.contextToken(contextFragment)
+            if exact != 0 {
+                contextTokens.append(exact)
+                contextFragment = ""
+            } else {
+                let completions = predictionEnabled
+                    ? decoder.complete(contextFragment, context: contextTokens, limit: 9) : []
+                if !completions.isEmpty {
+                    predictionCandidates = completions
+                    return
+                }
+                settleContextFragment()
+            }
         }
         predictionCandidates = predictionEnabled && !contextTokens.isEmpty
             ? decoder.associate(contextTokens, limit: 9) : []
     }
 
+    // A fragment left without a picked completion: English has no word
+    // pieces, so the context breaks; Chinese re-segments the fragment.
+    private func settleContextFragment() {
+        guard !contextFragment.isEmpty else { return }
+        let fragment = contextFragment
+        contextFragment = ""
+        guard !fragment.allSatisfy(\.isASCII) else {
+            contextTokens = []
+            return
+        }
+        let tokens = decoder.tokenize(fragment)
+        contextTokens = tokens.isEmpty ? [] : Self.afterLastBreak(contextTokens + tokens)
+    }
+
     /// Space and newline never form a token, so they start a fresh context.
     func clearContext() {
         contextTokens = []
+        contextFragment = ""
         hostContextTokens = nil
         predictionCandidates = []
     }
@@ -942,16 +975,25 @@ final class Composition {
             publishPredictions(for: candidate.tokens)
         } else {
             predictionCandidates = []
-            extendContext(base: contextTokens,
-                          with: decoder.tokenize(renderedText(candidate.text)))
+            extendContext(with: decoder.tokenize(renderedText(candidate.text)))
         }
     }
 
     // The ledger started from the last host snapshot, so once the keyboard
     // writes past that snapshot the ledger is the newer view until the host
     // reports again.
-    private func extendContext(base: [UInt32], with tokens: [UInt32]) {
-        contextTokens = Array(Self.afterLastBreak(base + tokens).suffix(32))
+    private func extendContext(with tokens: [UInt32], replacingLast: Bool = false) {
+        // A completion subsumes its prefix: the fragment, else the trailing
+        // token (狐 → 狐狸).
+        if replacingLast {
+            if contextFragment.isEmpty {
+                contextTokens = contextTokens.dropLast()
+            } else {
+                contextFragment = ""
+            }
+        }
+        settleContextFragment()
+        contextTokens = Array(Self.afterLastBreak(contextTokens + tokens).suffix(32))
         hostContextTokens = nil
     }
 
@@ -972,6 +1014,7 @@ final class Composition {
     }
 
     private func refresh() {
+        settleContextFragment()
         let context = Array((hostContextTokens ?? contextTokens).suffix(32))
         let anchors = engineAnchors()
         usingEngineAnchors = anchors != nil
