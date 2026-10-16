@@ -795,7 +795,6 @@ final class Composition {
     func deactivateCharacter() {
         guard activeCharacterIndex != nil else { return }
         clearActiveSelection()
-        displayGroups = []
     }
 
     /// A further tap on the character whose pinyin is being edited leaves

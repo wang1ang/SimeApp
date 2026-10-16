@@ -1082,6 +1082,26 @@ final class CompositionPreeditGroupingTests: XCTestCase {
         XCTAssertEqual(composition.preedit, "da yi chuan")
     }
 
+    func testLeavingPinyinEditingKeepsThePreeditGrouped() {
+        let decoder = RecordingPinyinDecoder()
+        decoder.decodeResult = { pinyin in
+            pinyin == "dayichuan"
+                ? [Candidate(text: "大衣船", consumed: 9, tokens: [1, 2, 3],
+                             units: "da'yi'chuan")]
+                : []
+        }
+        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
+
+        "dayichuan".forEach { composition.append(String($0)) }
+        composition.activateCharacter(1)
+        composition.activateCharacter(1)
+        // The keyboard's single exit path.
+        composition.deactivateCharacter()
+        composition.moveCursor(to: composition.raw.count)
+
+        XCTAssertEqual(composition.preedit, "da yi chuan")
+    }
+
     func testShuangpinPreeditUsesDecoderSourceSpans() {
         let decoder = RecordingPinyinDecoder()
         decoder.decodeResult = { raw in
