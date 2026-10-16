@@ -45,6 +45,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     private var shiftState: ShiftState = .off
     private var shifted: Bool { shiftState != .off }
     private var keyboardScheme = InputSettings.scheme
+    private var punctuationBesideSpace = InputSettings.punctuationBesideSpace
     private var keyboardNeedsRebuild = false
     // True once `composition` is backed by the native engine, so we only swap
     // decoders once per controller lifetime.
@@ -119,6 +120,10 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
             keyboardScheme = scheme
             composition = Self.makeComposition(inputScheme: scheme)
             usesNativeDecoder = composition.decoderIsNative
+            keyboardNeedsRebuild = true
+        }
+        if punctuationBesideSpace != InputSettings.punctuationBesideSpace {
+            punctuationBesideSpace = InputSettings.punctuationBesideSpace
             keyboardNeedsRebuild = true
         }
         recordShuangpinScheme()
@@ -294,6 +299,15 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
         let space = keyButton("space")
         let enter = keyButton("return")
         returnKeyButton = enter
+        guard punctuationBesideSpace else {
+            // Off restores the earlier 3-key row.
+            row.spacing = 8
+            bottomPunctuationKeys = []
+            [mode, space, enter].forEach { row.addArrangedSubview($0) }
+            mode.widthAnchor.constraint(equalTo: enter.widthAnchor).isActive = true
+            space.widthAnchor.constraint(equalTo: mode.widthAnchor, multiplier: 2.1).isActive = true
+            return row
+        }
         let comma = keyButton("，")
         let period = keyButton("。")
         let question = keyButton("？")
@@ -1027,7 +1041,9 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
                 makeRow(["-", "/", "：", "；", "（", "）", "￥", "@", "“", "”"])
             )
             keyboardStack.addArrangedSubview(
-                makeRow(["#+=", "*", "+", "=", "、", "！", ".", "⌫"])
+                makeRow(punctuationBesideSpace
+                    ? ["#+=", "*", "+", "=", "、", "！", ".", "⌫"]
+                    : ["#+=", "。", "，", "、", "？", "！", ".", "⌫"])
             )
         case .symbols:
             let topRow = makeRow(["【", "】", "｛", "｝", "#", "%", "^", "*", "+", "="])

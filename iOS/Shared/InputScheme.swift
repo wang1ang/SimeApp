@@ -123,4 +123,10 @@ enum InputSettings {
         get { defaults.object(forKey: "reDecodeOnCorrection") as? Bool ?? true }
         set { defaults.set(newValue, forKey: "reDecodeOnCorrection") }
     }
+
+    /// Show ，。？ beside the space bar (default); off restores the earlier layout.
+    static var punctuationBesideSpace: Bool {
+        get { defaults.object(forKey: "punctuationBesideSpace") as? Bool ?? true }
+        set { defaults.set(newValue, forKey: "punctuationBesideSpace") }
+    }
 }

@@ -5,6 +5,7 @@ struct ContentView: View {
     @State private var scheme = InputSettings.scheme
     @State private var prediction = InputSettings.predictionEnabled
     @State private var reDecode = InputSettings.reDecodeOnCorrection
+    @State private var punctuationBesideSpace = InputSettings.punctuationBesideSpace
     @State private var testText = ""
 
     // The schemes offered in the picker, in display order.
@@ -39,6 +40,13 @@ struct ContentView: View {
                             InputSettings.predictionEnabled = enabled
                         }
                     Text(prediction ? "当前：上屏后显示联想候选" : "当前：关闭联想")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                    Toggle("空格旁标点", isOn: $punctuationBesideSpace)
+                        .onChange(of: punctuationBesideSpace) { enabled in
+                            InputSettings.punctuationBesideSpace = enabled
+                        }
+                    Text(punctuationBesideSpace ? "当前：，。？显示在空格两侧" : "当前：标点收起，空格加宽")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                     Toggle("更正后整句重解", isOn: $reDecode)
@@ -85,6 +93,7 @@ struct ContentView: View {
             scheme = InputSettings.scheme
             prediction = InputSettings.predictionEnabled
             reDecode = InputSettings.reDecodeOnCorrection
+            punctuationBesideSpace = InputSettings.punctuationBesideSpace
         }
     }
 }
