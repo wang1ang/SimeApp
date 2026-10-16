@@ -460,7 +460,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
                     render()
                 } else {
                     textDocumentProxy.insertText("\n")
-                    composition.clearContext()
+                    composition.appendNewline()
                 }
             }
         case "⇧":
@@ -575,6 +575,9 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
         } else {
             textDocumentProxy.deleteBackward()
             composition.deleteContextBackward()
+            // The proxy already reflects the delete; the host settles what
+            // the ledger can't see (e.g. a deleted space that had cleared it).
+            refreshHostContext()
             render()
         }
     }

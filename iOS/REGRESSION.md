@@ -101,18 +101,18 @@
 
 ## 宿主正文上下文与联想
 
-44. 宿主正文在三个时机读取：键盘出现（`viewWillAppear`）、非组合态的 `textDidChange`（真机验证：键盘弹出、移动光标、中文上屏后会触发；键盘自己退格、英文上屏不触发），以及每次组合的第一个按键、写入 marked 之前（`textDidChange` 在组合中几乎不触发，所以读到的文本不含 marked 前缀）。非组合态读到后直接发布联想，输入前即可补全。微信、备忘录已真机验证能读到。宿主正文结尾等于本键盘 context 文本时保留已有切分，否则以宿主为准，由 `Tests/CompositionBehaviorTests.swift` 覆盖。
+44. 宿主正文在四个时机读取：键盘出现（`viewWillAppear`）、非组合态退格之后（真机验证：`deleteBackward` 返回后立即读到的已是删除后的文字，所以退格后同步读取）、非组合态的 `textDidChange`（真机验证：键盘弹出、移动光标、中文上屏后会触发；键盘自己退格、英文上屏不触发），以及每次组合的第一个按键、写入 marked 之前（`textDidChange` 在组合中几乎不触发，所以读到的文本不含 marked 前缀）。非组合态读到后直接发布联想，输入前即可补全。微信、备忘录已真机验证能读到。宿主正文结尾等于本键盘 context 文本时保留已有切分，否则以宿主为准，由 `Tests/CompositionBehaviorTests.swift` 覆盖。
 45. 宿主拒绝提供正文时，应回退到本键盘已有 token context。
 46. 分词器不能在切换键盘、首次输入或点击第一行时造成明显卡顿或扩展内存峰值。
 47. iOS 不建任何分词索引：分词每次扫描词表（`CutByScan`），不常驻额外内存（见 47a）。
 47a. **分词器调用点白名单，增删改任何一处都必须先和用户沟通**。iOS 侧只有以下地方调用分词（引擎 `Sime::Tokenize` → `sime_tokenize_text` → `NativePinyinDecoder.tokenize`）：
-   - 宿主正文上下文：`Composition.updateHostContext`（由 `KeyboardViewController.refreshHostContext` 在 #44 的三个时机传入光标前最多 128 字；结尾等于已有 context 文本时不分词。只分最后一个空白之后的部分，但英文后面的单个空格不切断，继续向前读（包括末尾的空格），每段分别分词；英文不拆成 word piece，引擎切出的相邻英文片段合并为整词精确匹配，匹配不到或词头被截断即为断开）。
+   - 宿主正文上下文：`Composition.updateHostContext`（由 `KeyboardViewController.refreshHostContext` 在 #44 的四个时机传入光标前最多 128 字；结尾等于已有 context 文本时不分词。只分最后一个空白之后的部分，但英文后面的单个空格不切断，继续向前读（包括末尾的空格），每段分别分词；英文不拆成 word piece，引擎切出的相邻英文片段合并为整词精确匹配，匹配不到或词头被截断即为断开）。
    - 非组合态退格：`Composition.settleContextFragment`，被截短的末尾 token 剩余部分精确匹配不到、且没被选补全（补不出或用户没选）时，仅对**中文**剩余部分分词；英文不分词。
    - 旧 overlay 锚点上屏：`Composition.recordSentenceCommit`，锚点不走引擎路径时对上屏文本重新分词。
    - 引擎内部：`Sime::DecodeCorrection` 对改选的固定前缀 `fixed_prefix` 用 `CutByScan` 求上下文。
 
    iOS 不得构建引擎 `Cutter`（整词表字节 DAT，真机峰值 +23–41 MB，会触发 Jetsam）；引擎内 `Cutter` 只留给 iOS 不调用的用户句子迁移（`LoadUserSentence`）与 `sime-cut` 工具。宿主上下文、退格、改选三处的内存峰值由 `Tests/MemoryPeakTests.swift` 覆盖（overlay 上屏走同一个 `Tokenize`，未单独测），`CutByScan` 与 `Cutter` 分词一致由引擎 `tests/correction_test.cc` 覆盖。
-48. 所有上屏内容都进入 context，丢弃前文只有一条规则：token 断开。解码上屏（含锚点）直接使用解码 tokens；标点、数字、符号和原样上屏的按键追加在已有 context 后，整段精确匹配为一个 token（引擎 `ContextToken`）；空格、换行没有 token：换行和非英文后面的空格清空 context；英文后面的单个空格（手动输入、键盘插入、宿主读到的都一样）不切断，此时联想只出下一个词。context 默认相邻英文 token 之间有一个空格，退格会单独删掉它；英文联想（非补全）上屏前补一个空格，前面已有空格则不补，补在非英文之后的空格同样断开 context；非组合态退格从 context 末尾删一个字符，剩余部分精确匹配为 token 则照常，否则联想改为该片段的单词补全（只显示待插入部分，如「钵钵」→「鸡」、`iPhon` →「e」），补不出或没选补全就继续时，英文清空 context（英文 token 无 word piece，不能拆），中文只对这段剩余部分 `Tokenize`，之前的 token 不动；宿主文本由引擎 `Tokenize` 分词，英文按整词匹配（见 47a）；无法匹配或语言模型打不了分的位置由引擎记为 `NotToken` 分隔，键盘在 App 层直接丢弃它及其之前的 context。断言由 `Tests/CompositionBehaviorTests.swift`、`Tests/PredictionTests.swift` 与引擎 `tests/correction_test.cc` 覆盖。
+48. 所有上屏内容都进入 context，丢弃前文只有一条规则：token 断开。解码上屏（含锚点）直接使用解码 tokens；标点、数字、符号和原样上屏的按键追加在已有 context 后，整段精确匹配为一个 token（引擎 `ContextToken`）；空格、换行没有 token：换行和非英文后面的空格清空 context；英文后面的单个空格（手动输入、键盘插入、宿主读到的都一样）不切断，此时联想只出下一个词。context 只有 token、不含空格，默认相邻英文 token 之间有一个空格；光标前是否真有空格由另一个变量记录（本键盘最后上屏的字符：空格、换行、数字、符号或文字；读到宿主正文时以宿主末字符为准）：英文联想（非补全）上屏前补一个空格，前面已有空格则不补，退格删掉的是空格时 context 不变，补在非英文之后的空格同样断开 context；非组合态退格从 context 末尾删一个字符，剩余部分精确匹配为 token 则照常，否则联想改为该片段的单词补全（只显示待插入部分，如「钵钵」→「鸡」、`iPhon` →「e」），补不出或没选补全就继续时，英文清空 context（英文 token 无 word piece，不能拆），中文只对这段剩余部分 `Tokenize`，之前的 token 不动；宿主文本由引擎 `Tokenize` 分词，英文按整词匹配（见 47a）；无法匹配或语言模型打不了分的位置由引擎记为 `NotToken` 分隔，键盘在 App 层直接丢弃它及其之前的 context。断言由 `Tests/CompositionBehaviorTests.swift`、`Tests/PredictionTests.swift` 与引擎 `tests/correction_test.cc` 覆盖。
 49. context 上限最终应读取 `sime_context_size`，不能永久硬编码。
 50. 宿主正文对候选排序的实际影响需用真实模型和真机文本场景验证。
 50a. 联想（`NativePinyinDecoder.predict`）必须过滤纯标点/符号 token：n-gram 里几乎任何字最高频后继都是 `，。、！？`，不过滤会占满联想栏名额、把有用词挤掉，表现为“联想全错”。实现方式为多取候选（约 limit×6，上限 60）后剔除纯标点再取前 N。由 `Tests/PredictionTests.swift` 兑现。

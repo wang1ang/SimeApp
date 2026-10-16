@@ -29,6 +29,11 @@ final class Composition {
     // Text a backspace left after `contextTokens` that is no token; it offers
     // word completions until picked or settled.
     private var contextFragment = ""
+    // The last character committed before the cursor. Tokens can't tell
+    // whether a space follows an English word, so this tracks it; a host
+    // read overrides it.
+    private var lastCharacter: Character?
+    private var afterSpace: Bool { lastCharacter?.isWhitespace == true }
     // Sparse user corrections inside `raw`. There is no in-composition prefix:
     // a selection pins its span here and the whole input stays editable; the
     // only "prefix" is already-committed host text, carried as context.
@@ -448,6 +453,7 @@ final class Composition {
         reDecodeOnCorrection = previous.reDecodeOnCorrection
         contextTokens = previous.contextTokens
         contextFragment = previous.contextFragment
+        lastCharacter = previous.lastCharacter
         restore(raw: previous.raw)
     }
 
@@ -467,13 +473,20 @@ final class Composition {
     /// the context changed.
     @discardableResult
     func updateHostContext(from text: String) -> Bool {
+        let wasAfterSpace = afterSpace
+        lastCharacter = text.last
+        // The space after an English word is not part of the context.
         let ledger = ledgerText
-        if !ledger.isEmpty, text.hasSuffix(ledger) { return false }
+        let spaced = afterSpace && Self.isEnglishLetter(text.dropLast().last)
+        if !ledger.isEmpty, (spaced ? String(text.dropLast()) : text).hasSuffix(ledger) {
+            guard afterSpace != wasAfterSpace else { return false }
+            if !isComposing { predictionCandidates = associations() }
+            return true
+        }
         let tokens = hostTokens(text)
-        let fragment = !tokens.isEmpty && text.hasSuffix(" ") ? " " : ""
-        guard tokens != contextTokens || fragment != contextFragment else { return false }
+        guard tokens != contextTokens || !contextFragment.isEmpty else { return false }
         contextTokens = tokens
-        contextFragment = fragment
+        contextFragment = ""
         if isComposing {
             refresh()
         } else {
@@ -482,8 +495,8 @@ final class Composition {
         return true
     }
 
-    // The ledger as it reads in the host: adjacent English words are spaced,
-    // as the keyboard commits them.
+    // The ledger as it reads in the host: the context holds only tokens, and
+    // adjacent English words are taken to be spaced, as the keyboard commits them.
     private var ledgerText: String {
         let pieces = contextTokens.map(decoder.tokenText)
             + (contextFragment.isEmpty ? [] : [contextFragment])
@@ -708,6 +721,7 @@ final class Composition {
         if !isComposing, let calc = calculatorSuggestion {
             guard index == 0 else { return nil }
             calculatorSuggestion = nil
+            lastCharacter = calc.insert.last
             return calc.insert
         }
         if !isComposing, predictionCandidates.indices.contains(index) {
@@ -715,11 +729,11 @@ final class Composition {
             // Association candidates carry the full word; `consumed` leading
             // characters are already in the document (completion of the
             // trailing token), so only the remainder is inserted.
-            let drop = min(prediction.consumed, prediction.text.count)
+            // After a space nothing is left to complete.
+            let drop = afterSpace ? 0 : min(prediction.consumed, prediction.text.count)
             let insert = String(prediction.text.dropFirst(drop))
             // A next English word is spaced off unless a space precedes it.
-            let spaced = drop == 0 && Self.isEnglishLetter(insert.first)
-                && contextFragment != " "
+            let spaced = drop == 0 && Self.isEnglishLetter(insert.first) && !afterSpace
             // A space after anything but English breaks the context.
             if spaced, let last = contextTokens.last {
                 let text = decoder.tokenText(last)
@@ -986,6 +1000,7 @@ final class Composition {
     func appendInsertedContext(_ text: String) {
         guard !text.isEmpty else { return }
         extendContext(with: [decoder.contextToken(text)])
+        lastCharacter = text.last
         predictionCandidates = predictionEnabled
             ? decoder.associate(contextTokens, limit: 9) : []
     }
@@ -994,6 +1009,13 @@ final class Composition {
     /// context. A shortened token that is no longer a token becomes a
     /// fragment offering word completions; earlier tokens stay settled.
     func deleteContextBackward() {
+        if afterSpace {
+            // The context holds no whitespace; the host read that follows
+            // restores what a space had cleared.
+            lastCharacter = ledgerText.last
+            predictionCandidates = associations()
+            return
+        }
         let text: String
         if !contextFragment.isEmpty {
             text = contextFragment
@@ -1003,11 +1025,7 @@ final class Composition {
             return
         }
         contextFragment = String(text.dropLast())
-        if contextFragment.isEmpty, Self.isEnglishWord(text),
-           let previous = contextTokens.last, Self.isEnglishWord(decoder.tokenText(previous)) {
-            // The space between two English words is deleted on its own.
-            contextFragment = " "
-        } else if !contextFragment.isEmpty {
+        if !contextFragment.isEmpty {
             let exact = decoder.contextToken(contextFragment)
             if exact != 0 {
                 contextTokens.append(exact)
@@ -1022,20 +1040,24 @@ final class Composition {
                 settleContextFragment()
             }
         }
+        // A whole English word deleted after another leaves the space between them.
+        let spaceLeft = Self.isEnglishWord(text) && text.count == 1
+            && contextTokens.last.map { Self.isEnglishWord(decoder.tokenText($0)) } == true
+        lastCharacter = spaceLeft ? " " : ledgerText.last
         predictionCandidates = associations()
     }
 
+    // After a space only next words fit, not completions of the word before it.
     private func associations() -> [Candidate] {
         guard predictionEnabled, !contextTokens.isEmpty else { return [] }
-        // After a space only next words fit, not completions of the word before it.
         return decoder.associate(contextTokens, limit: 9)
-            .filter { contextFragment != " " || $0.consumed == 0 }
+            .filter { !afterSpace || $0.consumed == 0 }
     }
 
     // A fragment left without a picked completion: English has no word
     // pieces, so the context breaks; Chinese re-segments the fragment.
     private func settleContextFragment() {
-        guard !contextFragment.isEmpty, contextFragment != " " else { return }
+        guard !contextFragment.isEmpty else { return }
         let fragment = contextFragment
         contextFragment = ""
         guard !fragment.allSatisfy(\.isASCII) else {
@@ -1050,19 +1072,22 @@ final class Composition {
     /// breaks it.
     func appendSpace() {
         settleContextFragment()
-        guard contextFragment.isEmpty, let last = contextTokens.last,
-              Self.isEnglishWord(decoder.tokenText(last)) else {
-            clearContext()
-            return
-        }
-        contextFragment = " "
-        predictionCandidates = associations()
+        let keeps = !afterSpace && contextTokens.last.map { Self.isEnglishWord(decoder.tokenText($0)) } == true
+        if !keeps { clearContext() }
+        lastCharacter = " "
+        if keeps { predictionCandidates = associations() }
     }
 
     /// Newline never forms a token, so it starts a fresh context.
+    func appendNewline() {
+        clearContext()
+        lastCharacter = "\n"
+    }
+
     func clearContext() {
         contextTokens = []
         contextFragment = ""
+        lastCharacter = nil
         predictionCandidates = []
     }
 
@@ -1088,9 +1113,9 @@ final class Composition {
                 contextFragment = ""
             }
         }
-        if contextFragment == " " { contextFragment = "" }
         settleContextFragment()
         contextTokens = Array(Self.afterLastBreak(contextTokens + tokens).suffix(32))
+        lastCharacter = ledgerText.last
     }
 
     // Nothing before a NotToken break can score, so the context keeps only

@@ -984,6 +984,62 @@ final class CompositionContextTests: XCTestCase {
         XCTAssertFalse(composition.updateHostContext(from: "hello world"))
     }
 
+    func testDeletingTheLastEnglishWordLeavesNextWordAssociations() {
+        let decoder = RecordingPinyinDecoder()
+        decoder.contextTokenText = ["hello": 40, "world": 41]
+        for prefix in ["worl", "wor", "wo", "w"] {
+            decoder.completionResult[prefix] = [Candidate(text: "world", consumed: prefix.count, tokens: [41])]
+        }
+        decoder.decodeResult = { _ in
+            [Candidate(text: "helloworld", consumed: 10, tokens: [40, 41], units: "",
+                       segmentKeys: [5, 5], segmentChars: [5, 5])]
+        }
+        decoder.predictionResult = { context in
+            context == [40]
+                ? [Candidate(text: "world", consumed: 0, tokens: [41]),
+                   Candidate(text: "hellos", consumed: 5, tokens: [42])]
+                : []
+        }
+        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
+        composition.predictionEnabled = true
+
+        "helloworld".forEach { composition.append(String($0)) }
+        XCTAssertEqual(composition.commitBestOrRaw(), "hello world")
+        (0..<5).forEach { _ in composition.deleteContextBackward() }
+        XCTAssertEqual(composition.displayCandidates.map(\.text), ["world"])
+
+        composition.deleteContextBackward()
+        XCTAssertEqual(composition.displayCandidates.map(\.text), ["world", "s"])
+        XCTAssertEqual(composition.selectDisplayed(1), "s")
+    }
+
+    func testHostTextOverridesTheTrackedSpaceAfterEnglish() {
+        let decoder = RecordingPinyinDecoder()
+        decoder.contextTokenText = ["hello": 40, "world": 41]
+        decoder.decodeResult = { pinyin in
+            [Candidate(text: "hello", consumed: pinyin.count, tokens: [40], units: pinyin)]
+        }
+        decoder.predictionResult = { context in
+            context == [40]
+                ? [Candidate(text: "world", consumed: 0, tokens: [41]),
+                   Candidate(text: "hellos", consumed: 5, tokens: [42])]
+                : []
+        }
+        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
+        composition.predictionEnabled = true
+
+        "hello".forEach { composition.append(String($0)) }
+        XCTAssertEqual(composition.commitBestOrRaw(), "hello")
+        composition.appendSpace()
+        XCTAssertEqual(composition.displayCandidates.map(\.text), ["world"])
+
+        // The host shows no space (e.g. the cursor moved back before it).
+        XCTAssertTrue(composition.updateHostContext(from: "hello"))
+        XCTAssertEqual(composition.displayCandidates.map(\.text), ["world", "s"])
+        XCTAssertEqual(composition.selectDisplayed(0), " world")
+        XCTAssertEqual(composition.languageModelContext, [40, 41])
+    }
+
     func testSpacedEnglishAssociationAfterChineseStartsANewContext() {
         let decoder = RecordingPinyinDecoder()
         decoder.contextTokenText = ["你好": 11, "world": 41]
@@ -1156,6 +1212,29 @@ final class CompositionContextTests: XCTestCase {
         composition.appendSpace()
         composition.appendSpace()
         XCTAssertEqual(composition.languageModelContext, [])
+    }
+
+    func testHostTextAfterBackspacingASpaceRestoresTheWordBeforeIt() {
+        let decoder = RecordingPinyinDecoder()
+        decoder.tokenizedText["你好"] = [11]
+        decoder.contextTokenText = ["你好": 11]
+        decoder.decodeResult = { pinyin in
+            [Candidate(text: "你好", consumed: pinyin.count, tokens: [11], units: pinyin)]
+        }
+        decoder.predictionResult = { context in
+            context == [11] ? [Candidate(text: "啊", consumed: 0, tokens: [12])] : []
+        }
+        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
+        composition.predictionEnabled = true
+
+        "nihao".forEach { composition.append(String($0)) }
+        XCTAssertEqual(composition.commitBestOrRaw(), "你好")
+        composition.appendSpace()
+        composition.deleteContextBackward()
+        XCTAssertTrue(composition.updateHostContext(from: "你好"))
+
+        XCTAssertEqual(composition.displayCandidates.map(\.text), ["啊"])
+        XCTAssertEqual(composition.languageModelContext, [11])
     }
 
     func testEmptyHostTextClearsTheLedgerAndAssociations() {
