@@ -314,6 +314,24 @@ final class FullPinyinEndToEndTests: XCTestCase {
                       "woxuanB should end in a literal B; got: \(tail)")
     }
 
+    // A leading capital is selectable on its own so it can be anchored, whether
+    // or not an English word (Bf) also starts there.
+    func testTappingLeadingCapitalOffersAndAnchorsIt() throws {
+        let bundle = Bundle(for: Self.self)
+        guard let decoder = NativePinyinDecoder(bundle: bundle) else { throw XCTSkip() }
+        for letter in ["B", "G"] {
+            let c = Composition(decoder: decoder, inputScheme: .fullPinyin)
+            "\(letter)fangan".forEach { c.append(String($0)) }
+            c.activateCharacter(0)
+            guard let index = c.displayCandidates.firstIndex(where: { $0.text == letter }) else {
+                return XCTFail("tapping \(letter) should offer \(letter); got: \(c.displayCandidates.map(\.text))")
+            }
+            XCTAssertNil(c.selectDisplayed(index))
+            XCTAssertEqual(c.preedit, "\(letter) fang an")
+            XCTAssertEqual(c.candidates.first?.text, "\(letter)方案")
+        }
+    }
+
     func testLiteralLetterDoesNotDisplaceWordsOrAbbreviations() throws {
         let cases: [(pinyin: String, top: String)] = [
             ("woxihuanApple", "我喜欢Apple"),

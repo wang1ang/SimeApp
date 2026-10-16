@@ -190,6 +190,18 @@ final class ShuangpinEndToEndTests: XCTestCase {
         XCTAssertEqual(c.candidates.first?.text, "NTP")
     }
 
+    func testTappingLeadingCapitalOffersAndAnchorsIt() throws {
+        let c = try composition(for: "Bfhan")
+        c.activateCharacter(0)
+        guard let index = c.displayCandidates.firstIndex(where: { $0.text == "B" }) else {
+            return XCTFail("tapping B should offer B; got: \(c.displayCandidates.map(\.text))")
+        }
+        XCTAssertNil(c.selectDisplayed(index))
+        XCTAssertEqual(c.preedit, "B fh an")
+        XCTAssertTrue(c.candidates.first?.text.hasPrefix("B方") ?? false,
+                      "B should stay anchored; got: \(c.candidates.map(\.text))")
+    }
+
     func testTappingRestOfCapitalRunOffersItsLetters() throws {
         let c = try composition(for: "NTP")
         let nt = try XCTUnwrap(c.candidates.firstIndex(where: { $0.text == "NT" }))
