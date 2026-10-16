@@ -104,7 +104,14 @@
 44. `documentContextBeforeInput` 包含当前 marked 前缀时，必须先剔除 marked 部分再分词。
 45. 宿主拒绝提供正文时，应回退到本键盘已有 token context。
 46. 分词器不能在切换键盘、首次输入或点击第一行时造成明显卡顿或扩展内存峰值。
-47. 分词器索引应延迟创建并有明确缓存/生命周期上限。
+47. iOS 不建任何分词索引：分词每次扫描词表（`CutByScan`），不常驻额外内存（见 47a）。
+47a. **分词器调用点白名单，增删改任何一处都必须先和用户沟通**。iOS 侧只有以下地方调用分词（引擎 `Sime::Tokenize` → `sime_tokenize_text` → `NativePinyinDecoder.tokenize`）：
+   - 宿主正文上下文：`Composition.updateHostContext`（由 `KeyboardViewController.refreshHostContext` 传入光标前最多 128 字，只切最后一个空白之后的部分）。
+   - 非组合态退格：`Composition.deleteContextBackward`，仅当被截短的末尾 token 剩余部分精确匹配不到时，对这段剩余部分分词。
+   - 旧 overlay 锚点上屏：`Composition.recordSentenceCommit`，锚点不走引擎路径时对上屏文本重新分词。
+   - 引擎内部：`Sime::DecodeCorrection` 对改选的固定前缀 `fixed_prefix` 用 `CutByScan` 求上下文。
+
+   iOS 不得构建引擎 `Cutter`（整词表字节 DAT，真机峰值 +23–41 MB，会触发 Jetsam）；引擎内 `Cutter` 只留给 iOS 不调用的用户句子迁移（`LoadUserSentence`）与 `sime-cut` 工具。宿主上下文、退格、改选三处的内存峰值由 `Tests/MemoryPeakTests.swift` 覆盖（overlay 上屏走同一个 `Tokenize`，未单独测），`CutByScan` 与 `Cutter` 分词一致由引擎 `tests/correction_test.cc` 覆盖。
 48. 所有上屏内容都进入 context，丢弃前文只有一条规则：token 断开。解码上屏（含锚点）直接使用解码 tokens；标点、数字、符号和原样上屏的按键追加在已有 context 后，整段精确匹配为一个 token（引擎 `ContextToken`）；空格、换行没有 token，由键盘直接清空 context；非组合态退格从 context 末尾删一个字符，多字 token 剩余部分先精确匹配，匹配不到则只对这段剩余部分 `Tokenize`，之前的 token 不动；宿主文本由引擎 `Tokenize` 分词；无法匹配或语言模型打不了分的位置由引擎记为 `NotToken` 分隔，键盘在 App 层直接丢弃它及其之前的 context。断言由 `Tests/CompositionBehaviorTests.swift` 与引擎 `tests/correction_test.cc` 覆盖。
 49. context 上限最终应读取 `sime_context_size`，不能永久硬编码。
 50. 宿主正文对候选排序的实际影响需用真实模型和真机文本场景验证。
