@@ -66,7 +66,7 @@
 
 ## Marked text 与宿主光标
 
-> 状态：**未实现 / 已移除**。“点击宿主里的 marked 拼音定位光标 / 宿主 unmark 后恢复 marked”这套机制（`syncCompositionCursor` + `textDidChange` 里的恢复逻辑）在多个宿主上从未可靠工作：点那段下划线拼音会整段消失、再点会把键盘弄崩（伴 JetsamEvent/SystemMemoryReset）。相关代码已删除——`textDidChange` 仅保留 `refreshHostContext`（联想上下文）与回车键外观刷新，不再按宿主 context 重定位或在 unmark 后恢复/取消。29–34 保留为“目标但未实现”，将来重做需先解决崩溃/内存问题。
+> 状态：**未实现 / 已移除**。“点击宿主里的 marked 拼音定位光标 / 宿主 unmark 后恢复 marked”这套机制（`syncCompositionCursor` + `textDidChange` 里的恢复逻辑）在多个宿主上从未可靠工作：点那段下划线拼音会整段消失、再点会把键盘弄崩（伴 JetsamEvent/SystemMemoryReset）。相关代码已删除——`textDidChange` 仅保留回车键外观等刷新（宿主正文改在组合开始时读取，见 44），不再按宿主 context 重定位或在 unmark 后恢复/取消。29–34 保留为“目标但未实现”，将来重做需先解决崩溃/内存问题。
 
 29. （未实现）点击宿主中的 marked 拼音应定位组合光标，不能让整段拼音消失。
 30. 宿主只暴露光标前或光标后一侧 context 时，也应尽可能完成定位。
@@ -101,12 +101,12 @@
 
 ## 宿主正文上下文与联想
 
-44. `documentContextBeforeInput` 包含当前 marked 前缀时，必须先剔除 marked 部分再分词。
+44. 宿主正文只在每次组合的第一个按键、写入 marked 之前读取（`textDidChange` 在组合中几乎不触发，曾因此从未读到正文），所以读到的文本不含 marked 前缀。微信、备忘录已真机验证能读到。
 45. 宿主拒绝提供正文时，应回退到本键盘已有 token context。
 46. 分词器不能在切换键盘、首次输入或点击第一行时造成明显卡顿或扩展内存峰值。
 47. iOS 不建任何分词索引：分词每次扫描词表（`CutByScan`），不常驻额外内存（见 47a）。
 47a. **分词器调用点白名单，增删改任何一处都必须先和用户沟通**。iOS 侧只有以下地方调用分词（引擎 `Sime::Tokenize` → `sime_tokenize_text` → `NativePinyinDecoder.tokenize`）：
-   - 宿主正文上下文：`Composition.updateHostContext`（由 `KeyboardViewController.refreshHostContext` 传入光标前最多 128 字，只切最后一个空白之后的部分）。
+   - 宿主正文上下文：`Composition.updateHostContext`（由 `KeyboardViewController.refreshHostContext` 在每次组合的第一个按键、写入 marked 之前传入光标前最多 128 字，只切最后一个空白之后的部分）。
    - 非组合态退格：`Composition.settleContextFragment`，被截短的末尾 token 剩余部分精确匹配不到、且没被选补全（补不出或用户没选）时，仅对**中文**剩余部分分词；英文不分词。
    - 旧 overlay 锚点上屏：`Composition.recordSentenceCommit`，锚点不走引擎路径时对上屏文本重新分词。
    - 引擎内部：`Sime::DecodeCorrection` 对改选的固定前缀 `fixed_prefix` 用 `CutByScan` 求上下文。

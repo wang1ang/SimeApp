@@ -155,9 +155,6 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
 
     override func textDidChange(_ textInput: UITextInput?) {
         super.textDidChange(textInput)
-        if composition.isComposing {
-            refreshHostContext()
-        }
         updateSpaceContextHint()
         refreshReturnKeyAppearance()
         if composition.updateCalculator(context: textDocumentProxy.documentContextBeforeInput) {
@@ -165,16 +162,15 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
         }
     }
 
+    // The host text is read once per composition, before any marked text
+    // exists; textDidChange almost never fires while composing.
+    private func appendKey(_ key: String) {
+        if !composition.isComposing { refreshHostContext() }
+        composition.append(key)
+    }
+
     private func refreshHostContext() {
-        guard var before = textDocumentProxy.documentContextBeforeInput else { return }
-        // UIKit normally includes the marked preedit before the cursor. It is
-        // not committed host text and must not become language-model context.
-        if composition.isComposing {
-            let markedPrefix = composition.markedPrefix
-            if before.hasSuffix(markedPrefix) {
-                before.removeLast(markedPrefix.count)
-            }
-        }
+        guard let before = textDocumentProxy.documentContextBeforeInput else { return }
         // UITextDocumentProxy already bounds this context; retain an explicit
         // recent window as a safeguard for hosts that return more text.
         composition.updateHostContext(from: String(before.suffix(128)))
@@ -487,7 +483,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
             keyboardNeedsRebuild = true
             render()
         case ";" where keyboardScheme.usesSemicolonKey:
-            composition.append(title)
+            appendKey(title)
             updateMarkedText()
             render()
         case "*", "+", "=" where keyboardPage == .numbers:
@@ -508,7 +504,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
                 // composition preserves its case and surfaces it as a literal
                 // English candidate (committed on space/enter/tap), so
                 // uppercase does not go straight to the document.
-                composition.append(title)
+                appendKey(title)
                 if shiftState == .oneShot {
                     shiftState = .off
                     keyboardNeedsRebuild = true
