@@ -110,6 +110,24 @@ final class CompositionCandidateSelectionTests: XCTestCase {
         XCTAssertEqual(composition.cursor, 3)
     }
 
+    func testThirdTapOnTheEditedCharacterLeavesPinyinEditing() {
+        let decoder = RecordingPinyinDecoder()
+        decoder.decodeResult = { pinyin in
+            pinyin == "nih"
+                ? [Candidate(text: "你好", consumed: 3, tokens: [1, 2],
+                             units: "ni'hao")]
+                : []
+        }
+        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
+
+        "nih".forEach { composition.append(String($0)) }
+        composition.activateCharacter(1)
+        XCTAssertFalse(composition.isEditingPinyin(at: 1))
+        composition.activateCharacter(1)
+        XCTAssertTrue(composition.isEditingPinyin(at: 1))
+        XCTAssertFalse(composition.isEditingPinyin(at: 0))
+    }
+
     func testActiveCorrectionRetainsTrailingShuangpinInitialForPinyinEditing() {
         let decoder = RecordingPinyinDecoder()
         decoder.decodeResult = { _ in

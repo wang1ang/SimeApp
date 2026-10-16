@@ -863,6 +863,10 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
 
     @objc private func sentenceCharacterTapped(_ sender: UIButton) {
         guard let index = sender.accessibilityValue.flatMap(Int.init) else { return }
+        if composition.isEditingPinyin(at: index) {
+            cancelActiveSelection()
+            return
+        }
         // Fresh open (or switching chars) only lists candidates; the pinyin
         // toggle happens on a further tap while the bubble is open on this char.
         let bubbleOpenOnSame = candidateBubble != nil && composition.activeCharacterIndex == index

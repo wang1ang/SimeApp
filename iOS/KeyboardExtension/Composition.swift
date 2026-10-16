@@ -798,6 +798,12 @@ final class Composition {
         displayGroups = []
     }
 
+    /// A further tap on the character whose pinyin is being edited leaves
+    /// editing instead of reopening its candidates.
+    func isEditingPinyin(at index: Int) -> Bool {
+        activeShowsKeys && activeCharacterIndex == index
+    }
+
     func activateCharacter(_ index: Int, allowKeyToggle: Bool = true) {
         // Second tap on the highlighted char reveals its typed keys; the first
         // only selects it and lists candidates.
