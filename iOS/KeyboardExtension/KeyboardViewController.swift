@@ -299,27 +299,25 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
         let space = keyButton("space")
         let enter = keyButton("return")
         returnKeyButton = enter
-        guard punctuationBesideSpace else {
-            // Off restores the earlier 3-key row.
-            row.spacing = 8
-            bottomPunctuationKeys = []
-            [mode, space, enter].forEach { row.addArrangedSubview($0) }
-            mode.widthAnchor.constraint(equalTo: enter.widthAnchor).isActive = true
-            space.widthAnchor.constraint(equalTo: mode.widthAnchor, multiplier: 2.1).isActive = true
-            return row
-        }
-        let comma = keyButton("，")
-        let period = keyButton("。")
-        let question = keyButton("？")
         // Add every key to the row before activating cross-key width
         // constraints. Constraining against a sibling that is not yet in the
         // shared stack view has no common ancestor and aborts. The same
-        // 6-key layout is used on every page for a consistent look.
-        [mode, comma, space, period, question, enter].forEach { row.addArrangedSubview($0) }
-        space.widthAnchor.constraint(equalTo: mode.widthAnchor, multiplier: 2.1).isActive = true
-        // Punctuation keys match the letter-key width of the rows above;
-        // rebuildKeyboard anchors them once the reference row exists.
-        bottomPunctuationKeys = [comma, period, question]
+        // layout is used on every page for a consistent look.
+        if punctuationBesideSpace {
+            let comma = keyButton("，")
+            let period = keyButton("。")
+            let question = keyButton("？")
+            [mode, comma, space, period, question, enter].forEach { row.addArrangedSubview($0) }
+            // Punctuation keys match the letter-key width of the rows above;
+            // rebuildKeyboard anchors them once the reference row exists.
+            bottomPunctuationKeys = [comma, period, question]
+            space.widthAnchor.constraint(equalTo: mode.widthAnchor, multiplier: 2.1).isActive = true
+        } else {
+            [mode, space, enter].forEach { row.addArrangedSubview($0) }
+            bottomPunctuationKeys = []
+            // Mirrors the return key: its right edge sits on the z-key column.
+            mode.widthAnchor.constraint(equalTo: enter.widthAnchor).isActive = true
+        }
         // Return key width puts its left edge at the m-key column of the
         // letters third row (9 keys, m at index 7, 4pt gaps):
         //   m.left = (7L+28)/9  ->  width = L - m.left = (2/9)L - 28/9.
