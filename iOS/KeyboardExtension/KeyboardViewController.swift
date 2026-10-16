@@ -584,7 +584,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
             commit(text)
         } else {
             textDocumentProxy.insertText(" ")
-            composition.clearContext()
+            composition.appendSpace()
         }
         render()
     }

@@ -470,14 +470,14 @@ final class Composition {
         let ledger = ledgerText
         if !ledger.isEmpty, text.hasSuffix(ledger) { return false }
         let tokens = hostTokens(text)
-        guard tokens != contextTokens || !contextFragment.isEmpty else { return false }
+        let fragment = !tokens.isEmpty && text.hasSuffix(" ") ? " " : ""
+        guard tokens != contextTokens || fragment != contextFragment else { return false }
         contextTokens = tokens
-        contextFragment = ""
+        contextFragment = fragment
         if isComposing {
             refresh()
         } else {
-            predictionCandidates = predictionEnabled && !tokens.isEmpty
-                ? decoder.associate(tokens, limit: 9) : []
+            predictionCandidates = associations()
         }
         return true
     }
@@ -498,8 +498,8 @@ final class Composition {
         return text
     }
 
-    // Only English words joined by one space share a context; any other
-    // whitespace breaks it, since nothing before it can score.
+    // A space after an English word keeps the context; any other whitespace
+    // breaks it, since nothing before it can score.
     private func hostTokens(_ text: String) -> [UInt32] {
         var tokens: [UInt32] = []
         var end = text.endIndex
@@ -507,10 +507,8 @@ final class Composition {
             let start = text[..<end].lastIndex(where: \.isWhitespace)
                 .map { text.index(after: $0) } ?? text.startIndex
             let chunk = text[start..<end]
-            guard !chunk.isEmpty else { break }
-            tokens = chunkTokens(chunk) + tokens
-            guard !tokens.contains(0), start > text.startIndex,
-                  Self.isEnglishLetter(chunk.first) else { break }
+            if !chunk.isEmpty { tokens = chunkTokens(chunk) + tokens }
+            guard !tokens.contains(0), start > text.startIndex else { break }
             let space = text.index(before: start)
             guard text[space] == " ", space > text.startIndex,
                   Self.isEnglishLetter(text[text.index(before: space)]) else { break }
@@ -722,7 +720,7 @@ final class Composition {
             // A next English word is spaced off unless a space precedes it.
             let spaced = drop == 0 && Self.isEnglishLetter(insert.first)
                 && contextFragment != " "
-            // Only English words share a context across a space.
+            // A space after anything but English breaks the context.
             if spaced, let last = contextTokens.last {
                 let text = decoder.tokenText(last)
                 if !text.isEmpty, !Self.isEnglishWord(text) { contextTokens = [] }
@@ -1024,10 +1022,14 @@ final class Composition {
                 settleContextFragment()
             }
         }
+        predictionCandidates = associations()
+    }
+
+    private func associations() -> [Candidate] {
+        guard predictionEnabled, !contextTokens.isEmpty else { return [] }
         // After a space only next words fit, not completions of the word before it.
-        predictionCandidates = predictionEnabled && !contextTokens.isEmpty
-            ? decoder.associate(contextTokens, limit: 9)
-                .filter { contextFragment != " " || $0.consumed == 0 } : []
+        return decoder.associate(contextTokens, limit: 9)
+            .filter { contextFragment != " " || $0.consumed == 0 }
     }
 
     // A fragment left without a picked completion: English has no word
@@ -1044,7 +1046,20 @@ final class Composition {
         contextTokens = tokens.isEmpty ? [] : Self.afterLastBreak(contextTokens + tokens)
     }
 
-    /// Space and newline never form a token, so they start a fresh context.
+    /// A space after an English word keeps the context; any other space
+    /// breaks it.
+    func appendSpace() {
+        settleContextFragment()
+        guard contextFragment.isEmpty, let last = contextTokens.last,
+              Self.isEnglishWord(decoder.tokenText(last)) else {
+            clearContext()
+            return
+        }
+        contextFragment = " "
+        predictionCandidates = associations()
+    }
+
+    /// Newline never forms a token, so it starts a fresh context.
     func clearContext() {
         contextTokens = []
         contextFragment = ""
@@ -1073,13 +1088,7 @@ final class Composition {
                 contextFragment = ""
             }
         }
-        if contextFragment == " " {
-            contextFragment = ""
-            // Only English words share a context across a space.
-            if let first = tokens.first, !Self.isEnglishWord(decoder.tokenText(first)) {
-                contextTokens = []
-            }
-        }
+        if contextFragment == " " { contextFragment = "" }
         settleContextFragment()
         contextTokens = Array(Self.afterLastBreak(contextTokens + tokens).suffix(32))
     }
