@@ -160,6 +160,17 @@ final class FullPinyinEndToEndTests: XCTestCase {
         XCTAssertEqual(word.segmentKeys, [1, 1, 1, 1, 1, 1])
     }
 
+    func testHostEnglishWordIsOneContextToken() throws {
+        let bundle = Bundle(for: Self.self)
+        guard let decoder = NativePinyinDecoder(bundle: bundle) else { throw XCTSkip() }
+        let iPhone = decoder.contextToken("iPhone")
+        guard iPhone != 0 else { throw XCTSkip("iPhone is not a token") }
+        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
+        composition.updateHostContext(from: "我爱 hello iPhone")
+        XCTAssertEqual(composition.languageModelContext,
+                       [decoder.contextToken("hello"), iPhone])
+    }
+
     func testLastSegmentCorrectionUsesHostContext() throws {
         // After 你, "ganshan" tops as 干啥呢 (gan'sha'n). Tapping the last char 呢
         // must re-choose from the "n" tail — the correction decode is seeded with

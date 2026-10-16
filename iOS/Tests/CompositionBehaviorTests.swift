@@ -860,6 +860,176 @@ final class CompositionContextTests: XCTestCase {
         XCTAssertEqual(decoder.decodeCalls.last?.context, [7, 8])
     }
 
+    func testHostTextReadBeforeTypingPublishesAssociations() {
+        let decoder = RecordingPinyinDecoder()
+        decoder.tokenizedText["今天"] = [1, 2]
+        decoder.predictionResult = { _ in [Candidate(text: "天气", consumed: 0, tokens: [3])] }
+        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
+        composition.predictionEnabled = true
+
+        composition.updateHostContext(from: "今天")
+
+        XCTAssertEqual(decoder.predictionCalls.last?.context, [1, 2])
+        XCTAssertEqual(composition.displayCandidates.map(\.text), ["天气"])
+    }
+
+    func testHostTextEndingWithTheLedgerKeepsTheLedger() {
+        let decoder = RecordingPinyinDecoder()
+        decoder.tokenizedText["宿主你好"] = [90, 91]
+        decoder.contextTokenText = ["你好": 11]
+        decoder.decodeResult = { pinyin in
+            [Candidate(text: "你好", consumed: pinyin.count, tokens: [11], units: pinyin)]
+        }
+        decoder.predictionResult = { _ in [Candidate(text: "啊", consumed: 0, tokens: [12])] }
+        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
+        composition.predictionEnabled = true
+
+        "nihao".forEach { composition.append(String($0)) }
+        XCTAssertEqual(composition.commitBestOrRaw(), "你好")
+        let predictionCallsAfterCommit = decoder.predictionCalls.count
+        composition.updateHostContext(from: "宿主你好")
+
+        XCTAssertEqual(decoder.predictionCalls.count, predictionCallsAfterCommit)
+        XCTAssertEqual(composition.displayCandidates.map(\.text), ["啊"])
+        composition.append("w")
+        XCTAssertEqual(decoder.decodeCalls.last?.context, [11])
+    }
+
+    func testHostTextEndingWithTheFragmentKeepsItsCompletions() {
+        let decoder = RecordingPinyinDecoder()
+        decoder.tokenizedText["我爱iPhone"] = [7, 8]
+        decoder.tokenizedText["我爱iPhon"] = [7, 30, 31]
+        decoder.contextTokenText = ["我爱": 7, "iPhone": 8]
+        decoder.completionResult["iPhon"] = [Candidate(text: "iPhone", consumed: 5, tokens: [8])]
+        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
+        composition.predictionEnabled = true
+
+        composition.updateHostContext(from: "我爱iPhone")
+        composition.deleteContextBackward()
+        composition.updateHostContext(from: "我爱iPhon")
+
+        XCTAssertEqual(composition.displayCandidates.map(\.text), ["e"])
+    }
+
+    func testHostTextThatDiffersFromTheLedgerReplacesIt() {
+        let decoder = RecordingPinyinDecoder()
+        decoder.tokenizedText["今天"] = [1, 2]
+        decoder.contextTokenText = ["你好": 11]
+        decoder.decodeResult = { pinyin in
+            [Candidate(text: "你好", consumed: pinyin.count, tokens: [11], units: pinyin)]
+        }
+        decoder.predictionResult = { context in
+            context == [1, 2] ? [Candidate(text: "天气", consumed: 0, tokens: [3])] : []
+        }
+        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
+        composition.predictionEnabled = true
+
+        "nihao".forEach { composition.append(String($0)) }
+        XCTAssertEqual(composition.commitBestOrRaw(), "你好")
+        composition.updateHostContext(from: "今天")
+
+        XCTAssertEqual(composition.displayCandidates.map(\.text), ["天气"])
+        composition.append("w")
+        XCTAssertEqual(decoder.decodeCalls.last?.context, [1, 2])
+    }
+
+    func testCommittedEnglishWordsKeepTheSpaceBetweenThem() {
+        let decoder = RecordingPinyinDecoder()
+        decoder.contextTokenText = ["hello": 40, "world": 41]
+        for prefix in ["worl", "wor", "wo", "w"] {
+            decoder.completionResult[prefix] = [Candidate(text: "world", consumed: prefix.count, tokens: [41])]
+        }
+        decoder.decodeResult = { pinyin in
+            pinyin == "helloworld"
+                ? [Candidate(text: "helloworld", consumed: 10, tokens: [40, 41], units: "",
+                             segmentKeys: [5, 5], segmentChars: [5, 5])]
+                : [Candidate(text: "我", consumed: pinyin.count, tokens: [12], units: pinyin)]
+        }
+        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
+        composition.predictionEnabled = true
+
+        "helloworld".forEach { composition.append(String($0)) }
+        XCTAssertEqual(composition.commitBestOrRaw(), "hello world")
+        XCTAssertFalse(composition.updateHostContext(from: "hello world"))
+        (0..<5).forEach { _ in composition.deleteContextBackward() }
+        XCTAssertFalse(composition.updateHostContext(from: "hello "))
+        composition.deleteContextBackward()
+        XCTAssertFalse(composition.updateHostContext(from: "hello"))
+        composition.append("w")
+        XCTAssertEqual(decoder.decodeCalls.last?.context, [40])
+    }
+
+    func testHostEnglishIsMatchedAsWholeWords() {
+        let decoder = RecordingPinyinDecoder()
+        decoder.tokenizedText["我爱iPhone"] = [7, 50, 51, 52]
+        decoder.contextTokenText = ["我爱": 7, "iP": 50, "hon": 51, "e": 52, "iPhone": 8]
+        decoder.decodeResult = { pinyin in
+            [Candidate(text: "我", consumed: pinyin.count, tokens: [12], units: pinyin)]
+        }
+        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
+
+        composition.updateHostContext(from: "我爱iPhone")
+        composition.append("w")
+
+        XCTAssertEqual(decoder.decodeCalls.last?.context, [7, 8])
+    }
+
+    func testHostEnglishWithoutAWholeTokenBreaksTheContext() {
+        let decoder = RecordingPinyinDecoder()
+        decoder.tokenizedText["我爱xyz"] = [7, 60, 61]
+        decoder.tokenizedText["qhello"] = [0, 40]
+        decoder.contextTokenText = ["我爱": 7, "xy": 60, "z": 61, "hello": 40]
+        decoder.decodeResult = { pinyin in
+            [Candidate(text: "我", consumed: pinyin.count, tokens: [12], units: pinyin)]
+        }
+        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
+
+        composition.updateHostContext(from: "我爱xyz")
+        composition.append("w")
+        XCTAssertEqual(decoder.decodeCalls.last?.context, [])
+
+        composition.updateHostContext(from: "qhello")
+        XCTAssertEqual(decoder.decodeCalls.last?.context, [])
+    }
+
+    func testHostEnglishWordsJoinedByOneSpaceShareTheContext() {
+        let decoder = RecordingPinyinDecoder()
+        decoder.tokenizedText["hello"] = [40]
+        decoder.tokenizedText["world"] = [41]
+        decoder.tokenizedText["你好"] = [11]
+        decoder.contextTokenText = ["hello": 40, "world": 41, "你好": 11]
+        decoder.decodeResult = { pinyin in
+            [Candidate(text: "我", consumed: pinyin.count, tokens: [12], units: pinyin)]
+        }
+        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
+
+        composition.updateHostContext(from: "hello world")
+        composition.append("w")
+        XCTAssertEqual(decoder.decodeCalls.last?.context, [40, 41])
+
+        composition.updateHostContext(from: "你好 world")
+        XCTAssertEqual(decoder.decodeCalls.last?.context, [41])
+    }
+
+    func testEmptyHostTextClearsTheLedgerAndAssociations() {
+        let decoder = RecordingPinyinDecoder()
+        decoder.contextTokenText = ["你好": 11]
+        decoder.decodeResult = { pinyin in
+            [Candidate(text: "你好", consumed: pinyin.count, tokens: [11], units: pinyin)]
+        }
+        decoder.predictionResult = { _ in [Candidate(text: "啊", consumed: 0, tokens: [12])] }
+        let composition = Composition(decoder: decoder, inputScheme: .fullPinyin)
+        composition.predictionEnabled = true
+
+        "nihao".forEach { composition.append(String($0)) }
+        XCTAssertEqual(composition.commitBestOrRaw(), "你好")
+        composition.updateHostContext(from: "")
+
+        XCTAssertEqual(composition.displayCandidates.map(\.text), [])
+        composition.append("w")
+        XCTAssertEqual(decoder.decodeCalls.last?.context, [])
+    }
+
     func testPredictionContextIsBoundedToTheMostRecent32Tokens() {
         let decoder = RecordingPinyinDecoder()
         let tokens = (0..<40).map(UInt32.init)

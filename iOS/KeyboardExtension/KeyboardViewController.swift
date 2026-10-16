@@ -124,6 +124,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
         recordShuangpinScheme()
         composition.predictionEnabled = InputSettings.predictionEnabled
         composition.reDecodeOnCorrection = InputSettings.reDecodeOnCorrection
+        if !composition.isComposing { refreshHostContext() }
         refreshReturnKeyAppearance()
         render()
         activateNativeDecoder()
@@ -157,23 +158,27 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
         super.textDidChange(textInput)
         updateSpaceContextHint()
         refreshReturnKeyAppearance()
-        if composition.updateCalculator(context: textDocumentProxy.documentContextBeforeInput) {
+        // Read while idle so association works before typing; textDidChange
+        // almost never fires while composing, and marked text would pollute it.
+        let contextChanged = !composition.isComposing && refreshHostContext()
+        if composition.updateCalculator(context: textDocumentProxy.documentContextBeforeInput)
+            || contextChanged {
             render()
         }
     }
 
-    // The host text is read once per composition, before any marked text
-    // exists; textDidChange almost never fires while composing.
+    // Also read on the first key, before any marked text exists.
     private func appendKey(_ key: String) {
         if !composition.isComposing { refreshHostContext() }
         composition.append(key)
     }
 
-    private func refreshHostContext() {
-        guard let before = textDocumentProxy.documentContextBeforeInput else { return }
+    @discardableResult
+    private func refreshHostContext() -> Bool {
+        guard let before = textDocumentProxy.documentContextBeforeInput else { return false }
         // UITextDocumentProxy already bounds this context; retain an explicit
         // recent window as a safeguard for hosts that return more text.
-        composition.updateHostContext(from: String(before.suffix(128)))
+        return composition.updateHostContext(from: String(before.suffix(128)))
     }
 
     private func refreshReturnKeyAppearance() {

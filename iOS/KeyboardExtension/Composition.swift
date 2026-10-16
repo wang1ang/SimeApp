@@ -25,9 +25,6 @@ final class Composition {
     private var predictionCandidates: [Candidate] = []
     /// Shown instead of association while the host text ends in arithmetic.
     private(set) var calculatorSuggestion: CalculatorSuggestion?
-    // Tokens derived from the host's text before the insertion point. They
-    // supersede the local fallback whenever UIKit exposes that text.
-    private var hostContextTokens: [UInt32]?
     private var contextTokens: [UInt32] = []
     // Text a backspace left after `contextTokens` that is no token; it offers
     // word completions until picked or settled.
@@ -95,7 +92,7 @@ final class Composition {
     }
     var selectionLocation: Int { markedPrefix.utf16.count }
     var isComposing: Bool { !raw.isEmpty }
-    var languageModelContext: [UInt32] { Array((hostContextTokens ?? contextTokens).suffix(32)) }
+    var languageModelContext: [UInt32] { Array(contextTokens.suffix(32)) }
     var debugContextText: String {
         decoder.describeContext(languageModelContext)
     }
@@ -449,7 +446,6 @@ final class Composition {
     func reinterpret(from previous: Composition) {
         predictionEnabled = previous.predictionEnabled
         reDecodeOnCorrection = previous.reDecodeOnCorrection
-        hostContextTokens = previous.hostContextTokens
         contextTokens = previous.contextTokens
         contextFragment = previous.contextFragment
         restore(raw: previous.raw)
@@ -466,17 +462,98 @@ final class Composition {
         clearComposition()
     }
 
-    func updateHostContext(from text: String) {
-        // Nothing before a space or newline can score, so skip tokenizing it.
-        let tail = text.split(omittingEmptySubsequences: false,
-                              whereSeparator: \.isWhitespace).last ?? ""
-        let tokens = tail.isEmpty ? [] : Self.afterLastBreak(decoder.tokenize(String(tail)))
-        guard hostContextTokens != tokens else { return }
-        hostContextTokens = tokens
-        // Host is the authoritative baseline: replace the ledger, don't append.
+    /// Host text wins over the ledger unless it ends with the ledger's text,
+    /// in which case the ledger's own segmentation is kept. Returns whether
+    /// the context changed.
+    @discardableResult
+    func updateHostContext(from text: String) -> Bool {
+        let ledger = ledgerText
+        if !ledger.isEmpty, text.hasSuffix(ledger) { return false }
+        let tokens = hostTokens(text)
+        guard tokens != contextTokens || !contextFragment.isEmpty else { return false }
         contextTokens = tokens
         contextFragment = ""
-        if isComposing { refresh() }
+        if isComposing {
+            refresh()
+        } else {
+            predictionCandidates = predictionEnabled && !tokens.isEmpty
+                ? decoder.associate(tokens, limit: 9) : []
+        }
+        return true
+    }
+
+    // The ledger as it reads in the host: adjacent English words are spaced,
+    // as the keyboard commits them.
+    private var ledgerText: String {
+        let pieces = contextTokens.map(decoder.tokenText)
+            + (contextFragment.isEmpty ? [] : [contextFragment])
+        var text = ""
+        var previousIsEnglish = false
+        for piece in pieces {
+            let isEnglish = Self.isEnglishWord(piece)
+            if isEnglish && previousIsEnglish { text += " " }
+            text += piece
+            previousIsEnglish = isEnglish
+        }
+        return text
+    }
+
+    // Only English words joined by one space share a context; any other
+    // whitespace breaks it, since nothing before it can score.
+    private func hostTokens(_ text: String) -> [UInt32] {
+        var tokens: [UInt32] = []
+        var end = text.endIndex
+        while true {
+            let start = text[..<end].lastIndex(where: \.isWhitespace)
+                .map { text.index(after: $0) } ?? text.startIndex
+            let chunk = text[start..<end]
+            guard !chunk.isEmpty else { break }
+            tokens = chunkTokens(chunk) + tokens
+            guard !tokens.contains(0), start > text.startIndex,
+                  Self.isEnglishLetter(chunk.first) else { break }
+            let space = text.index(before: start)
+            guard text[space] == " ", space > text.startIndex,
+                  Self.isEnglishLetter(text[text.index(before: space)]) else { break }
+            end = space
+        }
+        return Self.afterLastBreak(tokens)
+    }
+
+    // English is never split into pieces: a word is one whole token or a break.
+    private func chunkTokens(_ chunk: Substring) -> [UInt32] {
+        let tokens = decoder.tokenize(String(chunk))
+        guard !tokens.isEmpty else { return [0] }
+        let kept = Self.afterLastBreak(tokens)
+        let texts = kept.map(decoder.tokenText)
+        // A word whose start fell before a break is only part of a word.
+        var cut = Self.isEnglishLetter(chunk.dropLast(texts.joined().count).last)
+        var result: [UInt32] = kept.count < tokens.count ? [0] : []
+        var word = ""
+        func endWord() {
+            guard !word.isEmpty else { return }
+            result.append(cut ? 0 : decoder.contextToken(word))
+            word = ""
+        }
+        for (token, text) in zip(kept, texts) {
+            if Self.isEnglishWord(text) {
+                word += text
+            } else {
+                endWord()
+                cut = false
+                result.append(token)
+            }
+        }
+        endWord()
+        return result
+    }
+
+    private static func isEnglishLetter(_ character: Character?) -> Bool {
+        guard let character else { return false }
+        return character.isASCII && character.isLetter
+    }
+
+    private static func isEnglishWord(_ text: String) -> Bool {
+        !text.isEmpty && text.allSatisfy { isEnglishLetter($0) }
     }
 
     func append(_ letter: String) {
@@ -840,7 +917,7 @@ final class Composition {
             scheme: inputScheme,
             fixedPrefix: fixedPrefix,
             rawKeyColumn: anchorColumn,
-            context: Array((hostContextTokens ?? contextTokens).suffix(32)),
+            context: Array(contextTokens.suffix(32)),
             limit: 60
         ).filter {
             let keys = segmentRawLengths($0).reduce(0, +)
@@ -924,9 +1001,12 @@ final class Composition {
         } else {
             return
         }
-        hostContextTokens = nil
         contextFragment = String(text.dropLast())
-        if !contextFragment.isEmpty {
+        if contextFragment.isEmpty, Self.isEnglishWord(text),
+           let previous = contextTokens.last, Self.isEnglishWord(decoder.tokenText(previous)) {
+            // The space between two English words is deleted on its own.
+            contextFragment = " "
+        } else if !contextFragment.isEmpty {
             let exact = decoder.contextToken(contextFragment)
             if exact != 0 {
                 contextTokens.append(exact)
@@ -941,14 +1021,16 @@ final class Composition {
                 settleContextFragment()
             }
         }
+        // After a space only next words fit, not completions of the word before it.
         predictionCandidates = predictionEnabled && !contextTokens.isEmpty
-            ? decoder.associate(contextTokens, limit: 9) : []
+            ? decoder.associate(contextTokens, limit: 9)
+                .filter { contextFragment != " " || $0.consumed == 0 } : []
     }
 
     // A fragment left without a picked completion: English has no word
     // pieces, so the context breaks; Chinese re-segments the fragment.
     private func settleContextFragment() {
-        guard !contextFragment.isEmpty else { return }
+        guard !contextFragment.isEmpty, contextFragment != " " else { return }
         let fragment = contextFragment
         contextFragment = ""
         guard !fragment.allSatisfy(\.isASCII) else {
@@ -963,7 +1045,6 @@ final class Composition {
     func clearContext() {
         contextTokens = []
         contextFragment = ""
-        hostContextTokens = nil
         predictionCandidates = []
     }
 
@@ -979,9 +1060,6 @@ final class Composition {
         }
     }
 
-    // The ledger started from the last host snapshot, so once the keyboard
-    // writes past that snapshot the ledger is the newer view until the host
-    // reports again.
     private func extendContext(with tokens: [UInt32], replacingLast: Bool = false) {
         // A completion subsumes its prefix: the fragment, else the trailing
         // token (狐 → 狐狸).
@@ -992,9 +1070,15 @@ final class Composition {
                 contextFragment = ""
             }
         }
+        if contextFragment == " " {
+            contextFragment = ""
+            // Only English words share a context across a space.
+            if let first = tokens.first, !Self.isEnglishWord(decoder.tokenText(first)) {
+                contextTokens = []
+            }
+        }
         settleContextFragment()
         contextTokens = Array(Self.afterLastBreak(contextTokens + tokens).suffix(32))
-        hostContextTokens = nil
     }
 
     // Nothing before a NotToken break can score, so the context keeps only
@@ -1015,7 +1099,7 @@ final class Composition {
 
     private func refresh() {
         settleContextFragment()
-        let context = Array((hostContextTokens ?? contextTokens).suffix(32))
+        let context = Array(contextTokens.suffix(32))
         let anchors = engineAnchors()
         usingEngineAnchors = anchors != nil
         candidates = decoder.decodeComposition(
