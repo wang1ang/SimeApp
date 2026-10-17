@@ -91,10 +91,10 @@ final class ShuangpinEndToEndTests: XCTestCase {
 
     func testSelectingLoveForLuoJoinsMarkedRawGroups() throws {
         let c = try composition(for: "woloveni")
-        XCTAssertEqual(c.candidates.first?.text, "沃洛着你")
+        XCTAssertEqual(c.candidates.first?.text, "我摞着你")
         c.activateCharacter(1)
         guard let love = c.displayCandidates.firstIndex(where: { $0.text == "love" }) else {
-            return XCTFail("tapping 洛 should offer love; got: \(c.displayCandidates.map { $0.text })")
+            return XCTFail("tapping 摞 should offer love; got: \(c.displayCandidates.map { $0.text })")
         }
         XCTAssertNil(c.selectDisplayed(love))
         XCTAssertEqual(c.preedit, "wo love ni")
